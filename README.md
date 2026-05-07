@@ -30,3 +30,20 @@ Aquarium-first rather than framework-first.
 Create the smallest C# executable that opens a window, owns the camera/Grid
 invariant, and renders one sun plus orbiting planets with diegetic labels.
 Everything else earns its way back in.
+
+## Run
+
+```powershell
+dotnet build Aquarium.Engine.slnx
+dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj
+```
+
+Headless smoke:
+
+```powershell
+dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --headless
+```
+
+The first cut uses Stride as a NuGet-hosted shell through
+`Stride.CommunityToolkit.Windows`. Stride is scaffolding; the Aquarium owns the
+camera/Grid invariant and the renderer direction. See `docs/stride-boundary.md`.
