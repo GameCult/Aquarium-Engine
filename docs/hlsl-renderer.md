@@ -170,6 +170,9 @@ Gate 3A adds a current-frame temporal-control target. It carries reactive
 strength, stochastic/composition coverage, and a reserved medium-opacity slot;
 the resolve now reduces history for low-coverage reactive Grid samples before
 future volumetrics arrive.
+Gate 3B ping-pongs that control target as history too, so the resolver can
+compare previous/current coverage and reserved medium opacity at the reprojected
+UV.
 
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.

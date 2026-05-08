@@ -57,3 +57,6 @@ prototype integrated along the camera ray before surface composition.
   from field/normal metadata. Current channels are reactive strength, stochastic
   coverage, reserved medium opacity, and reserved spare; the resolve uses the
   first two to reduce history for low-coverage reactive Grid samples.
+- Temporal Gate 3B: temporal control now has its own ping-pong history. Resolve
+  samples previous control at the reprojected UV and reduces history across
+  coverage or reserved medium-opacity discontinuities.

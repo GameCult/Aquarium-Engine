@@ -24,6 +24,7 @@ Texture2D<float4> historyTexture : register(t4);
 Texture2D<float4> currentSceneMetadataTexture : register(t5);
 Texture2D<float4> historyMetadataTexture : register(t6);
 Texture2D<float4> currentSceneControlTexture : register(t7);
+Texture2D<float4> historyControlTexture : register(t8);
 SamplerState gridSampler : register(s0);
 SamplerState ditherSampler : register(s1);
 
@@ -1337,6 +1338,7 @@ struct ResolveOut
     float4 finalColor : SV_Target0;
     float4 historyColor : SV_Target1;
     float4 historyMetadata : SV_Target2;
+    float4 historyControl : SV_Target3;
 };
 
 ResolveOut AquariumResolvePS(VertexOut input)
@@ -1352,6 +1354,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float3 currentNormal = currentMetadata.yzw;
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
+    float currentMediumOpacity = saturate(currentControl.z);
 
     float historyWeight = 0.0;
     float3 historyColor = currentColor;
@@ -1366,9 +1369,12 @@ ResolveOut AquariumResolvePS(VertexOut input)
         {
             float4 previous = historyTexture.SampleLevel(gridSampler, previousUv, 0.0);
             float4 previousMetadata = historyMetadataTexture.SampleLevel(gridSampler, previousUv, 0.0);
+            float4 previousControl = historyControlTexture.SampleLevel(gridSampler, previousUv, 0.0);
             float previousTravel = previous.a;
             float previousFieldId = previousMetadata.x;
             float3 previousNormal = previousMetadata.yzw;
+            float previousCoverage = saturate(previousControl.y);
+            float previousMediumOpacity = saturate(previousControl.z);
             float travelDelta = abs(previousTravel - currentTravel);
             float travelTolerance = max(0.045, currentTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
@@ -1387,9 +1393,11 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
             float reactiveWeight = 1.0 - currentReactive;
             float coverageWeight = currentFieldId == FIELD_ID_GRID ? smoothstep(0.02, 0.55, currentCoverage) : 1.0;
+            float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
+            float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight;
+            historyWeight = 0.82 * travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
         }
     }
 
@@ -1398,6 +1406,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     output.finalColor = float4(aces(resolved), 1.0);
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
+    output.historyControl = currentControl;
     return output;
 }
 

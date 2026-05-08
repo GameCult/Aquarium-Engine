@@ -158,6 +158,16 @@ w = reserved
 - the resolve combines reactive and coverage weights with travel, field, normal,
   and neighborhood-color validation
 
+Current Gate 3B implementation:
+
+- temporal-control history ping-pongs alongside color/travel and field/normal
+  history
+- resolve samples previous-frame temporal control at the reprojected UV
+- coverage discontinuity reduces history
+- medium-opacity discontinuity reduces history, even though real volumetrics do
+  not write the channel yet
+- current temporal control is written into the history set for the next frame
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

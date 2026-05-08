@@ -53,12 +53,18 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Texture2D historyMetadataTextureA;
     private readonly ID3D11RenderTargetView historyMetadataRenderTargetViewA;
     private readonly ID3D11ShaderResourceView historyMetadataShaderResourceViewA;
+    private readonly ID3D11Texture2D historyControlTextureA;
+    private readonly ID3D11RenderTargetView historyControlRenderTargetViewA;
+    private readonly ID3D11ShaderResourceView historyControlShaderResourceViewA;
     private readonly ID3D11Texture2D historyTextureB;
     private readonly ID3D11RenderTargetView historyRenderTargetViewB;
     private readonly ID3D11ShaderResourceView historyShaderResourceViewB;
     private readonly ID3D11Texture2D historyMetadataTextureB;
     private readonly ID3D11RenderTargetView historyMetadataRenderTargetViewB;
     private readonly ID3D11ShaderResourceView historyMetadataShaderResourceViewB;
+    private readonly ID3D11Texture2D historyControlTextureB;
+    private readonly ID3D11RenderTargetView historyControlRenderTargetViewB;
+    private readonly ID3D11ShaderResourceView historyControlShaderResourceViewB;
     private readonly ID3D11SamplerState gridSampler;
     private readonly ID3D11SamplerState ditherSampler;
     private readonly ID3D11Buffer frameConstantBuffer;
@@ -151,12 +157,18 @@ public sealed class D3D11Renderer : IDisposable
         historyMetadataTextureA = CreateHdrTexture(width, height);
         historyMetadataRenderTargetViewA = device.CreateRenderTargetView(historyMetadataTextureA);
         historyMetadataShaderResourceViewA = device.CreateShaderResourceView(historyMetadataTextureA);
+        historyControlTextureA = CreateHdrTexture(width, height);
+        historyControlRenderTargetViewA = device.CreateRenderTargetView(historyControlTextureA);
+        historyControlShaderResourceViewA = device.CreateShaderResourceView(historyControlTextureA);
         historyTextureB = CreateHdrTexture(width, height);
         historyRenderTargetViewB = device.CreateRenderTargetView(historyTextureB);
         historyShaderResourceViewB = device.CreateShaderResourceView(historyTextureB);
         historyMetadataTextureB = CreateHdrTexture(width, height);
         historyMetadataRenderTargetViewB = device.CreateRenderTargetView(historyMetadataTextureB);
         historyMetadataShaderResourceViewB = device.CreateShaderResourceView(historyMetadataTextureB);
+        historyControlTextureB = CreateHdrTexture(width, height);
+        historyControlRenderTargetViewB = device.CreateRenderTargetView(historyControlTextureB);
+        historyControlShaderResourceViewB = device.CreateShaderResourceView(historyControlTextureB);
         startupProgress?.Invoke("Loading Aetheria blue-noise dither texture");
         ditherTexture = CreateDitherTexture(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
         ditherShaderResourceView = device.CreateShaderResourceView(ditherTexture);
@@ -268,12 +280,18 @@ public sealed class D3D11Renderer : IDisposable
         historyMetadataShaderResourceViewB.Dispose();
         historyMetadataRenderTargetViewB.Dispose();
         historyMetadataTextureB.Dispose();
+        historyControlShaderResourceViewB.Dispose();
+        historyControlRenderTargetViewB.Dispose();
+        historyControlTextureB.Dispose();
         historyShaderResourceViewA.Dispose();
         historyRenderTargetViewA.Dispose();
         historyTextureA.Dispose();
         historyMetadataShaderResourceViewA.Dispose();
         historyMetadataRenderTargetViewA.Dispose();
         historyMetadataTextureA.Dispose();
+        historyControlShaderResourceViewA.Dispose();
+        historyControlRenderTargetViewA.Dispose();
+        historyControlTextureA.Dispose();
         sceneShaderResourceView.Dispose();
         sceneRenderTargetView.Dispose();
         sceneTexture.Dispose();
@@ -365,6 +383,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(5);
         context.PSUnsetShaderResource(6);
         context.PSUnsetShaderResource(7);
+        context.PSUnsetShaderResource(8);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -383,6 +402,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(5);
         context.PSUnsetShaderResource(6);
         context.PSUnsetShaderResource(7);
+        context.PSUnsetShaderResource(8);
         context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView, sceneControlRenderTargetView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(sceneRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -407,13 +427,16 @@ public sealed class D3D11Renderer : IDisposable
         var historyWriteView = frameIndex % 2 == 0 ? historyRenderTargetViewB : historyRenderTargetViewA;
         var historyMetadataReadView = frameIndex % 2 == 0 ? historyMetadataShaderResourceViewA : historyMetadataShaderResourceViewB;
         var historyMetadataWriteView = frameIndex % 2 == 0 ? historyMetadataRenderTargetViewB : historyMetadataRenderTargetViewA;
+        var historyControlReadView = frameIndex % 2 == 0 ? historyControlShaderResourceViewA : historyControlShaderResourceViewB;
+        var historyControlWriteView = frameIndex % 2 == 0 ? historyControlRenderTargetViewB : historyControlRenderTargetViewA;
 
         context.PSUnsetShaderResource(3);
         context.PSUnsetShaderResource(4);
         context.PSUnsetShaderResource(5);
         context.PSUnsetShaderResource(6);
         context.PSUnsetShaderResource(7);
-        context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView, historyMetadataWriteView });
+        context.PSUnsetShaderResource(8);
+        context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView, historyMetadataWriteView, historyControlWriteView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
         context.IASetInputLayout(null);
@@ -426,6 +449,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(5, sceneMetadataShaderResourceView);
         context.PSSetShaderResource(6, historyMetadataReadView);
         context.PSSetShaderResource(7, sceneControlShaderResourceView);
+        context.PSSetShaderResource(8, historyControlReadView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }
