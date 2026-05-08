@@ -242,13 +242,17 @@ float displacedSphereSdf(float3 p, float3 center, float radius, int index, bool 
 {
     float3 local = p - center;
     float baseDistance = length(local) - radius;
-    float farPadding = radius * (isSelf ? 0.24 : 0.14);
-    if (baseDistance > farPadding)
+    float maxDisplacement = radius * (isSelf ? 0.20 : 0.105);
+
+    if (baseDistance > maxDisplacement * 1.5)
     {
-        return baseDistance - farPadding;
+        return baseDistance - maxDisplacement;
     }
 
-    return baseDistance - planetDisplacement(local, radius, index, isSelf);
+    float actualDistance = baseDistance - planetDisplacement(local, radius, index, isSelf);
+    float conservativeDistance = baseDistance - maxDisplacement;
+    float blend = 1.0 - smoothstep(maxDisplacement * 0.25, maxDisplacement * 1.5, baseDistance);
+    return lerp(conservativeDistance, actualDistance, blend);
 }
 
 float sceneSdf(float3 p, out int materialId)
@@ -286,7 +290,7 @@ float sceneDistance(float3 p)
 
 float3 terrainNormal(float3 p)
 {
-    float2 e = float2(0.035, 0.0);
+    float2 e = float2(max(0.035, gridRadius * 0.0012), 0.0);
     float h0 = terrainHeight(p.xy - e.xy);
     float h1 = terrainHeight(p.xy + e.xy);
     float h2 = terrainHeight(p.xy - e.yx);
@@ -294,24 +298,50 @@ float3 terrainNormal(float3 p)
     return normalize(float3(h0 - h1, h2 - h3, e.x * 2.0));
 }
 
-float3 planetNormal(float3 p)
+void nearestBody(float3 p, out float3 center, out float radius, out int index, out bool isSelf)
 {
     float bestDistance = abs(length(p - SUN_POSITION) - SUN_RADIUS);
-    float3 bestCenter = SUN_POSITION;
+    center = SUN_POSITION;
+    radius = SUN_RADIUS;
+    index = 17;
+    isSelf = true;
 
     [unroll]
     for (int i = 0; i < PLANET_COUNT; i++)
     {
-        float3 center = planetCenter(i);
-        float distanceToBody = abs(length(p - center) - planetRadius(i));
+        float3 bodyCenter = planetCenter(i);
+        float bodyRadius = planetRadius(i);
+        float distanceToBody = abs(length(p - bodyCenter) - bodyRadius);
         if (distanceToBody < bestDistance)
         {
             bestDistance = distanceToBody;
-            bestCenter = center;
+            center = bodyCenter;
+            radius = bodyRadius;
+            index = i;
+            isSelf = false;
         }
     }
+}
 
-    return normalize(p - bestCenter);
+float3 planetNormal(float3 p)
+{
+    float3 center;
+    float radius;
+    int index;
+    bool isSelf;
+    nearestBody(p, center, radius, index, isSelf);
+
+    float3 local = p - center;
+    float3 radial = normalize(local);
+    float3 domain = local / max(radius, 0.001);
+    float seed = hash21(float2(index, 41.17)) * 19.0;
+    float normalFrequency = isSelf ? 5.4 : 7.5;
+    float3 detail = float3(
+        noised3(domain * normalFrequency + seed),
+        noised3(domain.yzx * normalFrequency + seed + 7.13),
+        noised3(domain.zxy * normalFrequency + seed + 13.71));
+    detail -= radial * dot(detail, radial);
+    return normalize(radial + detail * (isSelf ? 0.32 : 0.24));
 }
 
 float3 surfaceNormal(float3 p, int materialId)
@@ -347,8 +377,10 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         }
 
         float distanceToScene = sceneSdf(hitPosition, materialId);
-        if (distanceToScene < SURFACE_EPSILON * max(1.0, travel * 0.15))
+        float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
+        if (distanceToScene < hitEpsilon)
         {
+            hitPosition = rayOrigin + rayDirection * travel;
             return true;
         }
 
