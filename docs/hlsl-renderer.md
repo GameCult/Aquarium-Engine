@@ -53,7 +53,9 @@ Current frame order:
    Empty froxels skip body SDF work entirely.
 5. Displaced body SDFs report a noisy hit distance separately from a conservative
    envelope step distance, so high-frequency surface detail can shape the
-   silhouette without letting rays skip over it.
+   silhouette without letting rays skip over it. When a ray is inside the
+   conservative envelope but outside the noisy surface, it takes a shell escape
+   step instead of starving on the minimum stride.
 6. Terrain marching uses heightfield crossing and slope-aware steps instead of
    pretending `z - height(xy)` is a true Euclidean SDF. Body objects still use
    SDF distance steps.

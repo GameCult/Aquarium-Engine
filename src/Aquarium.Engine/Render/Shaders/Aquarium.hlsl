@@ -530,7 +530,14 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             : 0.026;
 
         terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
-        float bodyStep = bodyStepDistance < 99999.0 ? max(bodyStepDistance * 0.68, 0.004) : 100000.0;
+        float bodyStep = 100000.0;
+        if (bodyStepDistance < 99999.0)
+        {
+            bodyStep = bodyStepDistance > hitEpsilon
+                ? bodyStepDistance * 0.68
+                : max(bodyDistance * 0.42, 0.045);
+        }
+
         float distanceToScene = min(bodyStep, terrainStep);
         previousTravel = travel;
         previousTerrainGap = terrainGap;
