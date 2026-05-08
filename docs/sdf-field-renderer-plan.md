@@ -78,34 +78,38 @@ A hybrid field has both solid and medium behavior. Examples:
 
 ## Render Architecture
 
-### Stage 1: Analytic Field Prototype
+This renderer needs a waterfall implementation shape. The wrong abstraction here
+is not a harmless intermediate state; it becomes the renderer. Build the machine
+we want, then bring it up behind explicit gates.
 
-Start inside the current fullscreen HLSL path:
+### Gate 1: Field Contract
 
-1. Keep the existing terrain/body raymarch.
-2. Add a small analytic SDF cloud registry in shader code.
-3. March local cloud density along the camera ray up to the nearest solid hit or
-   the Grid far distance.
-4. Composite as:
+Define the field instance ABI before adding more visual tricks:
 
-   ```text
-   final = cloud_scattering + cloud_transmittance * surface_color
-   ```
+- CPU-owned field registry.
+- Stable field ids and debug names.
+- World transform plus inverse transform.
+- Conservative bounds.
+- Shape parameters.
+- Material and medium ids.
+- Field flags for solid, cloud, hybrid, emitter, shadow caster, and receiver.
+- Debug mode ids and per-field visibility toggles.
 
-This is allowed as a prototype because it proves the field contract and visual
-direction. It is not allowed to become the final volume architecture by stealth.
+Hard-coded shader field loops are temporary scaffolding only. Do not extend them
+except to replace them.
 
-### Stage 2: Field Instance Contract
+### Gate 2: Broad Phase
 
-Move analytic field identity out of hard-coded shader loops:
+Move field selection out of brute-force pixel loops:
 
 - CPU packs field instances into a structured buffer.
 - Each instance has transform, bounds, kind, material id, medium id, and shape
   parameters.
 - The current body froxel table evolves into a general field broad phase.
-- Debug views show candidate fields, bounds, and step counts.
+- Candidate lists are available to solid and medium passes.
+- Debug views show candidate fields, bounds, rejected fields, and step counts.
 
-### Stage 3: Explicit Volume Pass
+### Gate 3: Explicit Volume Pass
 
 Add a renderer-owned low-resolution volume pass:
 
@@ -119,7 +123,19 @@ Add a renderer-owned low-resolution volume pass:
 This follows Wronski/Hillaire for the pass shape, but without assuming clouds
 are distant sky content.
 
-### Stage 4: SDF Acceleration
+### Gate 4: Surface And Medium Composition
+
+Make composition explicit:
+
+- solid ray hits produce surface color, depth, normal, material, and field id
+- medium integration respects surface depth
+- clouds in front of surfaces affect surfaces through transmittance
+- clouds behind surfaces do not leak through opaque solids
+- multiple cloud intervals accumulate front-to-back without sample-budget
+  starvation
+- debug views expose each composition term
+
+### Gate 5: SDF Acceleration
 
 Only after profiling proves the need:
 
@@ -165,15 +181,18 @@ Before this grows teeth, add debug surfaces for:
 
 If we cannot see why a pixel looks wrong, the renderer is already lying.
 
-## First Implementation Slice
+## Current Temporary Scaffold
 
-The first code slice is intentionally small:
+`Aquarium.hlsl` currently contains an analytic local cloud scaffold. It exists to
+keep pixels alive while the real field renderer is built, not to define the
+architecture.
 
-1. Add analytic local SDF cloud functions to `Aquarium.hlsl`.
-2. March them in world space along each camera ray.
-3. Allow clouds below, above, and around the Grid.
-4. Composite cloud scattering/transmittance with the existing surface raymarch.
-5. Keep all coordinates stable in world/object space.
+Rules for that scaffold:
 
-This starts the visual grammar without committing to the final storage or pass
-layout. A tiny honest machine. How upsettingly rare.
+- Fix correctness bugs when they block evaluation.
+- Do not add new cloud features there.
+- Do not tune around structural failures.
+- Replace it with the field registry, broad phase, and explicit volume pass.
+- Treat every artifact as evidence for the final machine, not as an invitation
+  to add another little compromise. The compromise pile is how renderers become
+  haunted furniture.

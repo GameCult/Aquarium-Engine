@@ -109,6 +109,11 @@ coordinate and composition contract for local SDF clouds, but the final renderer
 should move toward the explicit field registry and volume pass described in
 `docs/sdf-field-renderer-plan.md`.
 
+Do not grow this scaffold sideways. The SDF cloud path is now a waterfall
+renderer task: field contract, broad phase, explicit volume pass, then
+composition and acceleration. Correctness fixes belong here only when needed to
+keep the scene inspectable while the real machine is built.
+
 Current prototype traits:
 
 - ellipsoid SDF cloud containers

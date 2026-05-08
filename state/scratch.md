@@ -27,3 +27,7 @@ prototype integrated along the camera ray before surface composition.
 - Follow-up fix made the march structural: intersect each analytic cloud
   ellipsoid, jump empty space to the next true entry, and sample only inside
   cloud intervals so near containers cannot eat the budget before far clouds.
+- Method correction: stop iterating cloud features by agile half-step. Build the
+  target renderer as a waterfall machine: field contract, broad phase, explicit
+  local volume pass, composition, then acceleration. Current shader cloud code is
+  temporary scaffolding only.
