@@ -28,6 +28,7 @@ public sealed class Win32Window : IDisposable
     private const uint LR_LOADFROMFILE = 0x00000010;
     private const int ICON_SIZE_LARGE = 32;
     private const int ICON_SIZE_SMALL = 16;
+    private const int ICON_SIZE_SPLASH = 192;
     private const int IDC_ARROW = 32512;
     private const int VK_W = 0x57;
     private const int VK_A = 0x41;
@@ -40,6 +41,7 @@ public sealed class Win32Window : IDisposable
     private readonly InputState input;
     private readonly IntPtr largeIcon;
     private readonly IntPtr smallIcon;
+    private readonly IntPtr splashIcon;
     private bool disposed;
 
     private Win32Window(
@@ -50,7 +52,8 @@ public sealed class Win32Window : IDisposable
         int width,
         int height,
         IntPtr largeIcon,
-        IntPtr smallIcon)
+        IntPtr smallIcon,
+        IntPtr splashIcon)
     {
         Handle = handle;
         this.className = className;
@@ -58,6 +61,7 @@ public sealed class Win32Window : IDisposable
         this.input = input;
         this.largeIcon = largeIcon;
         this.smallIcon = smallIcon;
+        this.splashIcon = splashIcon;
         ClientWidth = width;
         ClientHeight = height;
     }
@@ -74,6 +78,7 @@ public sealed class Win32Window : IDisposable
         var instance = GetModuleHandle(null);
         var largeIcon = LoadIconFromPath(iconPath, ICON_SIZE_LARGE);
         var smallIcon = LoadIconFromPath(iconPath, ICON_SIZE_SMALL);
+        var splashIcon = LoadIconFromPath(iconPath, ICON_SIZE_SPLASH);
         var classNamePointer = Marshal.StringToHGlobalUni(className);
         var titlePointer = Marshal.StringToHGlobalUni(title);
         WndProc? windowProcedure = null;
@@ -172,12 +177,48 @@ public sealed class Win32Window : IDisposable
             UpdateWindow(handle);
             SetWindowText(handle, title);
 
-            return new Win32Window(handle, className, windowProcedure, input, width, height, largeIcon, smallIcon);
+            return new Win32Window(handle, className, windowProcedure, input, width, height, largeIcon, smallIcon, splashIcon);
         }
         finally
         {
             Marshal.FreeHGlobal(classNamePointer);
             Marshal.FreeHGlobal(titlePointer);
+        }
+    }
+
+    public void PaintSplash()
+    {
+        if (!GetClientRect(Handle, out var rect))
+        {
+            return;
+        }
+
+        ClientWidth = Math.Max(1, rect.right - rect.left);
+        ClientHeight = Math.Max(1, rect.bottom - rect.top);
+
+        var deviceContext = GetDC(Handle);
+        if (deviceContext == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            PaintDiagonalGradient(deviceContext, ClientWidth, ClientHeight);
+
+            if (splashIcon != IntPtr.Zero)
+            {
+                var iconSize = Math.Min(ICON_SIZE_SPLASH, Math.Max(96, Math.Min(ClientWidth, ClientHeight) / 3));
+                var iconX = (ClientWidth - iconSize) / 2;
+                var iconY = (ClientHeight - iconSize) / 2;
+                DrawIconEx(deviceContext, iconX, iconY, splashIcon, iconSize, iconSize, 0, IntPtr.Zero, 0x0003);
+            }
+
+            GdiFlush();
+        }
+        finally
+        {
+            ReleaseDC(Handle, deviceContext);
         }
     }
 
@@ -227,7 +268,80 @@ public sealed class Win32Window : IDisposable
             DestroyIcon(smallIcon);
         }
 
+        if (splashIcon != IntPtr.Zero)
+        {
+            DestroyIcon(splashIcon);
+        }
+
         GC.SuppressFinalize(this);
+    }
+
+    private static void PaintDiagonalGradient(IntPtr deviceContext, int width, int height)
+    {
+        var pixels = new uint[width * height];
+        var denominator = Math.Max(1.0f, width + height);
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var diagonal = (x + y) / denominator;
+                var vignetteX = x / Math.Max(1.0f, width - 1.0f) - 0.5f;
+                var vignetteY = y / Math.Max(1.0f, height - 1.0f) - 0.5f;
+                var vignette = Math.Clamp(1.0f - (vignetteX * vignetteX + vignetteY * vignetteY) * 0.72f, 0.0f, 1.0f);
+                var t = SmoothStep(0.0f, 1.0f, diagonal);
+                pixels[y * width + x] = LerpColor(0x05, 0x08, 0x18, 0x06, 0x1A, 0x3A, t, vignette);
+            }
+        }
+
+        var bitmapInfo = new BITMAPINFO
+        {
+            bmiHeader = new BITMAPINFOHEADER
+            {
+                biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
+                biWidth = width,
+                biHeight = -height,
+                biPlanes = 1,
+                biBitCount = 32,
+                biCompression = 0,
+            },
+        };
+
+        var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        try
+        {
+            StretchDIBits(
+                deviceContext,
+                0,
+                0,
+                width,
+                height,
+                0,
+                0,
+                width,
+                height,
+                handle.AddrOfPinnedObject(),
+                ref bitmapInfo,
+                0,
+                0x00CC0020);
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    private static float SmoothStep(float edge0, float edge1, float value)
+    {
+        var t = Math.Clamp((value - edge0) / Math.Max(edge1 - edge0, 0.0001f), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    }
+
+    private static uint LerpColor(byte r0, byte g0, byte b0, byte r1, byte g1, byte b1, float t, float intensity)
+    {
+        var r = (byte)Math.Clamp(MathF.Round((r0 + (r1 - r0) * t) * intensity), byte.MinValue, byte.MaxValue);
+        var g = (byte)Math.Clamp(MathF.Round((g0 + (g1 - g0) * t) * intensity), byte.MinValue, byte.MaxValue);
+        var b = (byte)Math.Clamp(MathF.Round((b0 + (b1 - b0) * t) * intensity), byte.MinValue, byte.MaxValue);
+        return (uint)(b | (g << 8) | (r << 16));
     }
 
     private static IntPtr LoadIconFromPath(string? iconPath, int size)
@@ -274,7 +388,44 @@ public sealed class Win32Window : IDisposable
     private static extern bool DestroyIcon(IntPtr icon);
 
     [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr handle, IntPtr deviceContext);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DrawIconEx(
+        IntPtr deviceContext,
+        int left,
+        int top,
+        IntPtr icon,
+        int width,
+        int height,
+        uint stepIfAnimated,
+        IntPtr flickerFreeBrush,
+        uint flags);
+
+    [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr handle, uint message, nuint wParam, IntPtr lParam);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern int StretchDIBits(
+        IntPtr deviceContext,
+        int destinationX,
+        int destinationY,
+        int destinationWidth,
+        int destinationHeight,
+        int sourceX,
+        int sourceY,
+        int sourceWidth,
+        int sourceHeight,
+        IntPtr bits,
+        ref BITMAPINFO bitmapInfo,
+        uint usage,
+        uint rasterOperation);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool GdiFlush();
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UpdateWindow(IntPtr handle);
@@ -378,5 +529,28 @@ public sealed class Win32Window : IDisposable
         public int top;
         public int right;
         public int bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFO
+    {
+        public BITMAPINFOHEADER bmiHeader;
+        public uint bmiColors;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER
+    {
+        public uint biSize;
+        public int biWidth;
+        public int biHeight;
+        public ushort biPlanes;
+        public ushort biBitCount;
+        public uint biCompression;
+        public uint biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public uint biClrUsed;
+        public uint biClrImportant;
     }
 }

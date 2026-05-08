@@ -15,6 +15,7 @@ public static class AquariumHost
         var height = runtime.Options.Headless ? 360 : 720;
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Aquarium-Engine-Icon.ico");
         using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath);
+        window.PaintSplash();
         using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight);
 
         runtime.Start();
