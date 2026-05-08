@@ -35,8 +35,9 @@ Everything else earns its way back in.
 
 ## Run
 
-Aquarium currently expects the sibling `CultMath` repo at `E:\Projects\CultMath`
-or the equivalent `..\..\..\CultMath` path from the engine project.
+Aquarium currently expects the sibling `CultMath` and `CultLib` repos at
+`E:\Projects\CultMath` and `E:\Projects\CultLib`, or the equivalent
+`..\..\..\CultMath` / `..\..\..\CultLib` paths from the engine project.
 
 ```powershell
 dotnet build Aquarium.Engine.slnx
@@ -50,10 +51,28 @@ runner instead of `dotnet run`:
 .\scripts\dev-reload.ps1
 ```
 
-It builds to a fresh disposable slot under `artifacts\dev-reload`, starts that
-slot, records the PID, and replaces only the previous process that the script
-itself launched. This keeps MSBuild away from the locked normal
-`bin\Debug` output while a live window is still open.
+It builds to a fresh disposable slot under `artifacts\dev-reload`, records the
+slot/PID in PowerShell CLIXML, and launches the runtime with a MessagePack
+CultCache store at `artifacts\dev-reload\cultcache\aquarium-client.msgpack`.
+The previous script-owned process is stopped only after the replacement build
+succeeds. This keeps MSBuild away from the locked normal `bin\Debug` output
+while a live window is still open.
+
+For automatic rebuild/restart on source changes, use the watcher:
+
+```powershell
+.\scripts\dev-watch.ps1
+```
+
+The watcher polls source files, waits for writes to settle, builds into a new
+slot, and only replaces the running Aquarium after the new build succeeds. If a
+build fails, the previous good process keeps running and that same broken source
+fingerprint is not retried until files change again.
+
+Runtime live state is a typed CultCache document, not a loose sidecar file. The
+first document is `epiphany.aquarium.live_state`, currently banking camera
+target, yaw, pitch, distance, time, and save generation every few frames so a
+reload can rehydrate without pretending memory is vibes.
 
 Stop the script-owned Aquarium process:
 
@@ -71,6 +90,12 @@ Headless reload smoke without touching the normal build output:
 
 ```powershell
 .\scripts\dev-reload.ps1 -Headless
+```
+
+Headless watch smoke:
+
+```powershell
+.\scripts\dev-watch.ps1 -Headless
 ```
 
 The first cut opens a Win32 window directly and owns a D3D11 swapchain through

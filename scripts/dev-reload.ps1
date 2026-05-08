@@ -1,7 +1,8 @@
 param(
     [switch]$Headless,
     [switch]$NoStop,
-    [switch]$BuildOnly
+    [switch]$BuildOnly,
+    [int]$RetainSlots = 12
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,7 +12,9 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "src\Aquarium.Engine\Aquarium.Engine.csproj"
 $devRoot = Join-Path $repoRoot "artifacts\dev-reload"
 $slotRoot = Join-Path $devRoot "slots"
-$statePath = Join-Path $devRoot "state.json"
+$statePath = Join-Path $devRoot "state.clixml"
+$buildStatePath = Join-Path $devRoot "last-build.clixml"
+$cultCachePath = Join-Path $devRoot "cultcache\aquarium-client.msgpack"
 $stdoutLogPath = Join-Path $devRoot "latest.out.log"
 $stderrLogPath = Join-Path $devRoot "latest.err.log"
 
@@ -22,7 +25,7 @@ function Stop-PreviousOwnedProcess {
         return
     }
 
-    $state = Get-Content -Raw -Path $statePath | ConvertFrom-Json
+    $state = Import-Clixml -Path $statePath
     if (-not $state.pid) {
         return
     }
@@ -50,7 +53,24 @@ function Stop-PreviousOwnedProcess {
     Stop-Process -Id ([int]$state.pid) -Force
 }
 
-Stop-PreviousOwnedProcess
+function Remove-OldSlots {
+    if ($RetainSlots -lt 1) {
+        return
+    }
+
+    $slots = Get-ChildItem -Path $slotRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -Skip $RetainSlots
+
+    foreach ($slot in $slots) {
+        try {
+            Remove-Item -LiteralPath $slot.FullName -Recurse -Force
+        }
+        catch {
+            Write-Host "Could not remove old slot $($slot.FullName): $($_.Exception.Message)"
+        }
+    }
+}
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $slotName = "$timestamp-$([guid]::NewGuid().ToString("N").Substring(0, 8))"
@@ -71,16 +91,18 @@ if ($BuildOnly) {
     @{
         slot = $slotPath
         builtAt = (Get-Date).ToString("o")
-        pid = $null
         stdoutLog = $stdoutLogPath
         stderrLog = $stderrLogPath
-    } | ConvertTo-Json | Set-Content -Path $statePath
+    } | Export-Clixml -Path $buildStatePath
     Write-Host "Build-only slot ready."
+    Remove-OldSlots
     exit 0
 }
 
+Stop-PreviousOwnedProcess
+
 $dllPath = Join-Path $slotPath "Aquarium.Engine.dll"
-$arguments = @($dllPath)
+$arguments = @($dllPath, "--cache", $cultCachePath)
 if ($Headless) {
     $arguments += "--headless"
 }
@@ -106,10 +128,13 @@ $process = Start-Process @startProcessParameters
     pid = $process.Id
     stdoutLog = $stdoutLogPath
     stderrLog = $stderrLogPath
-} | ConvertTo-Json | Set-Content -Path $statePath
+} | Export-Clixml -Path $statePath
 
 Write-Host "Aquarium running from disposable slot."
 Write-Host "  PID: $($process.Id)"
+Write-Host "  CultCache: $cultCachePath"
 Write-Host "  Stdout: $stdoutLogPath"
 Write-Host "  Stderr: $stderrLogPath"
 Write-Host "Run this script again to replace only this script-owned process."
+
+Remove-OldSlots

@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\CultMath\src\CultMath\CultMath.csproj" />
+    <ProjectReference Include="..\..\..\CultLib\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj" />
+    <ProjectReference Include="..\..\..\CultLib\src\GameCult.Networking\GameCult.Networking.csproj" />
   </ItemGroup>
 
   <ItemGroup>

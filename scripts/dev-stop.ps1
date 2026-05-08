@@ -2,14 +2,14 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$statePath = Join-Path $repoRoot "artifacts\dev-reload\state.json"
+$statePath = Join-Path $repoRoot "artifacts\dev-reload\state.clixml"
 
 if (-not (Test-Path $statePath)) {
     Write-Host "No dev-reload state file exists."
     exit 0
 }
 
-$state = Get-Content -Raw -Path $statePath | ConvertFrom-Json
+$state = Import-Clixml -Path $statePath
 if (-not $state.pid) {
     Write-Host "No script-owned Aquarium PID is recorded."
     exit 0
