@@ -10,6 +10,8 @@ distilled notes.
 
 - `source-manifest.md`: source list, URLs, local cache names, and download notes.
 - `synthesis.md`: distilled lessons for Aquarium's renderer architecture.
+- `recent-volumetrics-and-gpu-sdf.md`: follow-up citation/Advances scan covering
+  newer volumetrics, sparse GPU SDF, Nubis, and learned field storage.
 
 ## Current Direction
 
@@ -24,3 +26,8 @@ Start small: one low-resolution field volume, one Self light source, Beer
 transmittance, single scattering, stable reprojection/jitter, and explicit debug
 modes. Add richer atmosphere, clouds, and streaming only after the simple field
 earns its keep.
+
+The recent follow-up scan keeps that order. Newer production work mostly says:
+start with the froxel contract, use compressed distance/occupancy only when
+traversal needs it, and treat sparse brick SDFs or learned probes as later field
+storage tools rather than first-pass fog machinery.

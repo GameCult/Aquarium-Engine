@@ -29,6 +29,7 @@ current_model:
     native_spine: docs/vortice-spine.md
     input: docs/input.md
     volumetrics_research: research/volumetrics/synthesis.md
+    recent_volumetrics_and_gpu_sdf: research/volumetrics/recent-volumetrics-and-gpu-sdf.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
@@ -62,5 +63,6 @@ next_actions:
   - Verify publish output after every packaging-affecting change.
   - Add renderer debug controls through the DirectWrite overlay path.
   - Use research/volumetrics/synthesis.md before designing fog, atmospheric scattering, clouds, or sparse volume storage.
+  - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
   - Promote runtime knobs into typed CultCache documents.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

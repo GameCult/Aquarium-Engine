@@ -10,6 +10,26 @@ field representation and light transport model.
 
 ## Durable Lessons
 
+### Recent Scan: Do Not Skip The Boring First Pass
+
+The follow-up scan in `recent-volumetrics-and-gpu-sdf.md` checked newer Advances
+decks, citation trails, and GPU SDF work. The result does not overturn the first
+plan. It sharpens it.
+
+Modern production work still treats Wronski/Hillaire froxel rendering as the
+baseline. Nubis Evolved and Nubis Cubed show how far cloud rendering can go once
+the medium becomes enterable: voxel cloud assets, compressed SDF acceleration,
+adaptive/jittered ray-marching, and cloud-specific lighting approximations.
+AMD's Brixelizer-style SDF work shows the current shape of GPU SDF storage:
+cascaded sparse 8x8x8 bricks, AABB trees, jump-flood/Eikonal fill, static/dynamic
+update separation, and toroidal partial cascade updates. Neural Light Grid warns
+that learned field storage can help offline/precompute, but runtime neural decode
+cost is a trap unless the evaluation path is tiny and inspectable.
+
+Aquarium lesson: build the explicit low-resolution volume first. Add occupancy,
+SDF skipping, sparse bricks, or learned probes only after a real bottleneck asks
+for them by name.
+
 ### Wronski: Frustum Volume First
 
 Wronski's Assassin's Creed IV solution is the cleanest first production target
@@ -146,6 +166,8 @@ architecture.
    with view-from-ground-to-space behavior.
 8. Consider GigaVoxels-style sparse bricks only if volume data grows beyond one
    bounded field texture.
+9. Consider Nubis/AMD-style compressed SDF acceleration only after volume
+   traversal cost is measurable and the target field has coherent empty space.
 
 ## Non-Goals For The First Pass
 
