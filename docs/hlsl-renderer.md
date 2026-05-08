@@ -81,3 +81,8 @@ font layout/rasterization and Direct2D for the final draw. The D3D swapchain use
 format drama. This path is for debug UI, terminal text, inspectors, and future
 CultUI overlay surfaces. Diegetic labels that live in the scene still belong in
 the renderer as MSDF/SDF billboards.
+
+The overlay owns a private DirectWrite font collection built from bundled Google
+Fonts files in `Assets/Fonts`: Montserrat for thin small-cap display text and
+Ubuntu Sans for body/debug copy. The runtime does not depend on those fonts
+being installed in Windows.

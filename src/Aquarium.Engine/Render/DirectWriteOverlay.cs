@@ -11,7 +11,9 @@ namespace Aquarium.Engine.Render;
 internal sealed class DirectWriteOverlay : IDisposable
 {
     private readonly ID2D1Factory direct2DFactory;
-    private readonly IDWriteFactory directWriteFactory;
+    private readonly IDWriteFactory6 directWriteFactory;
+    private readonly IDWriteFontCollection fontCollection;
+    private readonly IDWriteTypography smallCapsTypography;
     private readonly ID2D1RenderTarget renderTarget;
     private readonly ID2D1SolidColorBrush primaryTextBrush;
     private readonly ID2D1SolidColorBrush quietTextBrush;
@@ -26,7 +28,19 @@ internal sealed class DirectWriteOverlay : IDisposable
         this.height = height;
 
         direct2DFactory = D2D1.D2D1CreateFactory<ID2D1Factory>(D2DFactoryType.SingleThreaded);
-        directWriteFactory = DWrite.DWriteCreateFactory<IDWriteFactory>(DWriteFactoryType.Shared);
+        directWriteFactory = DWrite.DWriteCreateFactory<IDWriteFactory6>(DWriteFactoryType.Shared);
+        fontCollection = CreateBrandFontCollection();
+        smallCapsTypography = directWriteFactory.CreateTypography();
+        smallCapsTypography.AddFontFeature(new FontFeature
+        {
+            NameTag = FontFeatureTag.SmallCapitalsFromCapitals,
+            Parameter = 1
+        });
+        smallCapsTypography.AddFontFeature(new FontFeature
+        {
+            NameTag = FontFeatureTag.CapitalSpacing,
+            Parameter = 1
+        });
 
         var renderTargetProperties = new RenderTargetProperties(
             RenderTargetType.Default,
@@ -41,19 +55,18 @@ internal sealed class DirectWriteOverlay : IDisposable
 
         primaryTextBrush = renderTarget.CreateSolidColorBrush(new Color4(0.88f, 0.96f, 1.0f, 0.92f));
         quietTextBrush = renderTarget.CreateSolidColorBrush(new Color4(0.54f, 0.68f, 0.72f, 0.72f));
-        titleFormat = CreateTextFormat(16.0f, FontWeight.SemiBold);
-        smallFormat = CreateTextFormat(11.0f, FontWeight.Medium);
+        titleFormat = CreateTextFormat("Montserrat", 18.0f, FontWeight.Thin);
+        smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
     }
 
     public void Render(AquariumFrame frame)
     {
         renderTarget.BeginDraw();
-        renderTarget.DrawText(
-            "DIRECTWRITE OVERLAY",
+        DrawHeader(
+            "directwrite overlay",
             titleFormat,
             new Rect(18, 14, Math.Min(width - 18, 340), 42),
-            primaryTextBrush,
-            DrawTextOptions.Clip);
+            primaryTextBrush);
         renderTarget.DrawText(
             $"grid r {frame.Grid.Radius:0.00}  cam z {frame.CameraPosition.Z:0.00}",
             smallFormat,
@@ -73,6 +86,8 @@ internal sealed class DirectWriteOverlay : IDisposable
     {
         smallFormat.Dispose();
         titleFormat.Dispose();
+        smallCapsTypography.Dispose();
+        fontCollection.Dispose();
         quietTextBrush.Dispose();
         primaryTextBrush.Dispose();
         renderTarget.Dispose();
@@ -80,11 +95,11 @@ internal sealed class DirectWriteOverlay : IDisposable
         direct2DFactory.Dispose();
     }
 
-    private IDWriteTextFormat CreateTextFormat(float size, FontWeight weight)
+    private IDWriteTextFormat CreateTextFormat(string familyName, float size, FontWeight weight)
     {
         var format = directWriteFactory.CreateTextFormat(
-            "Segoe UI",
-            null,
+            familyName,
+            fontCollection,
             weight,
             FontStyle.Normal,
             FontStretch.Normal,
@@ -92,5 +107,27 @@ internal sealed class DirectWriteOverlay : IDisposable
             "en-us");
         format.WordWrapping = WordWrapping.NoWrap;
         return format;
+    }
+
+    private IDWriteFontCollection CreateBrandFontCollection()
+    {
+        using var builder = directWriteFactory.CreateFontSetBuilder();
+        builder.AddFontFile(FontAssetPath("Montserrat[wght].ttf"));
+        builder.AddFontFile(FontAssetPath("UbuntuSans[wdth,wght].ttf"));
+        using var fontSet = builder.CreateFontSet();
+        return directWriteFactory.CreateFontCollectionFromFontSet(fontSet, FontFamilyModel.Typographic);
+    }
+
+    private void DrawHeader(string text, IDWriteTextFormat format, Rect bounds, ID2D1Brush brush)
+    {
+        var displayText = text.ToUpperInvariant();
+        using var layout = directWriteFactory.CreateTextLayout(displayText, format, bounds.Width, bounds.Height);
+        layout.SetTypography(smallCapsTypography, new TextRange(0, (uint)displayText.Length));
+        renderTarget.DrawTextLayout(new System.Numerics.Vector2(bounds.Left, bounds.Top), layout, brush, DrawTextOptions.Clip);
+    }
+
+    private static string FontAssetPath(string fileName)
+    {
+        return Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fileName);
     }
 }
