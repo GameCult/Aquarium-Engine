@@ -2,6 +2,7 @@ param(
     [switch]$Headless,
     [switch]$NoStop,
     [switch]$BuildOnly,
+    [switch]$Reopen,
     [int]$RetainSlots = 12,
     [int]$StartupTimeoutSeconds = 5
 )
@@ -14,15 +15,22 @@ $projectPath = Join-Path $repoRoot "src\Aquarium.Engine\Aquarium.Engine.csproj"
 $liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj"
 $devRoot = Join-Path $repoRoot "artifacts\dev-reload"
 $slotRoot = Join-Path $devRoot "slots"
-$statePath = Join-Path $devRoot "state.clixml"
+$visibleStatePath = Join-Path $devRoot "state.clixml"
+$headlessStatePath = Join-Path $devRoot "headless-state.clixml"
+$statePath = if ($Headless) { $headlessStatePath } else { $visibleStatePath }
 $buildStatePath = Join-Path $devRoot "last-build.clixml"
 $liveReloadPointerPath = Join-Path $devRoot "live-current.txt"
 $cultCachePath = Join-Path $devRoot "cultcache\aquarium-client.msgpack"
 $shaderSourcePath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
-$stdoutLogPath = Join-Path $devRoot "latest.out.log"
-$stderrLogPath = Join-Path $devRoot "latest.err.log"
+$logName = if ($Headless) { "headless" } else { "latest" }
+$stdoutLogPath = Join-Path $devRoot "$logName.out.log"
+$stderrLogPath = Join-Path $devRoot "$logName.err.log"
 
 New-Item -ItemType Directory -Force -Path $slotRoot | Out-Null
+
+if ($Reopen -and $Headless) {
+    throw "-Reopen is for the visible dev window; do not combine it with -Headless."
+}
 
 function Stop-PreviousOwnedProcess {
     if ($NoStop -or -not (Test-Path $statePath)) {
@@ -125,6 +133,99 @@ function Wait-ForStartedAquarium {
     }
 }
 
+function Start-AquariumProcess {
+    param(
+        [string]$SlotPath,
+        [string]$LiveAssemblyPath,
+        [bool]$RunHeadless
+    )
+
+    $exePath = Join-Path $SlotPath "Aquarium.Engine.exe"
+    if (-not (Test-Path $exePath)) {
+        throw "Expected apphost does not exist: $exePath"
+    }
+
+    if (-not (Test-Path $LiveAssemblyPath)) {
+        throw "Expected live runtime assembly does not exist: $LiveAssemblyPath"
+    }
+
+    Set-Content -Path $liveReloadPointerPath -Value $LiveAssemblyPath -Encoding UTF8
+
+    $arguments = @(
+        "--cache", $cultCachePath,
+        "--shader-source", $shaderSourcePath,
+        "--live-assembly", $LiveAssemblyPath,
+        "--live-reload-pointer", $liveReloadPointerPath
+    )
+    if ($RunHeadless) {
+        $arguments += "--headless"
+    }
+
+    $startProcessParameters = @{
+        FilePath = $exePath
+        ArgumentList = $arguments
+        WorkingDirectory = $SlotPath
+        RedirectStandardOutput = $stdoutLogPath
+        RedirectStandardError = $stderrLogPath
+        PassThru = $true
+    }
+
+    if ($RunHeadless) {
+        $startProcessParameters.WindowStyle = "Hidden"
+    }
+
+    return Start-Process @startProcessParameters
+}
+
+function Reopen-VisibleProcess {
+    if (-not (Test-Path $visibleStatePath)) {
+        throw "No visible dev-reload state file exists. Run scripts\dev-reload.ps1 once to create a launch slot."
+    }
+
+    $state = Import-Clixml -Path $visibleStatePath
+    if (-not $state.slot) {
+        throw "Visible dev-reload state does not record a slot."
+    }
+
+    if ($state.PSObject.Properties.Name -contains "pid" -and $state.pid) {
+        $existing = Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
+        if ($existing) {
+            Write-Host "Visible Aquarium process $($state.pid) is already running."
+            return
+        }
+    }
+
+    $slotPath = [string]$state.slot
+    $liveAssemblyPath = Join-Path $slotPath "Aquarium.Engine.Live.dll"
+    if ($state.PSObject.Properties.Name -contains "liveAssembly" -and $state.liveAssembly) {
+        $liveAssemblyPath = [string]$state.liveAssembly
+    }
+
+    $process = Start-AquariumProcess -SlotPath $slotPath -LiveAssemblyPath $liveAssemblyPath -RunHeadless:$false
+    Wait-ForStartedAquarium -Process $process -ExpectWindow:$true
+
+    @{
+        slot = $slotPath
+        builtAt = $state.builtAt
+        reopenedAt = (Get-Date).ToString("o")
+        pid = $process.Id
+        liveAssembly = $liveAssemblyPath
+        headless = $false
+        stdoutLog = $stdoutLogPath
+        stderrLog = $stderrLogPath
+    } | Export-Clixml -Path $visibleStatePath
+
+    Write-Host "Aquarium reopened from last visible slot."
+    Write-Host "  PID: $($process.Id)"
+    Write-Host "  Slot: $slotPath"
+    return
+}
+
+if ($Reopen) {
+    Reopen-VisibleProcess
+    exit 0
+}
+
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $slotName = "$timestamp-$([guid]::NewGuid().ToString("N").Substring(0, 8))"
 $slotPath = Join-Path $slotRoot $slotName
@@ -171,38 +272,15 @@ if (-not (Test-Path $liveAssemblyPath)) {
     throw "Expected live runtime assembly was not produced: $liveAssemblyPath"
 }
 
-Set-Content -Path $liveReloadPointerPath -Value $liveAssemblyPath -Encoding UTF8
-
-$arguments = @(
-    "--cache", $cultCachePath,
-    "--shader-source", $shaderSourcePath,
-    "--live-assembly", $liveAssemblyPath,
-    "--live-reload-pointer", $liveReloadPointerPath
-)
-if ($Headless) {
-    $arguments += "--headless"
-}
-
-$startProcessParameters = @{
-    FilePath = $exePath
-    ArgumentList = $arguments
-    WorkingDirectory = $slotPath
-    RedirectStandardOutput = $stdoutLogPath
-    RedirectStandardError = $stderrLogPath
-    PassThru = $true
-}
-
-if ($Headless) {
-    $startProcessParameters.WindowStyle = "Hidden"
-}
-
-$process = Start-Process @startProcessParameters
+$process = Start-AquariumProcess -SlotPath $slotPath -LiveAssemblyPath $liveAssemblyPath -RunHeadless:$Headless
 Wait-ForStartedAquarium -Process $process -ExpectWindow:(-not $Headless)
 
 @{
     slot = $slotPath
     builtAt = (Get-Date).ToString("o")
     pid = $process.Id
+    liveAssembly = $liveAssemblyPath
+    headless = [bool]$Headless
     stdoutLog = $stdoutLogPath
     stderrLog = $stderrLogPath
 } | Export-Clixml -Path $statePath
@@ -213,5 +291,8 @@ Write-Host "  CultCache: $cultCachePath"
 Write-Host "  Stdout: $stdoutLogPath"
 Write-Host "  Stderr: $stderrLogPath"
 Write-Host "Run this script again to replace only this script-owned process."
+if (-not $Headless) {
+    Write-Host "Run with -Reopen to reopen this visible slot without rebuilding."
+}
 
 Remove-OldSlots

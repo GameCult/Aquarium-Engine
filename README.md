@@ -55,6 +55,16 @@ The previous script-owned process is stopped only after the replacement build
 succeeds. This keeps MSBuild away from the locked normal `bin\Debug` output
 while a live window is still open.
 
+If the visible dev window was closed but the last slot is still present, reopen
+it without rebuilding:
+
+```powershell
+.\scripts\dev-reload.ps1 -Reopen
+```
+
+Visible and headless runs keep separate PID state and logs, so a headless smoke
+does not replace the visible dev window.
+
 For automatic rebuild/restart on source changes, use the watcher:
 
 ```powershell
