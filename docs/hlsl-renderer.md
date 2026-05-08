@@ -37,3 +37,20 @@ The Bevy SH/froxel lighting, brick maps, HDR bloom graph, and debug terminal are
 not directly ported yet. Those need engine systems around the shader rather than
 more one-pass pixel shader stuffing. The machete remains on the wall, tastefully
 lit.
+
+## Missing Grid Pass
+
+The current Vortice renderer does **not** yet have the deferred gravity/Grid
+height render texture that Aetheria and the Bevy prototype both assume. The
+single HLSL pass still evaluates analytic Grid height directly while marching.
+
+That is temporary. The real Grid path should be:
+
+1. Render gravity/body sources into a Grid-space height target.
+2. Sample that height target in the raymarch pass.
+3. Build terrain normals from adjacent Grid texels in world space.
+4. Keep the Grid target centered on the camera target while body anchors stay in
+   world space.
+
+Until that pass exists, the shader approximates the same normal construction by
+sampling `terrainHeight` at adjacent world-space Grid texel offsets.

@@ -17,6 +17,7 @@ static const float SUN_RADIUS = 1.12;
 static const float GRID_WEATHER_WORLD_SCALE = 42.0;
 static const float GRID_LINE_WORLD_CELL = 2.0;
 static const int PLANET_COUNT = 5;
+static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 
 struct VertexOut
 {
@@ -290,12 +291,25 @@ float sceneDistance(float3 p)
 
 float3 terrainNormal(float3 p)
 {
-    float2 e = float2(max(0.035, gridRadius * 0.0012), 0.0);
-    float h0 = terrainHeight(p.xy - e.xy);
-    float h1 = terrainHeight(p.xy + e.xy);
-    float h2 = terrainHeight(p.xy - e.yx);
-    float h3 = terrainHeight(p.xy + e.yx);
-    return normalize(float3(h0 - h1, h2 - h3, e.x * 2.0));
+    float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.01);
+    float2 dx = float2(texelWorld, 0.0);
+    float2 dy = float2(0.0, texelWorld);
+
+    float hLeft = terrainHeight(p.xy - dx);
+    float hRight = terrainHeight(p.xy + dx);
+    float hDown = terrainHeight(p.xy - dy);
+    float hUp = terrainHeight(p.xy + dy);
+
+    float3 tangentX = float3(texelWorld * 2.0, 0.0, hRight - hLeft);
+    float3 tangentY = float3(0.0, texelWorld * 2.0, hUp - hDown);
+    float3 normal = normalize(cross(tangentX, tangentY));
+
+    if (normal.z < 0.0)
+    {
+        normal = -normal;
+    }
+
+    return normal;
 }
 
 void nearestBody(float3 p, out float3 center, out float radius, out int index, out bool isSelf)
