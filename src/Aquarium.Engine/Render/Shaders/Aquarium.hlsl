@@ -282,17 +282,36 @@ float displacedSphereSdf(float3 p, float3 center, float radius, int index, bool 
     return lerp(conservativeDistance, actualDistance, blend);
 }
 
-float primitiveSdf(float3 p, int primitiveId, out int materialId)
+void primitiveDistances(float3 p, int primitiveId, out int materialId, out float hitDistance, out float stepDistance)
 {
+    float3 center;
+    float radius;
+    int index;
+    bool isSelf;
+
     if (primitiveId == 0)
     {
         materialId = 2;
-        return displacedSphereSdf(p, SUN_POSITION, SUN_RADIUS, 17, true);
+        center = SUN_POSITION;
+        radius = SUN_RADIUS;
+        index = 17;
+        isSelf = true;
+    }
+    else
+    {
+        int planetIndex = primitiveId - 1;
+        materialId = 3;
+        center = planetCenter(planetIndex);
+        radius = planetRadius(planetIndex);
+        index = planetIndex;
+        isSelf = false;
     }
 
-    int planetIndex = primitiveId - 1;
-    materialId = 3;
-    return displacedSphereSdf(p, planetCenter(planetIndex), planetRadius(planetIndex), planetIndex, false);
+    float3 local = p - center;
+    float baseDistance = length(local) - radius;
+    float maxDisplacement = radius * (isSelf ? 0.20 : 0.105);
+    hitDistance = baseDistance - planetDisplacement(local, radius, index, isSelf);
+    stepDistance = baseDistance - maxDisplacement;
 }
 
 int froxelIndexForPosition(float3 p)
@@ -313,15 +332,16 @@ int froxelIndexForPosition(float3 p)
     return cell.x + cell.y * FROXEL_COUNT_X + cell.z * FROXEL_COUNT_X * FROXEL_COUNT_Y;
 }
 
-float bodySdf(float3 p, out int materialId)
+void bodyDistances(float3 p, out int materialId, out float hitDistance, out float stepDistance)
 {
-    float distanceToScene = 100000.0;
+    hitDistance = 100000.0;
+    stepDistance = 100000.0;
     materialId = 0;
 
     int froxelIndex = froxelIndexForPosition(p);
     if (froxelIndex < 0)
     {
-        return distanceToScene;
+        return;
     }
 
     [unroll]
@@ -336,17 +356,27 @@ float bodySdf(float3 p, out int materialId)
             if (primitiveId >= 0)
             {
                 int primitiveMaterialId;
-                float primitiveDistance = primitiveSdf(p, primitiveId, primitiveMaterialId);
-                if (primitiveDistance < distanceToScene)
+                float primitiveHitDistance;
+                float primitiveStepDistance;
+                primitiveDistances(p, primitiveId, primitiveMaterialId, primitiveHitDistance, primitiveStepDistance);
+                if (primitiveHitDistance < hitDistance)
                 {
-                    distanceToScene = primitiveDistance;
+                    hitDistance = primitiveHitDistance;
                     materialId = primitiveMaterialId;
                 }
+
+                stepDistance = min(stepDistance, primitiveStepDistance);
             }
         }
     }
+}
 
-    return distanceToScene;
+float bodySdf(float3 p, out int materialId)
+{
+    float hitDistance;
+    float stepDistance;
+    bodyDistances(p, materialId, hitDistance, stepDistance);
+    return hitDistance;
 }
 
 float sceneSdf(float3 p, out int materialId)
@@ -463,7 +493,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
     float previousTerrainGap = rayOrigin.z - terrainHeight(rayOrigin.xy);
 
     [loop]
-    for (int stepIndex = 0; stepIndex < 52; stepIndex++)
+    for (int stepIndex = 0; stepIndex < 80; stepIndex++)
     {
         hitPosition = rayOrigin + rayDirection * travel;
         float fade = terrainMask(hitPosition.xy);
@@ -473,7 +503,9 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         }
 
         int bodyMaterialId;
-        float bodyDistance = bodySdf(hitPosition, bodyMaterialId);
+        float bodyDistance;
+        float bodyStepDistance;
+        bodyDistances(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
         float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
         if (bodyDistance < hitEpsilon)
         {
@@ -498,7 +530,8 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             : 0.026;
 
         terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
-        float distanceToScene = min(bodyDistance * 0.86, terrainStep);
+        float bodyStep = bodyStepDistance < 99999.0 ? max(bodyStepDistance * 0.68, 0.004) : 100000.0;
+        float distanceToScene = min(bodyStep, terrainStep);
         previousTravel = travel;
         previousTerrainGap = terrainGap;
 

@@ -51,12 +51,15 @@ Current frame order:
 3. `AquariumPS` raymarches solids and terrain against that height texture.
 4. Body SDF checks read only the primitive ids binned into the current froxel.
    Empty froxels skip body SDF work entirely.
-5. Terrain marching uses heightfield crossing and slope-aware steps instead of
+5. Displaced body SDFs report a noisy hit distance separately from a conservative
+   envelope step distance, so high-frequency surface detail can shape the
+   silhouette without letting rays skip over it.
+6. Terrain marching uses heightfield crossing and slope-aware steps instead of
    pretending `z - height(xy)` is a true Euclidean SDF. Body objects still use
    SDF distance steps.
-6. Terrain normals sample adjacent Grid texels in world space instead of
+7. Terrain normals sample adjacent Grid texels in world space instead of
    re-evaluating analytic height per normal tap.
-7. The Grid target is centered on the camera target; body anchors remain in
+8. The Grid target is centered on the camera target; body anchors remain in
    world space.
 
 The target currently stores height in `.r` only. The next useful expansion is to
