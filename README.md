@@ -14,6 +14,8 @@ here.
 
 - C# host with renderer architecture kept legible in Rider.
 - Vortice/D3D11 first, with the native boundary kept explicit.
+- DirectWrite/Direct2D overlay text after the scene pass for crisp debug and UI
+  typography.
 - Grid-centered camera and world-space interaction invariants as first-class
   engine contracts.
 - Diegetic UI surfaces driven by Aquarium objects instead of admin chrome.

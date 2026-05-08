@@ -63,7 +63,21 @@ Current frame order:
    re-evaluating analytic height per normal tap.
 8. The Grid target is centered on the camera target; body anchors remain in
    world space.
+9. Direct2D/DirectWrite draws overlay text onto the swapchain backbuffer after
+   the shader image is complete and before `Present`. Overlay text is therefore
+   final-pixel UI, not HDR scene material, and should stay out of bloom,
+   tonemapping, and raymarching unless a specific diegetic surface asks for the
+   trouble.
 
 The target currently stores height in `.r` only. The next useful expansion is to
 store packed gradients in `.g/.b` during the Grid pass so the raymarcher can use
 one texture fetch for height and a cheaper normal path when fidelity allows it.
+
+## Overlay Text
+
+Readable overlay text is handled by `DirectWriteOverlay`, using DirectWrite for
+font layout/rasterization and Direct2D for the final draw. The D3D swapchain uses
+`B8G8R8A8_UNorm` so the same backbuffer can be shared with Direct2D without
+format drama. This path is for debug UI, terminal text, inspectors, and future
+CultUI overlay surfaces. Diegetic labels that live in the scene still belong in
+the renderer as MSDF/SDF billboards.

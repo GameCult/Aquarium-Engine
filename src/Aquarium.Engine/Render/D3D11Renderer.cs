@@ -30,6 +30,7 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Device device;
     private readonly ID3D11DeviceContext context;
     private readonly ID3D11RenderTargetView renderTargetView;
+    private readonly DirectWriteOverlay overlay;
     private readonly ID3D11Texture2D gridHeightTexture;
     private readonly ID3D11RenderTargetView gridHeightRenderTargetView;
     private readonly ID3D11ShaderResourceView gridHeightShaderResourceView;
@@ -59,7 +60,7 @@ public sealed class D3D11Renderer : IDisposable
         var swapChainDescription = new SwapChainDescription
         {
             BufferCount = 2,
-            BufferDescription = new ModeDescription((uint)width, (uint)height, Format.R8G8B8A8_UNorm),
+            BufferDescription = new ModeDescription((uint)width, (uint)height, Format.B8G8R8A8_UNorm),
             BufferUsage = Usage.RenderTargetOutput,
             OutputWindow = windowHandle,
             SampleDescription = new SampleDescription(1, 0),
@@ -86,6 +87,8 @@ public sealed class D3D11Renderer : IDisposable
 
         using var backBuffer = swapChain.GetBuffer<ID3D11Texture2D>(0);
         renderTargetView = device.CreateRenderTargetView(backBuffer);
+        using var backBufferSurface = swapChain.GetBuffer<IDXGISurface>(0);
+        overlay = new DirectWriteOverlay(backBufferSurface, width, height);
 
         var initialShaders = CompileShaderSet(this.shaderPath);
         vertexShader = initialShaders.VertexShader;
@@ -143,11 +146,14 @@ public sealed class D3D11Renderer : IDisposable
         context.UpdateSubresource(froxelPrimitiveIds, froxelPrimitiveBuffer);
         RenderGridHeight();
         RenderAquarium();
+        context.Flush();
+        overlay.Render(frame);
         swapChain.Present(1, PresentFlags.None);
     }
 
     public void Dispose()
     {
+        overlay.Dispose();
         froxelPrimitiveShaderResourceView.Dispose();
         froxelPrimitiveBuffer.Dispose();
         frameConstantBuffer.Dispose();
