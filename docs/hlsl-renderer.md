@@ -38,19 +38,20 @@ not directly ported yet. Those need engine systems around the shader rather than
 more one-pass pixel shader stuffing. The machete remains on the wall, tastefully
 lit.
 
-## Missing Grid Pass
+## Deferred Grid Pass
 
-The current Vortice renderer does **not** yet have the deferred gravity/Grid
-height render texture that Aetheria and the Bevy prototype both assume. The
-single HLSL pass still evaluates analytic Grid height directly while marching.
+The renderer now has a deferred Grid height target.
 
-That is temporary. The real Grid path should be:
+Current frame order:
 
-1. Render gravity/body sources into a Grid-space height target.
-2. Sample that height target in the raymarch pass.
-3. Build terrain normals from adjacent Grid texels in world space.
-4. Keep the Grid target centered on the camera target while body anchors stay in
+1. `GridHeightPS` renders body/gravity height into a 128x128 Grid-space
+   `R32G32B32A32_Float` render target.
+2. `AquariumPS` raymarches solids and terrain against that height texture.
+3. Terrain normals sample adjacent Grid texels in world space instead of
+   re-evaluating analytic height per normal tap.
+4. The Grid target is centered on the camera target; body anchors remain in
    world space.
 
-Until that pass exists, the shader approximates the same normal construction by
-sampling `terrainHeight` at adjacent world-space Grid texel offsets.
+The target currently stores height in `.r` only. The next useful expansion is to
+store packed gradients in `.g/.b` during the Grid pass so the raymarcher can use
+one texture fetch for height and a cheaper normal path when fidelity allows it.

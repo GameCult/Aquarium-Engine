@@ -9,6 +9,9 @@ cbuffer AquariumFrame : register(b0)
     float2 _pad1;
 };
 
+Texture2D<float4> gridHeightTexture : register(t0);
+SamplerState gridSampler : register(s0);
+
 static const float PI = 3.14159265359;
 static const float FAR_DISTANCE = 90.0;
 static const float SURFACE_EPSILON = 0.0015;
@@ -194,7 +197,17 @@ float3 planetCenter(int index)
     return float3(xy, 1.15 + planetRadius(index) * 0.72);
 }
 
-float terrainHeight(float2 p)
+float2 gridUv(float2 p)
+{
+    return gridLocal(p) * 0.5 + 0.5;
+}
+
+float2 gridWorld(float2 uv)
+{
+    return gridCenter + (uv * 2.0 - 1.0) * gridRadius;
+}
+
+float analyticTerrainHeight(float2 p)
 {
     float positive = 0.0;
     float negative = 0.0;
@@ -221,6 +234,12 @@ float terrainHeight(float2 p)
     positive += max(slow, 0.0);
     negative += max(-slow, 0.0);
     return positive - negative;
+}
+
+float terrainHeight(float2 p)
+{
+    float2 uv = saturate(gridUv(p));
+    return gridHeightTexture.SampleLevel(gridSampler, uv, 0.0).r;
 }
 
 float sphereSdf(float3 p, float3 center, float radius)
@@ -291,14 +310,14 @@ float sceneDistance(float3 p)
 
 float3 terrainNormal(float3 p)
 {
-    float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.01);
-    float2 dx = float2(texelWorld, 0.0);
-    float2 dy = float2(0.0, texelWorld);
+    float2 uv = saturate(gridUv(p.xy));
+    float2 texel = 1.0 / GRID_HEIGHT_TEXEL_COUNT;
+    float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.001);
 
-    float hLeft = terrainHeight(p.xy - dx);
-    float hRight = terrainHeight(p.xy + dx);
-    float hDown = terrainHeight(p.xy - dy);
-    float hUp = terrainHeight(p.xy + dy);
+    float hLeft = gridHeightTexture.SampleLevel(gridSampler, uv - float2(texel.x, 0.0), 0.0).r;
+    float hRight = gridHeightTexture.SampleLevel(gridSampler, uv + float2(texel.x, 0.0), 0.0).r;
+    float hDown = gridHeightTexture.SampleLevel(gridSampler, uv - float2(0.0, texel.y), 0.0).r;
+    float hUp = gridHeightTexture.SampleLevel(gridSampler, uv + float2(0.0, texel.y), 0.0).r;
 
     float3 tangentX = float3(texelWorld * 2.0, 0.0, hRight - hLeft);
     float3 tangentY = float3(0.0, texelWorld * 2.0, hUp - hDown);
@@ -478,4 +497,12 @@ float4 AquariumPS(VertexOut input) : SV_Target
 
     color += float3(0.001, 0.003, 0.004);
     return float4(aces(color), 1.0);
+}
+
+float4 GridHeightPS(VertexOut input) : SV_Target
+{
+    float2 uv = saturate(input.uv);
+    float2 world = gridWorld(uv);
+    float height = analyticTerrainHeight(world);
+    return float4(height, 0.0, 0.0, 1.0);
 }
