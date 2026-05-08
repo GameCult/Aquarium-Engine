@@ -395,6 +395,88 @@ void bodyDistancesDirect(float3 p, out int materialId, out float hitDistance, ou
     }
 }
 
+void refineBodyIntersection(
+    float3 rayOrigin,
+    float3 rayDirection,
+    float previousTravel,
+    float currentTravel,
+    out float refinedTravel,
+    out int refinedMaterialId)
+{
+    float lowTravel = min(previousTravel, currentTravel);
+    float highTravel = max(previousTravel, currentTravel);
+    float searchSpan = max(highTravel - lowTravel, 0.012);
+    lowTravel = max(lowTravel - searchSpan * 0.35, 0.0);
+    highTravel += searchSpan * 0.35;
+
+    refinedTravel = currentTravel;
+    refinedMaterialId = 0;
+    float bestAbsDistance = 100000.0;
+    float lowDistance = 100000.0;
+    float highDistance = 100000.0;
+    int lowMaterialId = 0;
+    int highMaterialId = 0;
+    bool foundBracket = false;
+    float unusedStepDistance;
+
+    [unroll]
+    for (int sampleIndex = 0; sampleIndex < 9; sampleIndex++)
+    {
+        float t = lerp(lowTravel, highTravel, sampleIndex / 8.0);
+        float3 samplePosition = rayOrigin + rayDirection * t;
+        int sampleMaterialId;
+        float sampleDistance;
+        bodyDistancesDirect(samplePosition, sampleMaterialId, sampleDistance, unusedStepDistance);
+
+        float absDistance = abs(sampleDistance);
+        if (absDistance < bestAbsDistance)
+        {
+            bestAbsDistance = absDistance;
+            refinedTravel = t;
+            refinedMaterialId = sampleMaterialId;
+        }
+
+        if (!foundBracket && sampleDistance > 0.0)
+        {
+            lowTravel = t;
+            lowDistance = sampleDistance;
+            lowMaterialId = sampleMaterialId;
+        }
+        else if (!foundBracket)
+        {
+            highTravel = t;
+            highDistance = sampleDistance;
+            highMaterialId = sampleMaterialId;
+            foundBracket = true;
+        }
+    }
+
+    if (foundBracket && lowDistance > 0.0 && highDistance <= 0.0)
+    {
+        refinedMaterialId = highMaterialId != 0 ? highMaterialId : lowMaterialId;
+
+        [unroll]
+        for (int refineStep = 0; refineStep < 8; refineStep++)
+        {
+            float midTravel = (lowTravel + highTravel) * 0.5;
+            float3 midPosition = rayOrigin + rayDirection * midTravel;
+            float midDistance;
+            bodyDistancesDirect(midPosition, refinedMaterialId, midDistance, unusedStepDistance);
+
+            if (midDistance > 0.0)
+            {
+                lowTravel = midTravel;
+            }
+            else
+            {
+                highTravel = midTravel;
+            }
+        }
+
+        refinedTravel = highTravel;
+    }
+}
+
 float bodySdf(float3 p, out int materialId)
 {
     float hitDistance;
@@ -540,17 +622,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
         if (bodyDistance < hitEpsilon)
         {
-            float refinementSpan = max(abs(travel - previousTravel), 0.012);
-            float refinedTravel = travel;
-            for (int refineStep = 0; refineStep < 8; refineStep++)
-            {
-                hitPosition = rayOrigin + rayDirection * refinedTravel;
-                bodyDistancesDirect(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
-                refinedTravel += clamp(bodyDistance * 0.86, -refinementSpan, refinementSpan);
-                refinementSpan *= 0.55;
-            }
-
-            travel = max(refinedTravel, 0.0);
+            refineBodyIntersection(rayOrigin, rayDirection, previousTravel, travel, travel, bodyMaterialId);
             hitPosition = rayOrigin + rayDirection * travel;
             bodyDistancesDirect(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
             materialId = bodyMaterialId;
