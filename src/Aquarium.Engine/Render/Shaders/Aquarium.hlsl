@@ -1259,6 +1259,35 @@ float3 aces(float3 color)
     return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
 }
 
+float3 debugFieldIdColor(float fieldId)
+{
+    if (fieldId < 0.5)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+
+    if (abs(fieldId - FIELD_ID_GRID) < 0.25)
+    {
+        return float3(0.0, 0.9, 1.0);
+    }
+
+    if (abs(fieldId - FIELD_ID_SELF) < 0.25)
+    {
+        return float3(1.0, 0.92, 0.25);
+    }
+
+    if (fieldId >= FIELD_ID_PLANET_BASE)
+    {
+        float phase = frac((fieldId - FIELD_ID_PLANET_BASE) * 0.37);
+        return 0.35 + 0.65 * float3(
+            0.5 + 0.5 * sin(phase * 6.28318 + 0.0),
+            0.5 + 0.5 * sin(phase * 6.28318 + 2.1),
+            0.5 + 0.5 * sin(phase * 6.28318 + 4.2));
+    }
+
+    return float3(1.0, 0.0, 1.0);
+}
+
 struct SceneOut
 {
     float4 colorTravel : SV_Target0;
@@ -1307,7 +1336,7 @@ SceneOut AquariumScenePS(VertexOut input)
         outputMaterialId = FIELD_ID_GRID;
         outputNormal = terrainNormal(gridHitPosition);
         outputCoverage = gridSupport;
-        outputReactive = 1.0 - smoothstep(0.06, 0.48, gridSupport);
+        outputReactive = 0.0;
         if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
         {
             color = gridOverlay.rgb;
@@ -1489,6 +1518,14 @@ ResolveOut AquariumResolvePS(VertexOut input)
     else if (renderDebugMode >= 3.5 && renderDebugMode < 4.5)
     {
         finalColor = historyWeight.xxx;
+    }
+    else if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
+    {
+        finalColor = float3(currentReactive, currentCoverage, currentMediumOpacity);
+    }
+    else if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
+    {
+        finalColor = debugFieldIdColor(currentFieldId);
     }
 
     ResolveOut output;

@@ -93,7 +93,7 @@ public sealed class D3D11Renderer : IDisposable
     {
         this.width = width;
         this.height = height;
-        RenderDebugMode = Math.Clamp(renderDebugMode, 0, 4);
+        RenderDebugMode = Math.Clamp(renderDebugMode, 0, 6);
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
         startupProgress?.Invoke("Creating D3D11 device and swapchain");
 
@@ -271,7 +271,7 @@ public sealed class D3D11Renderer : IDisposable
 
     public void CycleRenderDebugMode()
     {
-        RenderDebugMode = (RenderDebugMode + 1) % 5;
+        RenderDebugMode = (RenderDebugMode + 1) % 7;
     }
 
     public void Dispose()

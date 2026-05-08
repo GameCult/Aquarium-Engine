@@ -161,5 +161,13 @@ public static class AquariumHost
         {
             renderer.RenderDebugMode = 4;
         }
+        else if (input.IsKeyPressed(KeyCode.Digit5))
+        {
+            renderer.RenderDebugMode = 5;
+        }
+        else if (input.IsKeyPressed(KeyCode.Digit6))
+        {
+            renderer.RenderDebugMode = 6;
+        }
     }
 }

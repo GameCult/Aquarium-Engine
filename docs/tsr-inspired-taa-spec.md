@@ -282,4 +282,7 @@ Current debug view controls:
 - `2` reprojected history color used by the resolver
 - `3` accepted history age
 - `4` history weight
+- `5` current temporal control: reactive in red, Grid support/coverage in green,
+  reserved medium opacity in blue
+- `6` current field identity palette for Grid, Self, and planets
 - `--render-debug` and `AQUARIUM_RENDER_DEBUG_MODE` set the startup mode

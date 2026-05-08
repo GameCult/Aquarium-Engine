@@ -206,10 +206,11 @@ Grid retrace has been removed; with jitter disabled, Grid analytic color uses
 the existing current hit.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
-number keys `0` through `4` select them directly. Mode `0` is final resolve,
+number keys `0` through `6` select them directly. Mode `0` is final resolve,
 `1` is raw current scene, `2` is the reprojected history sample, `3` is history
-age, and `4` is history weight. The startup mode can still be set with
-`--render-debug` or `AQUARIUM_RENDER_DEBUG_MODE`.
+age, `4` is history weight, `5` is current temporal control, and `6` is current
+field identity. The startup mode can still be set with `--render-debug` or
+`AQUARIUM_RENDER_DEBUG_MODE`.
 
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.

@@ -74,8 +74,9 @@ prototype integrated along the camera ray before surface composition.
   and color-delta rejection. A current dither miss is not evidence that the
   true Grid color is background.
 - Temporal debug keys: F1 cycles, 0 final, 1 raw current scene, 2 reprojected
-  history, 3 history age, 4 history weight. Use these to prove whether the
-  presented frame is resolved and whether history is alive.
+  history, 3 history age, 4 history weight, 5 current temporal control, 6
+  current field identity. Use these to prove whether the presented frame is
+  resolved and whether history is alive.
 - Temporal Gate 3F: Grid stochastic coverage now uses high-retention history
   without coverage/reactive authority penalties. Coverage remains a continuity
   signal, not a reason to throw away the accumulation low-alpha lines require.
@@ -92,6 +93,10 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3J: debug mode 1 is raw scene again. Final Grid pixels use the
   analytic current estimate directly instead of blending previous Grid color
   history; history debug surfaces remain diagnostics.
+- Temporal debug correction: mode 5 exposes current temporal control. The first
+  look showed the entire Grid red because stale Grid logic marked low support as
+  reactive. Grid reactive is now zero; support/coverage remains the green
+  signal.
 - Temporal Gate 3L: projection jitter is scaled to zero because Self/planet
   surfaces visibly juddered. Keep jitter disabled until opaque and Grid resolve
   both hide the offset. Removed the abandoned unjittered Grid retrace; Grid
