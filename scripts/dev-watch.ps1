@@ -17,6 +17,9 @@ $watchLogPath = Join-Path $repoRoot "artifacts\dev-reload\watch.log"
 $liveSlotRoot = Join-Path $repoRoot "artifacts\dev-reload\live-slots"
 $liveReloadPointerPath = Join-Path $repoRoot "artifacts\dev-reload\live-current.txt"
 $shaderPath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
+$visibleStatePath = Join-Path $repoRoot "artifacts\dev-reload\state.clixml"
+$headlessStatePath = Join-Path $repoRoot "artifacts\dev-reload\headless-state.clixml"
+$ownedProcessStatePath = if ($Headless) { $headlessStatePath } else { $visibleStatePath }
 
 New-Item -ItemType Directory -Force -Path (Split-Path $watchLogPath) | Out-Null
 New-Item -ItemType Directory -Force -Path $liveSlotRoot | Out-Null
@@ -30,6 +33,7 @@ function Write-WatchLog([string]$message) {
 function Get-SourceFiles {
     $roots = @(
         (Join-Path $repoRoot "src"),
+        (Join-Path $repoRoot "scripts"),
         (Join-Path $repoRoot "Aquarium.Engine.slnx"),
         (Join-Path $repoRoot "global.json")
     )
@@ -51,7 +55,7 @@ function Get-SourceFiles {
                 $_.FullName -notmatch "\\obj\\" -and
                 $_.FullName -notmatch "\\artifacts\\" -and
                 (
-                    $_.Extension -in @(".cs", ".csproj", ".json", ".slnx") -or
+                    $_.Extension -in @(".cs", ".csproj", ".json", ".slnx", ".ps1") -or
                     $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Engine\Assets\*")
                 )
             }
@@ -189,6 +193,43 @@ function Invoke-Reload {
     }
 }
 
+function Test-OwnedProcessRunning {
+    if ($NoInitialLaunch) {
+        return $true
+    }
+
+    if (-not (Test-Path $ownedProcessStatePath)) {
+        return $false
+    }
+
+    try {
+        $state = Import-Clixml -Path $ownedProcessStatePath
+        if (-not $state.pid -or -not $state.slot) {
+            return $false
+        }
+
+        $process = Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
+        if (-not $process) {
+            return $false
+        }
+
+        $recordedPath = [string]$state.slot
+        $commandLine = $null
+        try {
+            $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)").CommandLine
+        }
+        catch {
+            $commandLine = $null
+        }
+
+        return [bool]($commandLine -and $commandLine -like "*$recordedPath*")
+    }
+    catch {
+        Write-WatchLog "Could not inspect script-owned process state; will relaunch. $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Invoke-LiveReload {
     param([string]$reason)
 
@@ -231,6 +272,23 @@ Write-WatchLog "Watching Aquarium sources. Press Ctrl+C to stop."
 do {
     Start-Sleep -Milliseconds $IntervalMilliseconds
     $currentFingerprint = Wait-StableFingerprints
+
+    if (-not (Test-OwnedProcessRunning)) {
+        try {
+            Invoke-Reload "script-owned process is not running"
+            $lastGoodFingerprint = Wait-StableFingerprints
+            $lastFailedFingerprint = $null
+            $currentFingerprint = $lastGoodFingerprint
+        }
+        catch {
+            $lastFailedFingerprint = $currentFingerprint.all
+            Write-WatchLog "Relaunch failed; watcher remains alive. $($_.Exception.Message)"
+        }
+
+        if ($Once) {
+            break
+        }
+    }
 
     if ($currentFingerprint.all -eq $lastGoodFingerprint.all -or $currentFingerprint.all -eq $lastFailedFingerprint) {
         if ($Once) {

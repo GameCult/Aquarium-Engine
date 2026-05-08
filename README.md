@@ -75,6 +75,9 @@ The watcher polls source files, waits for writes to settle, builds into a new
 slot, and only replaces the running Aquarium after the new build succeeds. If a
 build fails, the previous good process keeps running and that same broken source
 fingerprint is not retried until files change again.
+It also watches the recorded script-owned process. If the visible window is
+closed or the recorded process dies, the watcher relaunches from a fresh slot on
+the next poll instead of sitting there with its hands folded like this is fine.
 
 Shader edits do not restart the process. The dev reload runner passes the
 source `Aquarium.hlsl` path into the live app, and the renderer polls that file,
