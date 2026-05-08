@@ -255,7 +255,7 @@ float sphereSdf(float3 p, float3 center, float radius)
     return length(p - center) - radius;
 }
 
-float planetDisplacement(float3 localPosition, float radius, int index, bool isSelf)
+float planetCutDepth(float3 localPosition, float radius, int index, bool isSelf)
 {
     float3 domain = localPosition / max(radius, 0.001);
     float seed = hash21(float2(index, 41.17)) * 19.0;
@@ -263,33 +263,19 @@ float planetDisplacement(float3 localPosition, float radius, int index, bool isS
     float fine = fbm3(domain * 5.2 + seed * 1.73 + timeSeconds * (isSelf ? -0.18 : 0.0));
     float ridged = pow(saturate(ridge(fine * 0.5 + 0.5)), isSelf ? 1.6 : 2.8);
     float amplitude = isSelf ? 0.20 : 0.105;
-    return (broad * 0.62 + ridged * 0.38) * radius * amplitude;
+    float cavity = saturate(0.56 + broad * 0.34 + ridged * 0.30);
+    return cavity * radius * amplitude;
 }
 
 float displacedSphereSdf(float3 p, float3 center, float radius, int index, bool isSelf)
 {
     float3 local = p - center;
     float baseDistance = length(local) - radius;
-    float maxDisplacement = radius * (isSelf ? 0.20 : 0.105);
-
-    if (baseDistance > maxDisplacement * 1.5)
-    {
-        return baseDistance - maxDisplacement;
-    }
-
-    float actualDistance = baseDistance - planetDisplacement(local, radius, index, isSelf);
-    float conservativeDistance = baseDistance - maxDisplacement;
-    float blend = 1.0 - smoothstep(maxDisplacement * 0.25, maxDisplacement * 1.5, baseDistance);
-    return lerp(conservativeDistance, actualDistance, blend);
+    return baseDistance + planetCutDepth(local, radius, index, isSelf);
 }
 
-void primitiveDistances(float3 p, int primitiveId, out int materialId, out float hitDistance, out float stepDistance)
+void primitiveInfo(int primitiveId, out int materialId, out float3 center, out float radius, out int index, out bool isSelf)
 {
-    float3 center;
-    float radius;
-    int index;
-    bool isSelf;
-
     if (primitiveId == 0)
     {
         materialId = 2;
@@ -307,12 +293,20 @@ void primitiveDistances(float3 p, int primitiveId, out int materialId, out float
         index = planetIndex;
         isSelf = false;
     }
+}
+
+void primitiveDistances(float3 p, int primitiveId, out int materialId, out float hitDistance, out float stepDistance)
+{
+    float3 center;
+    float radius;
+    int index;
+    bool isSelf;
+    primitiveInfo(primitiveId, materialId, center, radius, index, isSelf);
 
     float3 local = p - center;
     float baseDistance = length(local) - radius;
-    float maxDisplacement = radius * (isSelf ? 0.20 : 0.105);
-    hitDistance = baseDistance - planetDisplacement(local, radius, index, isSelf);
-    stepDistance = baseDistance - maxDisplacement;
+    hitDistance = baseDistance + planetCutDepth(local, radius, index, isSelf);
+    stepDistance = baseDistance;
 }
 
 int froxelIndexForPosition(float3 p)
@@ -392,84 +386,166 @@ void bodyDistancesDirect(float3 p, out int materialId, out float hitDistance, ou
     }
 }
 
-void refineBodyIntersection(
+float tracePrimitiveInterval(
     float3 rayOrigin,
     float3 rayDirection,
-    float previousTravel,
+    int primitiveId,
     float currentTravel,
-    out float refinedTravel,
-    out int refinedMaterialId)
+    out float entryTravel,
+    out float hitTravel,
+    out float exitTravel,
+    out int materialId)
 {
-    float lowTravel = min(previousTravel, currentTravel);
-    float highTravel = max(previousTravel, currentTravel);
-    float searchSpan = max(highTravel - lowTravel, 0.012);
-    lowTravel = max(lowTravel - searchSpan * 0.35, 0.0);
-    highTravel += searchSpan * 0.35;
+    entryTravel = currentTravel;
+    hitTravel = currentTravel;
+    exitTravel = currentTravel;
+    materialId = 0;
 
-    refinedTravel = currentTravel;
-    refinedMaterialId = 0;
-    float bestAbsDistance = 100000.0;
-    float lowDistance = 100000.0;
-    float highDistance = 100000.0;
-    int lowMaterialId = 0;
-    int highMaterialId = 0;
+    float3 center = float3(0.0, 0.0, 0.0);
+    float radius = 0.0;
+    int index = 0;
+    bool isSelf = false;
+    primitiveInfo(primitiveId, materialId, center, radius, index, isSelf);
+
+    float3 offset = rayOrigin - center;
+    float b = dot(offset, rayDirection);
+    float c = dot(offset, offset) - radius * radius;
+    float discriminant = b * b - c;
+    if (discriminant < 0.0)
+    {
+        entryTravel = currentTravel;
+        hitTravel = currentTravel;
+        exitTravel = currentTravel;
+        return 0.0;
+    }
+
+    float root = sqrt(discriminant);
+    entryTravel = -b - root;
+    exitTravel = -b + root;
+    if (exitTravel < 0.0)
+    {
+        entryTravel = currentTravel;
+        hitTravel = currentTravel;
+        exitTravel = currentTravel;
+        return 0.0;
+    }
+
+    entryTravel = max(entryTravel, currentTravel);
+    if (exitTravel < currentTravel)
+    {
+        entryTravel = currentTravel;
+        hitTravel = currentTravel;
+        return 0.0;
+    }
+
+    float previousTravel = entryTravel;
+    float previousDistance = displacedSphereSdf(rayOrigin + rayDirection * previousTravel, center, radius, index, isSelf);
+
+    if (previousDistance <= 0.0)
+    {
+        hitTravel = previousTravel;
+        return 1.0;
+    }
+
+    float lowTravel = previousTravel;
+    float highTravel = previousTravel;
     bool foundBracket = false;
-    float unusedStepDistance;
-
-    for (int sampleIndex = 0; sampleIndex < 9; sampleIndex++)
+    for (int sampleIndex = 1; sampleIndex <= 8; sampleIndex++)
     {
-        float t = lerp(lowTravel, highTravel, sampleIndex / 8.0);
-        float3 samplePosition = rayOrigin + rayDirection * t;
-        int sampleMaterialId;
-        float sampleDistance;
-        bodyDistancesDirect(samplePosition, sampleMaterialId, sampleDistance, unusedStepDistance);
-
-        float absDistance = abs(sampleDistance);
-        if (absDistance < bestAbsDistance)
+        float sampleTravel = lerp(entryTravel, exitTravel, sampleIndex / 8.0);
+        float sampleDistance = displacedSphereSdf(rayOrigin + rayDirection * sampleTravel, center, radius, index, isSelf);
+        if (sampleDistance <= 0.0)
         {
-            bestAbsDistance = absDistance;
-            refinedTravel = t;
-            refinedMaterialId = sampleMaterialId;
-        }
-
-        if (!foundBracket && sampleDistance > 0.0)
-        {
-            lowTravel = t;
-            lowDistance = sampleDistance;
-            lowMaterialId = sampleMaterialId;
-        }
-        else if (!foundBracket)
-        {
-            highTravel = t;
-            highDistance = sampleDistance;
-            highMaterialId = sampleMaterialId;
+            lowTravel = previousTravel;
+            highTravel = sampleTravel;
             foundBracket = true;
+            break;
         }
+
+        previousTravel = sampleTravel;
+        previousDistance = sampleDistance;
     }
 
-    if (foundBracket && lowDistance > 0.0 && highDistance <= 0.0)
+    if (!foundBracket)
     {
-        refinedMaterialId = highMaterialId != 0 ? highMaterialId : lowMaterialId;
+        hitTravel = currentTravel;
+        return 0.0;
+    }
 
-        for (int refineStep = 0; refineStep < 8; refineStep++)
+    for (int refineStep = 0; refineStep < 10; refineStep++)
+    {
+        float midTravel = (lowTravel + highTravel) * 0.5;
+        float midDistance = displacedSphereSdf(rayOrigin + rayDirection * midTravel, center, radius, index, isSelf);
+        if (midDistance > 0.0)
         {
-            float midTravel = (lowTravel + highTravel) * 0.5;
-            float3 midPosition = rayOrigin + rayDirection * midTravel;
-            float midDistance;
-            bodyDistancesDirect(midPosition, refinedMaterialId, midDistance, unusedStepDistance);
+            lowTravel = midTravel;
+        }
+        else
+        {
+            highTravel = midTravel;
+        }
+    }
 
-            if (midDistance > 0.0)
-            {
-                lowTravel = midTravel;
-            }
-            else
-            {
-                highTravel = midTravel;
-            }
+    hitTravel = highTravel;
+    return 1.0;
+}
+
+float traceNearestBodyInterval(
+    float3 rayOrigin,
+    float3 rayDirection,
+    float currentTravel,
+    out float entryTravel,
+    out float hitTravel,
+    out float exitTravel,
+    out int materialId)
+{
+    entryTravel = 100000.0;
+    hitTravel = 100000.0;
+    exitTravel = currentTravel;
+    materialId = 0;
+    float hit = 0.0;
+    float nearestEntry = 100000.0;
+    float nearestExit = 100000.0;
+
+    for (int primitiveId = 0; primitiveId < PRIMITIVE_COUNT; primitiveId++)
+    {
+        float primitiveEntryTravel;
+        float primitiveHitTravel;
+        float primitiveExitTravel;
+        int primitiveMaterialId;
+        float primitiveHit = tracePrimitiveInterval(
+            rayOrigin,
+            rayDirection,
+            primitiveId,
+            currentTravel,
+            primitiveEntryTravel,
+            primitiveHitTravel,
+            primitiveExitTravel,
+            primitiveMaterialId);
+
+        if (primitiveExitTravel >= currentTravel && primitiveEntryTravel < nearestEntry)
+        {
+            nearestEntry = primitiveEntryTravel;
+            nearestExit = primitiveExitTravel;
         }
 
-        refinedTravel = highTravel;
+        if (primitiveHit > 0.5 && primitiveHitTravel < hitTravel)
+        {
+            entryTravel = primitiveEntryTravel;
+            hitTravel = primitiveHitTravel;
+            exitTravel = primitiveExitTravel;
+            materialId = primitiveMaterialId;
+            hit = 1.0;
+        }
     }
+
+    if (hit < 0.5 && nearestExit < 99999.0)
+    {
+        entryTravel = nearestEntry;
+        exitTravel = nearestExit;
+    }
+
+    return hit;
 }
 
 float bodySdf(float3 p, out int materialId)
@@ -610,18 +686,34 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             return false;
         }
 
-        int bodyMaterialId;
-        float bodyDistance;
-        float bodyStepDistance;
-        bodyDistances(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
         float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
-        if (bodyDistance < hitEpsilon)
+        float bodyEntryTravel;
+        float bodyHitTravel;
+        float bodyExitTravel;
+        int bodyMaterialId;
+        float bodyHit = traceNearestBodyInterval(
+            rayOrigin,
+            rayDirection,
+            travel,
+            bodyEntryTravel,
+            bodyHitTravel,
+            bodyExitTravel,
+            bodyMaterialId);
+
+        if (bodyHit > 0.5)
         {
-            refineBodyIntersection(rayOrigin, rayDirection, previousTravel, travel, travel, bodyMaterialId);
+            travel = bodyHitTravel;
             hitPosition = rayOrigin + rayDirection * travel;
-            bodyDistancesDirect(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
             materialId = bodyMaterialId;
             return true;
+        }
+
+        if (bodyEntryTravel < 99999.0 && bodyExitTravel > travel)
+        {
+            previousTravel = travel;
+            previousTerrainGap = hitPosition.z - terrainHeight(hitPosition.xy);
+            travel = bodyExitTravel + 0.004;
+            continue;
         }
 
         float terrainGap = hitPosition.z - terrainHeight(hitPosition.xy);
@@ -641,20 +733,10 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             : 0.026;
 
         terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
-        float bodyStep = 100000.0;
-        if (bodyStepDistance < 99999.0)
-        {
-            bodyStep = bodyStepDistance > hitEpsilon
-                ? bodyStepDistance * 0.68
-                : max(abs(bodyDistance) * 0.42, 0.004);
-        }
-
-        float distanceToScene = min(bodyStep, terrainStep);
-        float minStep = bodyStep < terrainStep ? 0.004 : 0.026;
         previousTravel = travel;
         previousTerrainGap = terrainGap;
 
-        travel += max(distanceToScene, minStep);
+        travel += max(terrainStep, 0.026);
         if (travel > FAR_DISTANCE)
         {
             return false;
