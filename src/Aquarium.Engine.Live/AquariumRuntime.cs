@@ -39,7 +39,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
         Console.WriteLine($"Grid center: {gridFrame.Center}, radius: {gridFrame.Radius:0.00}");
         Console.WriteLine($"CultCache: {stateStore.CachePath}");
         Console.WriteLine($"CultNet hello: {stateStore.Hello.RuntimeKind} / {stateStore.Hello.DisplayName}");
-        Console.WriteLine("Vortice D3D11 is present as the host shell; Aquarium owns the invariants.");
+        Console.WriteLine("Vortice D3D11 is present as the host shell; Aquarium owns the invariants. Live reload probe armed.");
     }
 
     public void Update(float deltaSeconds, InputState input)

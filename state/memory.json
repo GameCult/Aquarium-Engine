@@ -76,6 +76,7 @@
       "The current live document is epiphany.aquarium.live_state, stored through CultLib MessagePack backing. Direct runs can use --cache or AQUARIUM_CULTCACHE_PATH.",
       "dev-reload builds disposable apphost slots so a running window does not lock normal build output. dev-watch hot reloads shaders and live runtime DLLs while preserving the last good process. Host/core/content changes, scripts, and src/Aquarium.Engine/Assets must rebuild and restart the apphost on demand. dev-watch must also relaunch if its recorded script-owned process is no longer running. For visible windows, dev-watch -ReopenWhenClosed reopens the last good visible slot without rebuilding.",
       "Live runtime reload is not successful just because dev-watch wrote live-current.txt. The watcher must see the host acknowledge the exact live DLL path in stdout, or treat the update as failed and keep the previous runtime/process alive.",
+      "dev-watch must not use Start-Process -Wait to run dev-reload while dev-reload launches the long-lived Aquarium app. On Windows that can leave the watcher stuck after initial launch, never reaching the poll loop. Invoke the reload script synchronously and let dev-reload own the detached app process.",
       "Shader reload failure must keep the previous good shader objects bound. Live-runtime reload failure must keep the previous runtime alive. Rehydrate from CultCache before claiming reload survival."
     ],
     "salvage_without_baggage": [

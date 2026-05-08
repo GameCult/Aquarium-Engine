@@ -186,16 +186,15 @@ function Invoke-Reload {
         $arguments += "-Headless"
     }
 
-    $process = Start-Process `
-        -FilePath "powershell" `
-        -ArgumentList $arguments `
-        -WorkingDirectory $repoRoot `
-        -Wait `
-        -PassThru `
-        -NoNewWindow
-
-    if ($process.ExitCode -ne 0) {
-        throw "dev-reload failed with exit code $($process.ExitCode)."
+    Push-Location $repoRoot
+    try {
+        & powershell @arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "dev-reload failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -213,11 +212,7 @@ function Get-OwnedProcessState {
     }
 }
 
-function Test-OwnedProcessRunning {
-    if ($NoInitialLaunch) {
-        return $true
-    }
-
+function Test-RecordedProcessRunning {
     $state = Get-OwnedProcessState
     if (-not $state -or -not $state.pid -or -not $state.slot) {
         return $false
@@ -240,6 +235,14 @@ function Test-OwnedProcessRunning {
     return [bool]($commandLine -and $commandLine -like "*$recordedPath*")
 }
 
+function Test-OwnedProcessRunning {
+    if ($NoInitialLaunch) {
+        return $true
+    }
+
+    return Test-RecordedProcessRunning
+}
+
 function Invoke-Reopen {
     param([string]$reason)
 
@@ -258,16 +261,15 @@ function Invoke-Reopen {
         "-RetainSlots", "$RetainSlots"
     )
 
-    $process = Start-Process `
-        -FilePath "powershell" `
-        -ArgumentList $arguments `
-        -WorkingDirectory $repoRoot `
-        -Wait `
-        -PassThru `
-        -NoNewWindow
-
-    if ($process.ExitCode -ne 0) {
-        throw "dev-reload -Reopen failed with exit code $($process.ExitCode)."
+    Push-Location $repoRoot
+    try {
+        & powershell @arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "dev-reload -Reopen failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -297,12 +299,7 @@ function Invoke-LiveReload {
 function Wait-LiveReloadAcknowledged {
     param([string]$liveAssemblyPath)
 
-    if ($NoInitialLaunch) {
-        Write-WatchLog "Live reload acknowledgement skipped: -NoInitialLaunch does not own a running process."
-        return
-    }
-
-    if (-not (Test-OwnedProcessRunning)) {
+    if (-not (Test-RecordedProcessRunning)) {
         throw "live reload pointer was updated, but no script-owned process is running to load it."
     }
 

@@ -100,3 +100,7 @@ prototype integrated along the camera ray before surface composition.
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last
   visible slot without rebuilding when the window has been closed.
+- Dev watcher failure found in practice: `Start-Process -Wait` around
+  `dev-reload.ps1` could block after the app launched, leaving the watcher stuck
+  at initial launch and never polling. The watcher now invokes dev-reload
+  synchronously and leaves long-lived process ownership inside dev-reload.
