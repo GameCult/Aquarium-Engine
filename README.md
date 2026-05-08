@@ -90,8 +90,10 @@ host sees the pointer change, loads and starts the new runtime first, then
 disposes the old one only after the replacement is valid. A bad live DLL leaves
 the previous runtime alive and reports the reload failure to stderr. Successful
 reloads rehydrate through CultCache without restarting the window or D3D device.
-Host, renderer, contract, project, and script changes still rebuild and restart
-the apphost.
+Host, renderer, contract, project, script, and `src\Aquarium.Engine\Assets`
+content changes still rebuild and restart the apphost. Runtime content belongs
+to the process image; shader hot reload cannot make a running renderer discover
+new files it never loaded.
 
 Runtime live state is a typed CultCache document, not a loose sidecar file. The
 first document is `epiphany.aquarium.live_state`, currently banking camera

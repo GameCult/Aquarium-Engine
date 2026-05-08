@@ -40,3 +40,6 @@ prototype integrated along the camera ray before surface composition.
 - Pulled Aetheria's `Assets/Resources/LDR_LLL1_0.png` into Aquarium as source
   PNG plus runtime `R8_UNorm` bytes. The renderer binds it as `t2` with wrapping
   point sampling for stochastic Grid coverage.
+- Dev watcher fix: restart fingerprint now includes `src/Aquarium.Engine/Assets`
+  so runtime content changes trigger apphost rebuild/restart instead of relying
+  on shader or live assembly reload.

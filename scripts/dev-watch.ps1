@@ -49,7 +49,11 @@ function Get-SourceFiles {
             Where-Object {
                 $_.FullName -notmatch "\\bin\\" -and
                 $_.FullName -notmatch "\\obj\\" -and
-                $_.Extension -in @(".cs", ".csproj", ".json", ".slnx")
+                $_.FullName -notmatch "\\artifacts\\" -and
+                (
+                    $_.Extension -in @(".cs", ".csproj", ".json", ".slnx") -or
+                    $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Engine\Assets\*")
+                )
             }
     }
 }
@@ -241,7 +245,7 @@ do {
             Invoke-LiveReload "live source change"
         }
         else {
-            Invoke-Reload "host source change"
+            Invoke-Reload "host/core/content source change"
         }
 
         $lastGoodFingerprint = $currentFingerprint

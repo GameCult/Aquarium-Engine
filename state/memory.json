@@ -59,7 +59,7 @@
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",
       "The current live document is epiphany.aquarium.live_state, stored through CultLib MessagePack backing. Direct runs can use --cache or AQUARIUM_CULTCACHE_PATH.",
-      "dev-reload builds disposable apphost slots so a running window does not lock normal build output. dev-watch hot reloads shaders and live runtime DLLs while preserving the last good process.",
+      "dev-reload builds disposable apphost slots so a running window does not lock normal build output. dev-watch hot reloads shaders and live runtime DLLs while preserving the last good process. Host/core/content changes, including src/Aquarium.Engine/Assets, must rebuild and restart the apphost on demand.",
       "Shader reload failure must keep the previous good shader objects bound. Live-runtime reload failure must keep the previous runtime alive. Rehydrate from CultCache before claiming reload survival."
     ],
     "salvage_without_baggage": [
