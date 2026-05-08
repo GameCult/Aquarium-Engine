@@ -34,3 +34,9 @@ prototype integrated along the camera ray before surface composition.
 - Current scene correction: analytic cloud scaffold is no longer composited.
   Bodies render as solids; the Grid traces separately and blends as a transparent
   schematic overlay so future volumetrics can own actual scene mass.
+- Grid transparency correction: do not use alpha blending over raymarched scene
+  content. Use Aetheria-style stochastic coverage and only draw the Grid when it
+  is nearer than the nearest solid body, so it does not overlay planets.
+- Pulled Aetheria's `Assets/Resources/LDR_LLL1_0.png` into Aquarium as source
+  PNG plus runtime `R8_UNorm` bytes. The renderer binds it as `t2` with wrapping
+  point sampling for stochastic Grid coverage.

@@ -24,6 +24,7 @@
   <ItemGroup>
     <Content Include="Assets\Aquarium-Engine-Icon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\**\*.ttf" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Textures\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Render\Shaders\**\*.hlsl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

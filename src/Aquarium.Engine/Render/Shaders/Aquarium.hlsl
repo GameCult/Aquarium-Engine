@@ -12,7 +12,9 @@ cbuffer AquariumFrame : register(b0)
 
 Texture2D<float4> gridHeightTexture : register(t0);
 StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
+Texture2D<float> ditherTexture : register(t2);
 SamplerState gridSampler : register(s0);
+SamplerState ditherSampler : register(s1);
 
 static const float PI = 3.14159265359;
 static const float SURFACE_EPSILON = 0.0015;
@@ -99,6 +101,14 @@ float hash31(float3 p)
     p = frac(p * 0.1031);
     p += dot(p, p.yzx + 33.33);
     return frac((p.x + p.y) * p.z) * 2.0 - 1.0;
+}
+
+float stochasticTransparency(float2 screenUv, float alpha)
+{
+    float frameSeed = floor(timeSeconds * 60.0);
+    float2 ditherUv = screenUv * (resolution / 512.0);
+    float dither = frac(ditherTexture.SampleLevel(ditherSampler, ditherUv, 0.0).r + frameSeed * 1.61803398875);
+    return alpha - dither - 0.001 * (1.0 - ceil(alpha));
 }
 
 float noised3(float3 x)
@@ -1178,20 +1188,25 @@ float4 AquariumPS(VertexOut input) : SV_Target
     int materialId;
     float travel;
     float3 color = 0.0;
+    float nearestSolidTravel = farDistance + 1.0;
 
     if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, travel))
     {
         float3 normal = surfaceNormal(hitPosition, materialId);
         color = shade(hitPosition, normal, materialId, rayDirection);
         color *= exp(-travel * 0.012);
+        nearestSolidTravel = travel;
     }
 
     float3 gridHitPosition;
     float gridTravel;
-    if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel))
+    if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel) && gridTravel < nearestSolidTravel)
     {
         float4 gridOverlay = shadeGridOverlay(gridHitPosition);
-        color = lerp(color, gridOverlay.rgb, gridOverlay.a);
+        if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
+        {
+            color = gridOverlay.rgb;
+        }
     }
 
     color += float3(0.001, 0.003, 0.004);

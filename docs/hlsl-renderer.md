@@ -126,9 +126,15 @@ Current prototype traits:
 
 The Grid now renders as a transparent schematic overlay. `AquariumPS` traces
 bodies separately from the Grid surface, shades solid bodies first, then
-intersects the Grid height field and blends lines, isolines, field lines, and a
-thin weather tint over the scene. The Grid no longer owns the opaque terrain hit
-that stops scene composition.
+intersects the Grid height field. The Grid only draws when its surface is closer
+than the nearest solid body, so it behaves like diegetic scene UI rather than a
+final-image HUD layer over planets.
+
+Grid coverage follows Aetheria's dithered particle transparency pattern:
+screen-space stochastic alpha test instead of conventional alpha blending. This
+uses Aetheria's `LDR_LLL1_0` blue-noise texture bound as a wrapping `R8_UNorm`
+shader resource, following the `_DitheringTex` + `_FrameNumber *
+1.61803398875` `ditherClip` path from `Dither Functions.cginc`.
 
 This keeps the current scene legible while leaving future volumetrics to provide
 the real spatial mass.

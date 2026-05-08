@@ -13,9 +13,11 @@ namespace Aquarium.Engine.Render;
 public sealed class D3D11Renderer : IDisposable
 {
     private const string ShaderRelativePath = "Render/Shaders/Aquarium.hlsl";
+    private const string DitherTextureRelativePath = "Assets/Textures/Aetheria-LDR_LLL1_0.r8";
     private static readonly TimeSpan ShaderReloadPollInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ShaderReloadWriteSettleTime = TimeSpan.FromMilliseconds(150);
     private const int GridHeightTextureSize = 128;
+    private const int DitherTextureSize = 512;
     private const int FroxelCountX = 8;
     private const int FroxelCountY = 8;
     private const int FroxelCountZ = 4;
@@ -34,7 +36,10 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Texture2D gridHeightTexture;
     private readonly ID3D11RenderTargetView gridHeightRenderTargetView;
     private readonly ID3D11ShaderResourceView gridHeightShaderResourceView;
+    private readonly ID3D11Texture2D ditherTexture;
+    private readonly ID3D11ShaderResourceView ditherShaderResourceView;
     private readonly ID3D11SamplerState gridSampler;
+    private readonly ID3D11SamplerState ditherSampler;
     private readonly ID3D11Buffer frameConstantBuffer;
     private readonly ID3D11Buffer froxelPrimitiveBuffer;
     private readonly ID3D11ShaderResourceView froxelPrimitiveShaderResourceView;
@@ -102,12 +107,25 @@ public sealed class D3D11Renderer : IDisposable
         gridHeightTexture = CreateGridHeightTexture();
         gridHeightRenderTargetView = device.CreateRenderTargetView(gridHeightTexture);
         gridHeightShaderResourceView = device.CreateShaderResourceView(gridHeightTexture);
+        startupProgress?.Invoke("Loading Aetheria blue-noise dither texture");
+        ditherTexture = CreateDitherTexture(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
+        ditherShaderResourceView = device.CreateShaderResourceView(ditherTexture);
         gridSampler = device.CreateSamplerState(new SamplerDescription
         {
             Filter = Filter.MinMagMipLinear,
             AddressU = TextureAddressMode.Clamp,
             AddressV = TextureAddressMode.Clamp,
             AddressW = TextureAddressMode.Clamp,
+            ComparisonFunc = ComparisonFunction.Never,
+            MinLOD = 0.0f,
+            MaxLOD = float.MaxValue,
+        });
+        ditherSampler = device.CreateSamplerState(new SamplerDescription
+        {
+            Filter = Filter.MinMagMipPoint,
+            AddressU = TextureAddressMode.Wrap,
+            AddressV = TextureAddressMode.Wrap,
+            AddressW = TextureAddressMode.Wrap,
             ComparisonFunc = ComparisonFunction.Never,
             MinLOD = 0.0f,
             MaxLOD = float.MaxValue,
@@ -164,7 +182,10 @@ public sealed class D3D11Renderer : IDisposable
         froxelPrimitiveShaderResourceView.Dispose();
         froxelPrimitiveBuffer.Dispose();
         frameConstantBuffer.Dispose();
+        ditherSampler.Dispose();
         gridSampler.Dispose();
+        ditherShaderResourceView.Dispose();
+        ditherTexture.Dispose();
         gridHeightShaderResourceView.Dispose();
         gridHeightRenderTargetView.Dispose();
         gridHeightTexture.Dispose();
@@ -196,10 +217,32 @@ public sealed class D3D11Renderer : IDisposable
         return device.CreateTexture2D(description);
     }
 
+    private ID3D11Texture2D CreateDitherTexture(string path)
+    {
+        var pixels = File.ReadAllBytes(path);
+        if (pixels.Length != DitherTextureSize * DitherTextureSize)
+        {
+            throw new InvalidOperationException($"Dither texture {path} must be {DitherTextureSize}x{DitherTextureSize} R8 data.");
+        }
+
+        return device.CreateTexture2D(
+            pixels,
+            Format.R8_UNorm,
+            DitherTextureSize,
+            DitherTextureSize,
+            1,
+            1,
+            BindFlags.ShaderResource,
+            ResourceOptionFlags.None,
+            ResourceUsage.Default,
+            CpuAccessFlags.None);
+    }
+
     private void RenderGridHeight()
     {
         context.PSUnsetShaderResource(0);
         context.PSUnsetShaderResource(1);
+        context.PSUnsetShaderResource(2);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -223,7 +266,9 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetConstantBuffer(0, frameConstantBuffer);
         context.PSSetShaderResource(0, gridHeightShaderResourceView);
         context.PSSetShaderResource(1, froxelPrimitiveShaderResourceView);
+        context.PSSetShaderResource(2, ditherShaderResourceView);
         context.PSSetSampler(0, gridSampler);
+        context.PSSetSampler(1, ditherSampler);
         context.Draw(3, 0);
     }
 
