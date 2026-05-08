@@ -69,3 +69,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3E: stochastic Grid history bypasses opaque-surface color clamp
   and color-delta rejection. A current dither miss is not evidence that the
   true Grid color is background.
+- Temporal debug keys: F1 cycles, 0 final, 1 raw current scene, 2 reprojected
+  history, 3 history age, 4 history weight. Use these to prove whether the
+  presented frame is resolved and whether history is alive.

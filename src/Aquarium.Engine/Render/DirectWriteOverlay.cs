@@ -59,7 +59,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
     }
 
-    public void Render(AquariumFrame frame)
+    public void Render(AquariumFrame frame, int renderDebugMode)
     {
         renderTarget.BeginDraw();
         DrawHeader(
@@ -73,6 +73,15 @@ internal sealed class DirectWriteOverlay : IDisposable
             new Rect(18, 38, Math.Min(width - 18, 420), 62),
             quietTextBrush,
             DrawTextOptions.Clip);
+        if (renderDebugMode > 0)
+        {
+            renderTarget.DrawText(
+                $"render debug {renderDebugMode}  F1 cycle  0-4 select",
+                smallFormat,
+                new Rect(18, 56, Math.Min(width - 18, 420), 80),
+                quietTextBrush,
+                DrawTextOptions.Clip);
+        }
         renderTarget.DrawText(
             "crisp text belongs after tonemapping",
             smallFormat,

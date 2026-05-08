@@ -24,6 +24,7 @@ public static class AquariumHost
             window.ClientWidth,
             window.ClientHeight,
             ParseShaderPath(args),
+            ParseRenderDebugMode(args),
             body => window.PaintSplash("Aquarium", body));
 
         var frameClock = Stopwatch.StartNew();
@@ -43,6 +44,7 @@ public static class AquariumHost
             lastFrame = now;
 
             runtimeLoader.Update(deltaSeconds, input);
+            ApplyRendererDebugInput(renderer, input);
             renderer.Render(runtimeLoader.Runtime.Frame);
 
             if (runtime.Options.Headless && ++frames >= 2)
@@ -113,5 +115,51 @@ public static class AquariumHost
         }
 
         return Environment.GetEnvironmentVariable("AQUARIUM_LIVE_RELOAD_POINTER");
+    }
+
+    private static int ParseRenderDebugMode(IReadOnlyCollection<string> args)
+    {
+        var values = args.ToArray();
+        for (var index = 0; index < values.Length - 1; index++)
+        {
+            if (string.Equals(values[index], "--render-debug", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(values[index + 1], out var mode))
+            {
+                return mode;
+            }
+        }
+
+        return int.TryParse(Environment.GetEnvironmentVariable("AQUARIUM_RENDER_DEBUG_MODE"), out var environmentMode)
+            ? environmentMode
+            : 0;
+    }
+
+    private static void ApplyRendererDebugInput(D3D11Renderer renderer, InputState input)
+    {
+        if (input.IsKeyPressed(KeyCode.RenderDebugCycle))
+        {
+            renderer.CycleRenderDebugMode();
+        }
+
+        if (input.IsKeyPressed(KeyCode.Digit0))
+        {
+            renderer.RenderDebugMode = 0;
+        }
+        else if (input.IsKeyPressed(KeyCode.Digit1))
+        {
+            renderer.RenderDebugMode = 1;
+        }
+        else if (input.IsKeyPressed(KeyCode.Digit2))
+        {
+            renderer.RenderDebugMode = 2;
+        }
+        else if (input.IsKeyPressed(KeyCode.Digit3))
+        {
+            renderer.RenderDebugMode = 3;
+        }
+        else if (input.IsKeyPressed(KeyCode.Digit4))
+        {
+            renderer.RenderDebugMode = 4;
+        }
     }
 }

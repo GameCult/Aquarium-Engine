@@ -88,10 +88,11 @@ public sealed class D3D11Renderer : IDisposable
     private float previousGridRadius;
     private float previousTimeSeconds;
 
-    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null, Action<string>? startupProgress = null)
+    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null, int renderDebugMode = 0, Action<string>? startupProgress = null)
     {
         this.width = width;
         this.height = height;
+        RenderDebugMode = Math.Clamp(renderDebugMode, 0, 4);
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
         startupProgress?.Invoke("Creating D3D11 device and swapchain");
 
@@ -245,7 +246,8 @@ public sealed class D3D11Renderer : IDisposable
             (float2)previousGridCenter,
             (float2)jitter,
             (float2)previousJitter,
-            new float2(0.0f, 0.0f));
+            RenderDebugMode,
+            0.0f);
 
         BuildFroxelPrimitiveTable(frame);
         context.UpdateSubresource(in constants, frameConstantBuffer);
@@ -254,7 +256,7 @@ public sealed class D3D11Renderer : IDisposable
         RenderScene();
         ResolveTemporal();
         context.Flush();
-        overlay.Render(frame);
+        overlay.Render(frame, RenderDebugMode);
         swapChain.Present(1, PresentFlags.None);
 
         previousCameraPosition = frame.CameraPosition;
@@ -262,6 +264,13 @@ public sealed class D3D11Renderer : IDisposable
         previousGridRadius = frame.Grid.Radius;
         previousTimeSeconds = frame.TimeSeconds;
         frameIndex++;
+    }
+
+    public int RenderDebugMode { get; set; }
+
+    public void CycleRenderDebugMode()
+    {
+        RenderDebugMode = (RenderDebugMode + 1) % 5;
     }
 
     public void Dispose()
@@ -708,7 +717,8 @@ public sealed class D3D11Renderer : IDisposable
         float2 PreviousGridCenter,
         float2 JitterPixels,
         float2 PreviousJitterPixels,
-        float2 Pad0);
+        float RenderDebugMode,
+        float Pad0);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 

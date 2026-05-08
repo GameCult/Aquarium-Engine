@@ -214,3 +214,13 @@ Still missing:
 - flicker analysis for high-frequency linework and stochastic coverage
 - history resurrection for reappearing stable details
 - debug visualizations for rejection, clamp, velocity, travel, and history age
+
+Current debug view controls:
+
+- `F1` cycles temporal debug modes in the running window
+- `0` final resolved color
+- `1` raw current scene color
+- `2` reprojected history color used by the resolver
+- `3` accepted history age
+- `4` history weight
+- `--render-debug` and `AQUARIUM_RENDER_DEBUG_MODE` set the startup mode

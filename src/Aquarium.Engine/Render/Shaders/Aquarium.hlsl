@@ -13,7 +13,8 @@ cbuffer AquariumFrame : register(b0)
     float2 previousGridCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
-    float2 _pad0;
+    float renderDebugMode;
+    float _pad0;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -1410,8 +1411,26 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
 
     float3 resolved = lerp(currentColor, historyColor, historyWeight);
+    float3 finalColor = aces(resolved);
+    if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
+    {
+        finalColor = aces(currentColor);
+    }
+    else if (renderDebugMode >= 1.5 && renderDebugMode < 2.5)
+    {
+        finalColor = aces(historyColor);
+    }
+    else if (renderDebugMode >= 2.5 && renderDebugMode < 3.5)
+    {
+        finalColor = historyAge / MAX_HISTORY_AGE;
+    }
+    else if (renderDebugMode >= 3.5 && renderDebugMode < 4.5)
+    {
+        finalColor = historyWeight.xxx;
+    }
+
     ResolveOut output;
-    output.finalColor = float4(aces(resolved), 1.0);
+    output.finalColor = float4(finalColor, 1.0);
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
     output.historyControl = float4(currentControl.xyz, historyAge);

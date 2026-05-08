@@ -182,6 +182,12 @@ Gate 3E gives stochastic Grid history its own validation path: it bypasses
 opaque-surface neighborhood color clamp/color-delta rejection while still using
 field, travel, normal, coverage, reactive, and age checks.
 
+Temporal debug modes are available in the running window: `F1` cycles modes and
+number keys `0` through `4` select them directly. Mode `0` is final resolve,
+`1` is raw current scene, `2` is the reprojected history sample, `3` is history
+age, and `4` is history weight. The startup mode can still be set with
+`--render-debug` or `AQUARIUM_RENDER_DEBUG_MODE`.
+
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.
 

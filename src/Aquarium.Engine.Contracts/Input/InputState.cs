@@ -5,6 +5,7 @@ namespace Aquarium.Engine.Input;
 public sealed class InputState
 {
     private readonly HashSet<KeyCode> downKeys = [];
+    private readonly HashSet<KeyCode> pressedKeys = [];
 
     public Vector2 MousePosition { get; private set; }
 
@@ -18,10 +19,13 @@ public sealed class InputState
 
     public bool IsKeyDown(KeyCode key) => downKeys.Contains(key);
 
+    public bool IsKeyPressed(KeyCode key) => pressedKeys.Contains(key);
+
     public void BeginFrame()
     {
         MouseDelta = Vector2.Zero;
         WheelDelta = 0.0f;
+        pressedKeys.Clear();
     }
 
     public void SetMousePosition(Vector2 position)
@@ -52,6 +56,11 @@ public sealed class InputState
     {
         if (isDown)
         {
+            if (!downKeys.Contains(key))
+            {
+                pressedKeys.Add(key);
+            }
+
             downKeys.Add(key);
         }
         else
@@ -73,4 +82,10 @@ public enum KeyCode
     A,
     S,
     D,
+    Digit0,
+    Digit1,
+    Digit2,
+    Digit3,
+    Digit4,
+    RenderDebugCycle,
 }
