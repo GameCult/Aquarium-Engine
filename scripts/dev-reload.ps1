@@ -132,7 +132,7 @@ Write-Host "  $slotPath"
 dotnet build $projectPath `
     -c Debug `
     -o $slotPath `
-    /p:UseAppHost=false
+    /p:UseAppHost=true
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet build failed with exit code $LASTEXITCODE."
 }
@@ -151,14 +151,18 @@ if ($BuildOnly) {
 
 Stop-PreviousOwnedProcess
 
-$dllPath = Join-Path $slotPath "Aquarium.Engine.dll"
-$arguments = @($dllPath, "--cache", $cultCachePath)
+$exePath = Join-Path $slotPath "Aquarium.Engine.exe"
+if (-not (Test-Path $exePath)) {
+    throw "Expected apphost was not produced: $exePath"
+}
+
+$arguments = @("--cache", $cultCachePath)
 if ($Headless) {
     $arguments += "--headless"
 }
 
 $startProcessParameters = @{
-    FilePath = "dotnet"
+    FilePath = $exePath
     ArgumentList = $arguments
     WorkingDirectory = $slotPath
     RedirectStandardOutput = $stdoutLogPath

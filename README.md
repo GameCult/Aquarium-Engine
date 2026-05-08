@@ -53,9 +53,10 @@ runner instead of `dotnet run`:
 .\scripts\dev-reload.ps1
 ```
 
-It builds to a fresh disposable slot under `artifacts\dev-reload`, records the
-slot/PID in PowerShell CLIXML, and launches the runtime with a MessagePack
-CultCache store at `artifacts\dev-reload\cultcache\aquarium-client.msgpack`.
+It builds an apphost executable into a fresh disposable slot under
+`artifacts\dev-reload`, records the slot/PID in PowerShell CLIXML, and launches
+the runtime with a MessagePack CultCache store at
+`artifacts\dev-reload\cultcache\aquarium-client.msgpack`.
 The previous script-owned process is stopped only after the replacement build
 succeeds. This keeps MSBuild away from the locked normal `bin\Debug` output
 while a live window is still open.
