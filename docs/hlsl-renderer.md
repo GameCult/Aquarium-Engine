@@ -199,12 +199,11 @@ Gate 3J restores debug mode `1` to true raw scene color and stops blending
 previous Grid color history into final Grid pixels. Grid history remains a
 diagnostic/output history surface, but final Grid color comes from the analytic
 current estimate.
-Gate 3K reconstructs that final Grid estimate from an unjittered ray and
-retraces the Grid hit, so projection jitter no longer makes the final Grid swim
-now that color history is not hiding it.
 Gate 3L scales projection jitter to zero for the live frame because Self and
 planet surfaces were visibly juddering. Jitter should remain off until the
-resolve hides it on both opaque surfaces and the Grid.
+resolve hides it on both opaque surfaces and the Grid. The abandoned unjittered
+Grid retrace has been removed; with jitter disabled, Grid analytic color uses
+the existing current hit.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `4` select them directly. Mode `0` is final resolve,

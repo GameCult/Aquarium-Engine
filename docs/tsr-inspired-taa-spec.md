@@ -246,20 +246,15 @@ Current Gate 3J implementation:
 - history/age/weight debug modes remain useful diagnostics, but stale Grid color
   history no longer drives the final visible Grid
 
-Current Gate 3K implementation:
-
-- final analytic Grid color is reconstructed from an unjittered current ray
-- the Grid surface is retraced for that unjittered ray so hit position and color
-  agree
-- projection jitter can still feed temporal diagnostics/history, but it no
-  longer makes the final Grid visibly swim when Grid color history is bypassed
-
 Current Gate 3L implementation:
 
 - projection jitter is scaled to zero for the live frame
 - visible jitter on Self/planet surfaces means the resolve is not yet hiding the
   sample offset well enough, so jitter stays disabled until opaque and Grid
   paths both prove stable
+- the abandoned unjittered Grid retrace was removed; with jitter disabled, Grid
+  analytic color reconstructs from the existing current hit instead of solving
+  the surface twice
 
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
