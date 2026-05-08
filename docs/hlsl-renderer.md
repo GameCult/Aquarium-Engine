@@ -72,6 +72,14 @@ The target currently stores height in `.r` only. The next useful expansion is to
 store packed gradients in `.g/.b` during the Grid pass so the raymarcher can use
 one texture fetch for height and a cheaper normal path when fidelity allows it.
 
+Grid linework is derivative-aware in the final raymarch pass. Cartesian
+Gridlines use screen-space `fwidth` against their world-domain coordinate so
+minor and major lines stay the same pixel width across zoom distances. Terrain
+height isolines and gradient-angle field lines follow the older Aetheria UI
+shader pattern: height contours are derived from the Grid height field, while
+angle lines quantize the terrain gradient direction and fade out on flat
+surfaces.
+
 ## Overlay Text
 
 Readable overlay text is handled by `DirectWriteOverlay`, using DirectWrite for

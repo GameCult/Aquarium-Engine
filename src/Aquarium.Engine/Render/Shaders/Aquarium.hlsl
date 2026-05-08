@@ -20,6 +20,13 @@ static const float3 SUN_POSITION = float3(0.0, 0.0, 2.2);
 static const float SUN_RADIUS = 1.12;
 static const float GRID_WEATHER_WORLD_SCALE = 42.0;
 static const float GRID_LINE_WORLD_CELL = 2.0;
+static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
+static const float GRID_LINE_PIXEL_WIDTH = 1.15;
+static const float GRID_MAJOR_LINE_PIXEL_WIDTH = 1.65;
+static const float GRID_LINE_PIXEL_FADE = 1.25;
+static const float TERRAIN_ISOLINE_SPACING = 0.12;
+static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 1.05;
+static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.72;
 static const int PLANET_COUNT = 5;
 static const int PRIMITIVE_COUNT = PLANET_COUNT + 1;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
@@ -662,11 +669,50 @@ float3 surfaceNormal(float3 p, int materialId)
     return planetNormal(p);
 }
 
+float periodicLineMask(float coordinate, float pixelWidth, float pixelFade)
+{
+    float distanceToLine = min(frac(coordinate), 1.0 - frac(coordinate));
+    float coordinatePerPixel = max(fwidth(coordinate), 0.00001);
+    float distancePixels = distanceToLine / coordinatePerPixel;
+    return 1.0 - smoothstep(pixelWidth, pixelWidth + pixelFade, distancePixels);
+}
+
 float gridLine(float2 p)
 {
-    float2 cell = abs(frac(p / GRID_LINE_WORLD_CELL) - 0.5);
-    float lineDistance = min(cell.x, cell.y);
-    return (1.0 - smoothstep(0.018, 0.042, lineDistance * GRID_LINE_WORLD_CELL)) * terrainMask(p);
+    float2 minorDomain = p / GRID_LINE_WORLD_CELL;
+    float2 majorDomain = p / GRID_MAJOR_LINE_WORLD_CELL;
+
+    float minor = max(
+        periodicLineMask(minorDomain.x, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
+        periodicLineMask(minorDomain.y, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
+    float major = max(
+        periodicLineMask(majorDomain.x, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
+        periodicLineMask(majorDomain.y, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
+
+    return saturate(minor * 0.72 + major) * terrainMask(p);
+}
+
+float terrainIsolines(float height)
+{
+    float contourDomain = height / TERRAIN_ISOLINE_SPACING;
+    float contour = periodicLineMask(contourDomain, TERRAIN_ISOLINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
+    float contourDerivative = max(fwidth(contourDomain), 0.00001);
+    float slopeFade = smoothstep(0.025, 0.25, contourDerivative);
+    return contour * slopeFade;
+}
+
+float terrainFieldLines(float2 gradient)
+{
+    float slope = length(gradient);
+    if (slope < 0.0001)
+    {
+        return 0.0;
+    }
+
+    float angleDomain = (atan2(gradient.y, gradient.x) / PI + 1.0) * 6.0;
+    float angleLine = periodicLineMask(angleDomain, TERRAIN_FIELD_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
+    float slopeStrength = smoothstep(0.015, 0.16, slope);
+    return angleLine * slopeStrength;
 }
 
 bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out int materialId, out float travel)
@@ -771,9 +817,15 @@ float3 shade(float3 position, float3 normal, int materialId, float3 rayDirection
 
     float mask = terrainMask(position.xy);
     float gridAmount = gridLine(position.xy);
-    float contour = 1.0 - smoothstep(0.015, 0.04, abs(frac(terrainHeight(position.xy) * 1.2) - 0.5));
+    float height = terrainHeight(position.xy);
+    float2 gradient = terrainGradient(position.xy);
+    float contour = terrainIsolines(height);
+    float fieldLine = terrainFieldLines(gradient);
     float3 baseColor = gridWeatherColor(position.xy, position.z);
-    float3 lineColor = float3(0.8, 1.0, 0.82) * (gridAmount * 0.85 + contour * 0.16);
+    float3 gridColor = float3(0.74, 1.0, 0.84) * gridAmount * 0.78;
+    float3 contourColor = float3(0.98, 1.0, 0.78) * contour * 0.22;
+    float3 fieldColor = float3(0.36, 0.92, 1.0) * fieldLine * 0.14;
+    float3 lineColor = gridColor + contourColor + fieldColor;
     float diffuse = nDotL * attenuation * 0.85;
     float selfGlow = exp(-distance(position, SUN_POSITION) * 0.34) * 0.34;
 
