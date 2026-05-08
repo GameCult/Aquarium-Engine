@@ -68,6 +68,11 @@ Current frame order:
    tonemapping, and raymarching unless a specific diegetic surface asks for the
    trouble.
 
+The shader far distance is frame-derived, not a fixed constant. C# sends the
+distance from the camera to the Grid origin plus the Grid radius, which matches
+the circular Grid fade boundary and avoids wasting raymarch work past the
+visible field.
+
 The target currently stores height in `.r` only. The next useful expansion is to
 store packed gradients in `.g/.b` during the Grid pass so the raymarcher can use
 one texture fetch for height and a cheaper normal path when fidelity allows it.

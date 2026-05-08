@@ -136,6 +136,8 @@ public sealed class D3D11Renderer : IDisposable
     {
         TryHotReloadShaders();
 
+        var gridOrigin = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
+        var farDistance = Vector3.Distance(frame.CameraPosition, gridOrigin) + MathF.Max(frame.Grid.Radius, 0.001f);
         var constants = new FrameConstants(
             new float2(width, height),
             frame.TimeSeconds,
@@ -143,7 +145,8 @@ public sealed class D3D11Renderer : IDisposable
             (float3)frame.CameraPosition,
             0.0f,
             (float2)frame.Grid.Center,
-            new float2(0.0f, 0.0f));
+            farDistance,
+            0.0f);
 
         BuildFroxelPrimitiveTable(frame);
         context.UpdateSubresource(in constants, frameConstantBuffer);
@@ -447,7 +450,8 @@ public sealed class D3D11Renderer : IDisposable
         float3 CameraPosition,
         float CameraPad,
         float2 GridCenter,
-        float2 Pad0);
+        float FarDistance,
+        float Pad0);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 

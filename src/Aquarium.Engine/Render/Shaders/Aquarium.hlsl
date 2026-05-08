@@ -6,7 +6,8 @@ cbuffer AquariumFrame : register(b0)
     float3 cameraPosition;
     float _pad0;
     float2 gridCenter;
-    float2 _pad1;
+    float farDistance;
+    float _pad1;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -14,7 +15,6 @@ StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 SamplerState gridSampler : register(s0);
 
 static const float PI = 3.14159265359;
-static const float FAR_DISTANCE = 90.0;
 static const float SURFACE_EPSILON = 0.0015;
 static const float3 SUN_POSITION = float3(0.0, 0.0, 2.2);
 static const float SUN_RADIUS = 1.12;
@@ -783,7 +783,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         previousTerrainGap = terrainGap;
 
         travel += max(terrainStep, 0.026);
-        if (travel > FAR_DISTANCE)
+        if (travel > farDistance)
         {
             return false;
         }
