@@ -43,10 +43,34 @@ dotnet build Aquarium.Engine.slnx
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj
 ```
 
+For iteration while an Aquarium window is already open, use the dev reload
+runner instead of `dotnet run`:
+
+```powershell
+.\scripts\dev-reload.ps1
+```
+
+It builds to a fresh disposable slot under `artifacts\dev-reload`, starts that
+slot, records the PID, and replaces only the previous process that the script
+itself launched. This keeps MSBuild away from the locked normal
+`bin\Debug` output while a live window is still open.
+
+Stop the script-owned Aquarium process:
+
+```powershell
+.\scripts\dev-stop.ps1
+```
+
 Headless smoke:
 
 ```powershell
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --headless
+```
+
+Headless reload smoke without touching the normal build output:
+
+```powershell
+.\scripts\dev-reload.ps1 -Headless
 ```
 
 The first cut opens a Win32 window directly and owns a D3D11 swapchain through
