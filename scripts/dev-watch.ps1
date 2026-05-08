@@ -16,6 +16,7 @@ $liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine
 $watchLogPath = Join-Path $repoRoot "artifacts\dev-reload\watch.log"
 $liveSlotRoot = Join-Path $repoRoot "artifacts\dev-reload\live-slots"
 $liveReloadPointerPath = Join-Path $repoRoot "artifacts\dev-reload\live-current.txt"
+$shaderPath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
 
 New-Item -ItemType Directory -Force -Path (Split-Path $watchLogPath) | Out-Null
 New-Item -ItemType Directory -Force -Path $liveSlotRoot | Out-Null
@@ -84,8 +85,39 @@ function Get-Fingerprint($files) {
     }
 }
 
+function Get-Hash([string]$text) {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha.ComputeHash($bytes)
+        return -join ($hashBytes | ForEach-Object { $_.ToString("x2") })
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Get-AquariumFrameContractText {
+    if (-not (Test-Path $shaderPath)) {
+        return ""
+    }
+
+    $text = Get-Content -Raw -LiteralPath $shaderPath
+    $match = [regex]::Match(
+        $text,
+        "cbuffer\s+AquariumFrame\s*:\s*register\(b0\)\s*\{(?<body>.*?)\};",
+        [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    if (-not $match.Success) {
+        return ""
+    }
+
+    return $match.Value
+}
+
 function Get-SourceFingerprint {
-    Get-Fingerprint (Get-SourceFiles)
+    $fileFingerprint = Get-Fingerprint (Get-SourceFiles)
+    $contractFingerprint = Get-Hash (Get-AquariumFrameContractText)
+    Get-Hash "$fileFingerprint`nAquariumFrame:$contractFingerprint"
 }
 
 function Get-LiveFingerprint {
@@ -93,7 +125,9 @@ function Get-LiveFingerprint {
 }
 
 function Get-RestartFingerprint {
-    Get-Fingerprint (Get-RestartFiles)
+    $fileFingerprint = Get-Fingerprint (Get-RestartFiles)
+    $contractFingerprint = Get-Hash (Get-AquariumFrameContractText)
+    Get-Hash "$fileFingerprint`nAquariumFrame:$contractFingerprint"
 }
 
 function Wait-StableFingerprints {

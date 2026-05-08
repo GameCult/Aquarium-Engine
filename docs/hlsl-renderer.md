@@ -71,7 +71,9 @@ Current frame order:
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches
 the circular Grid fade boundary and avoids wasting raymarch work past the
-visible field.
+visible field. Changes to the `AquariumFrame` shader constant buffer are host
+contract changes; `dev-watch.ps1` fingerprints that block and restarts the host
+instead of treating it as ordinary shader hot reload.
 
 The target currently stores height in `.r` only. The next useful expansion is to
 store packed gradients in `.g/.b` during the Grid pass so the raymarcher can use
