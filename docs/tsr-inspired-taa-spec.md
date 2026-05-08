@@ -114,20 +114,29 @@ more history.
 
 Current Gate 2A implementation:
 
-- scene metadata target stores material id plus surface normal
+- scene metadata target stores stable field id plus surface normal
 - history metadata ping-pongs alongside color/travel history
-- material id mismatch rejects history
+- field id mismatch rejects history
 - normal mismatch weakens/rejects history
 - Grid stochastic surfaces write Grid travel/normal even when the current
   dither sample does not draw color, so the temporal resolver accumulates the
   diegetic surface rather than reprojecting from the solid behind it
 
+Current Gate 2B implementation:
+
+- Self, Grid, and each orbiting planet have distinct field ids
+- orbiting planet hits map their current world hit back to the planet's previous
+  center before camera reprojection
+- this gives analytic SDF bodies object motion without a full velocity buffer
+  yet
+
 Still missing:
 
-- explicit animated-body velocity
 - separate field ids once the SDF field registry exists
 - reactive/coverage masks
 - richer disocclusion classification
+- a general velocity buffer for non-rigid fields, deformation, and future
+  volumetrics
 
 ### Gate 3: Volumetric Temporal Contract
 

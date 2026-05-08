@@ -45,6 +45,9 @@ static const float CLOUD_MAX_STEP = 0.46;
 static const float CLOUD_EMPTY_STEP_SCALE = 0.42;
 static const int PLANET_COUNT = 5;
 static const int PRIMITIVE_COUNT = PLANET_COUNT + 1;
+static const float FIELD_ID_GRID = 1.0;
+static const float FIELD_ID_SELF = 2.0;
+static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
@@ -113,6 +116,8 @@ float hash31(float3 p)
     return frac((p.x + p.y) * p.z) * 2.0 - 1.0;
 }
 
+float3 planetCenterAt(int index, float sampleTime);
+
 float stochasticTransparency(float2 screenUv, float alpha)
 {
     float frameSeed = floor(timeSeconds * 60.0);
@@ -152,6 +157,19 @@ float2 projectWorldToPreviousHistoryUv(float3 worldPosition)
     float2 previousPixel = (previousNdc * resolution.y + resolution) * 0.5 - previousJitterPixels;
     float2 previousScreenUv = previousPixel / resolution;
     return float2(previousScreenUv.x, 1.0 - previousScreenUv.y);
+}
+
+float3 temporalPreviousWorldPosition(float3 currentWorldPosition, float fieldId)
+{
+    if (fieldId >= FIELD_ID_PLANET_BASE && fieldId < FIELD_ID_PLANET_BASE + PLANET_COUNT)
+    {
+        int planetIndex = (int)(fieldId - FIELD_ID_PLANET_BASE + 0.5);
+        float3 currentCenter = planetCenterAt(planetIndex, timeSeconds);
+        float3 previousCenter = planetCenterAt(planetIndex, previousTimeSeconds);
+        return currentWorldPosition - currentCenter + previousCenter;
+    }
+
+    return currentWorldPosition;
 }
 
 float noised3(float3 x)
@@ -260,13 +278,18 @@ float planetRadius(int index)
     return lerp(0.34, 0.62, hash21(float2(index, 19.7)));
 }
 
-float3 planetCenter(int index)
+float3 planetCenterAt(int index, float sampleTime)
 {
     float f = (float)index;
-    float angle = f * 0.8975979 + timeSeconds * (0.08 + 0.011 * f);
+    float angle = f * 0.8975979 + sampleTime * (0.08 + 0.011 * f);
     float radius = 4.1 + f * 0.77;
     float2 xy = float2(cos(angle), sin(angle)) * radius;
     return float3(xy, 1.15 + planetRadius(index) * 0.72);
+}
+
+float3 planetCenter(int index)
+{
+    return planetCenterAt(index, timeSeconds);
 }
 
 float2 gridUv(float2 p)
@@ -795,12 +818,14 @@ float traceNearestBodyInterval(
     out float entryTravel,
     out float hitTravel,
     out float exitTravel,
-    out int materialId)
+    out int materialId,
+    out int hitPrimitiveId)
 {
     entryTravel = 100000.0;
     hitTravel = 100000.0;
     exitTravel = currentTravel;
     materialId = 0;
+    hitPrimitiveId = -1;
     float hit = 0.0;
     float nearestEntry = 100000.0;
     float nearestExit = 100000.0;
@@ -833,6 +858,7 @@ float traceNearestBodyInterval(
             hitTravel = primitiveHitTravel;
             exitTravel = primitiveExitTravel;
             materialId = primitiveMaterialId;
+            hitPrimitiveId = primitiveId;
             hit = 1.0;
         }
     }
@@ -1028,6 +1054,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         float bodyHitTravel;
         float bodyExitTravel;
         int bodyMaterialId;
+        int bodyPrimitiveId;
         float bodyHit = traceNearestBodyInterval(
             rayOrigin,
             rayDirection,
@@ -1035,7 +1062,8 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             bodyEntryTravel,
             bodyHitTravel,
             bodyExitTravel,
-            bodyMaterialId);
+            bodyMaterialId,
+            bodyPrimitiveId);
 
         if (bodyHit > 0.5)
         {
@@ -1083,7 +1111,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
     return false;
 }
 
-bool raymarchBodies(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out int materialId, out float travel)
+bool raymarchBodies(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out int materialId, out int primitiveId, out float travel)
 {
     float entryTravel;
     float exitTravel;
@@ -1094,7 +1122,8 @@ bool raymarchBodies(float3 rayOrigin, float3 rayDirection, out float3 hitPositio
         entryTravel,
         travel,
         exitTravel,
-        materialId);
+        materialId,
+        primitiveId);
 
     hitPosition = rayOrigin + rayDirection * travel;
     return bodyHit > 0.5 && travel <= farDistance;
@@ -1229,6 +1258,7 @@ SceneOut AquariumScenePS(VertexOut input)
 
     float3 hitPosition;
     int materialId;
+    int primitiveId;
     float travel;
     float3 color = 0.0;
     float nearestSolidTravel = farDistance + 1.0;
@@ -1236,14 +1266,14 @@ SceneOut AquariumScenePS(VertexOut input)
     float outputMaterialId = 0.0;
     float3 outputNormal = 0.0;
 
-    if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, travel))
+    if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, primitiveId, travel))
     {
         float3 normal = surfaceNormal(hitPosition, materialId);
         color = shade(hitPosition, normal, materialId, rayDirection);
         color *= exp(-travel * 0.012);
         nearestSolidTravel = travel;
         outputTravel = travel;
-        outputMaterialId = materialId;
+        outputMaterialId = primitiveId == 0 ? FIELD_ID_SELF : FIELD_ID_PLANET_BASE + (float)(primitiveId - 1);
         outputNormal = normal;
     }
 
@@ -1253,7 +1283,7 @@ SceneOut AquariumScenePS(VertexOut input)
     {
         float4 gridOverlay = shadeGridOverlay(gridHitPosition);
         outputTravel = gridTravel;
-        outputMaterialId = 1.0;
+        outputMaterialId = FIELD_ID_GRID;
         outputNormal = terrainNormal(gridHitPosition);
         if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
         {
@@ -1308,28 +1338,29 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentTravel = current.a;
     float3 currentColor = current.rgb;
     float4 currentMetadata = currentSceneMetadataTexture.SampleLevel(gridSampler, input.uv, 0.0);
-    float currentMaterialId = currentMetadata.x;
+    float currentFieldId = currentMetadata.x;
     float3 currentNormal = currentMetadata.yzw;
 
     float historyWeight = 0.0;
     float3 historyColor = currentColor;
-    if (frameIndex > 0.5 && currentTravel <= farDistance && currentMaterialId > 0.5)
+    if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
     {
         float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
         float3 worldPosition = cameraPosition + currentRay * currentTravel;
-        float2 previousUv = projectWorldToPreviousHistoryUv(worldPosition);
+        float3 previousWorldPosition = temporalPreviousWorldPosition(worldPosition, currentFieldId);
+        float2 previousUv = projectWorldToPreviousHistoryUv(previousWorldPosition);
 
         if (all(previousUv >= 0.0) && all(previousUv <= 1.0))
         {
             float4 previous = historyTexture.SampleLevel(gridSampler, previousUv, 0.0);
             float4 previousMetadata = historyMetadataTexture.SampleLevel(gridSampler, previousUv, 0.0);
             float previousTravel = previous.a;
-            float previousMaterialId = previousMetadata.x;
+            float previousFieldId = previousMetadata.x;
             float3 previousNormal = previousMetadata.yzw;
             float travelDelta = abs(previousTravel - currentTravel);
             float travelTolerance = max(0.045, currentTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
-            float materialWeight = abs(previousMaterialId - currentMaterialId) < 0.25 ? 1.0 : 0.0;
+            float fieldWeight = abs(previousFieldId - currentFieldId) < 0.25 ? 1.0 : 0.0;
             float normalWeight = 0.0;
             if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
             {
@@ -1344,7 +1375,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * travelWeight * colorWeight * materialWeight * normalWeight;
+            historyWeight = 0.82 * travelWeight * colorWeight * fieldWeight * normalWeight;
         }
     }
 

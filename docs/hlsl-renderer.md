@@ -160,12 +160,14 @@ delta, and only then tonemaps to the backbuffer.
 
 This started as Gate 1 of the TAA plan: camera reprojection, jitter, travel
 rejection, neighborhood clamping, and history ping-pong. Gate 2A now adds a
-scene metadata target and matching history metadata, storing material id and
-surface normal so history is rejected across material/normal discontinuities.
+scene metadata target and matching history metadata, storing field id and
+surface normal so history is rejected across field/normal discontinuities.
 The Grid also records its own travel and normal when it is the nearest diegetic
 surface, even if the current stochastic coverage sample does not draw color.
+Gate 2B adds stable field ids for Self/Grid/each planet and maps orbiting planet
+hits back to their previous center before camera reprojection.
 
-It deliberately does not pretend to solve explicit animated SDF velocity,
+It deliberately does not pretend to solve general non-rigid field velocity,
 reactive masks, volumetric history, or history resurrection yet.
 
 ## Overlay Text

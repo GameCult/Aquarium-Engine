@@ -50,3 +50,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 2A: added scene/history metadata storing material id and normal.
   Resolve now rejects material mismatches and normal discontinuities. Grid
   stochastic surfaces record Grid travel/normal even when dither misses.
+- Temporal Gate 2B: field id replaces coarse material id for TAA identity. Each
+  planet has a stable field id and analytic previous-center reprojection so
+  orbiting body history follows the body instead of camera-only motion.
