@@ -135,6 +135,19 @@ or compress fields, but runtime lighting needs simple lookups and explicit
 debuggability. A tiny neural toy that cannot explain a bad pixel is not yet a
 renderer feature.
 
+### Transcripts Are Evidence, Not Decoration
+
+The follow-up `transcript-addendum.md` corrected an earlier mistake: slides and
+presenter notes are not interchangeable with transcripts. The Dreams Umbra
+transcript materially changes the engineering lesson by explaining why the SDF,
+brick, hybrid transparency, froxel-lighting, and splat paths lived or died.
+GPUOpen's Brixelizer transcript also clarifies update/integration constraints
+that are easy to underweight when skimming slides.
+
+Aquarium implication: when a deck has a talk recording, preserve subtitles or
+transcripts before distilling. If no recording is found, mark that as an evidence
+gap.
+
 ### Recent Participating-Media Caching Points Toward Shared Radiance Fields
 
 The 2025 adaptive multi-view radiance-caching paper is useful because it treats

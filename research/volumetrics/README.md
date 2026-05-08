@@ -12,6 +12,8 @@ distilled notes.
 - `synthesis.md`: distilled lessons for Aquarium's renderer architecture.
 - `recent-volumetrics-and-gpu-sdf.md`: follow-up citation/Advances scan covering
   newer volumetrics, sparse GPU SDF, Nubis, and learned field storage.
+- `transcript-addendum.md`: correction pass using video subtitles where
+  available; especially Dreams and GPUOpen sparse SDF.
 
 ## Current Direction
 

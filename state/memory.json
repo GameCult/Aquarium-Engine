@@ -38,6 +38,7 @@
       "Future volumetric lighting should be a field sampled consistently by terrain, planets, fog, particles, and diegetic UI. Do not fake only the planet term if the scene is supposed to bounce light.",
       "Volumetric design must start from research/volumetrics/synthesis.md. The first pass should follow Wronski/Hillaire production shape: explicit low-resolution frustum volume, injected density/extinction/scattering, Self as first emitter, front-to-back transmittance/in-scattering integration, then consistent composition.",
       "For GPU SDF or newer volumetric storage, consult research/volumetrics/recent-volumetrics-and-gpu-sdf.md. The durable pattern is cascaded sparse bricks, compressed distance/occupancy, separate static/dynamic updates, toroidal partial updates, and learned fields only when runtime evaluation stays cheap and inspectable.",
+      "For research decks with recordings, pull subtitles/transcripts before distilling. The Dreams transcript changed the lesson: preserve the evaluator/field that serves the image, not the elegant SDF/brick/froxel experiment that drifted away from the art direction.",
       "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
       "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],

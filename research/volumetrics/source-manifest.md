@@ -13,9 +13,10 @@ are gitignored; rerun the listed URLs if the cache is missing.
 | Wronski volumetric fog | `wronski-volumetric-fog-siggraph2014-advances.pdf` | https://www.realtimerendering.com/advances/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pdf | SIGGRAPH 2014 Assassin's Creed IV volumetric fog deck with presenter notes. |
 | Frostbite unified volumetrics | `hillaire-frostbite-pb-unified-volumetrics-siggraph2015.pptx` | https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx | Hillaire/Frostbite SIGGRAPH 2015 deck; large binary, local only. |
 | Frostbite sky/atmosphere/clouds | `hillaire-frostbite-sky-atmosphere-clouds-siggraph2016.pdf` | https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf | SIGGRAPH 2016 physically based sky, atmosphere, and cloud rendering notes. |
-| Dreams Learning from Failure | `dreams-learning-from-failure-siggraph2015-compressed.pdf` | https://advances.realtimerendering.com/s2015/AlexEvans_SIGGRAPH-2015-sml.pdf | Compressed SIGGRAPH 2015 Media Molecule deck with transcript-like presenter notes. |
+| Dreams Learning from Failure | `dreams-learning-from-failure-siggraph2015-compressed.pdf` | https://advances.realtimerendering.com/s2015/AlexEvans_SIGGRAPH-2015-sml.pdf | Compressed SIGGRAPH 2015 Media Molecule deck. Presenter notes are useful but not a transcript. |
 | Dreams Media Molecule post | `dreams-learning-from-failure-mediamolecule.html` | https://www.mediamolecule.com/blog/article/siggraph_2015 | Official post for Alex Evans's SIGGRAPH talk. |
-| Dreams Umbra video page | `dreams-learning-from-failure-video-page.html` | https://www.mediamolecule.com/blog/article/alex_at_umbra_ignite_2015_learning_from_failure_video | Official video-page wrapper. I did not find a separate clean transcript. |
+| Dreams Umbra video page | `dreams-learning-from-failure-video-page.html` | https://www.mediamolecule.com/blog/article/alex_at_umbra_ignite_2015_learning_from_failure_video | Official video-page wrapper with YouTube embed. |
+| Dreams Umbra YouTube subtitles | `transcripts/dreams-umbra-ignite-2015.en.vtt` | https://www.youtube.com/watch?v=u9KNtnCZDMI | Cached with `python -m yt_dlp`; readable extract in `extracted-text/dreams-umbra-ignite-2015-transcript.txt`. This corrects the earlier slide-notes-as-transcript assumption. |
 | GigaVoxels paper | `gigavoxels-ray-guided-streaming.pdf` | https://maverick.inria.fr/Publications/2009/CNLE09/CNLE09.pdf | I3D 2009 paper on ray-guided streaming and brick/mipmap volume rendering. |
 | GigaVoxels publication page | `gigavoxels-publication-page.html` | https://www.icare3d.org/research-cat/publications/gigavoxels-ray-guided-streaming-for-efficient-and-detailed-voxel-rendering.html | Abstract, authors, and publication metadata. |
 | Horizon volumetric clouds | `schneider-horizon-volumetric-cloudscapes-siggraph2015.pdf` | https://advances.realtimerendering.com/s2015/The%20Real-time%20Volumetric%20Cloudscapes%20of%20Horizon%20-%20Zero%20Dawn%20-%20ARTR.pdf | Guerrilla SIGGRAPH 2015 deck on cloud modeling, lighting, and optimization. |
@@ -35,6 +36,7 @@ are gitignored; rerun the listed URLs if the cache is missing.
 | Neural Light Grid page | `neural-light-grid-activision-2024.html` | https://research.activision.com/publications/2024/08/Neural_Light_Grid | Activision research page for the technical memo and slides. |
 | Epic dynamic occlusion with SDF | `wright-dynamic-occlusion-sdf-siggraph2015.pdf` | https://advances.realtimerendering.com/s2015/DynamicOcclusionWithSignedDistanceFields.pdf | Production deck on SDF cone tracing and object/global distance fields. |
 | AMD sparse distance fields | `amd-real-time-sparse-distance-fields-for-games-2023.pdf` | https://gpuopen.com/download/GDC-2023-Sparse-Distance-Fields-For-Games.pdf | GDC 2023 GPUOpen/Brixelizer deck. |
+| AMD sparse distance fields video subtitles | `transcripts/gpuopen-sparse-sdf-gdc2023.en.vtt` | https://www.youtube.com/watch?v=iY15xhuuHPQ | Cached with `python -m yt_dlp`; readable extract in `extracted-text/gpuopen-sparse-sdf-gdc2023-transcript.txt`. |
 | RTSDF soft shadows paper | `rtsdf-soft-shadow-approximation-games-2022.pdf` | https://www.scitepress.org/PublishedPapers/2022/109962/109962.pdf | Paper on realtime SDF generation for soft shadow approximation. |
 | RTSDF arXiv version | `rtsdf-generating-sdf-realtime-soft-shadows-2022.pdf` | https://arxiv.org/pdf/2210.04449 | arXiv copy of the realtime SDF soft-shadow work. |
 | nvblox GPU SDF mapping | `nvblox-gpu-incremental-sdf-mapping-2023.pdf` | https://arxiv.org/pdf/2311.00626 | Robotics-oriented but useful GPU TSDF/ESDF incremental mapping reference. |
@@ -52,10 +54,14 @@ are gitignored; rerun the listed URLs if the cache is missing.
   - https://www.klayge.org/material/4_0/Atmospheric/Precomputed%20Atmospheric%20Scattering.pdf
   - https://citeseerx.ist.psu.edu/document?doi=5cd50191a346535eef7e12c024592c3afdd29ad4&repid=rep1&type=pdf
   - DOI: https://doi.org/10.1111/j.1467-8659.2008.01245.x
-- A separate Dreams talk transcript was not found. The compressed SIGGRAPH PDF
-  contains substantial presenter-note text and is the preserved transcript-like
-  source for this pass.
+- The Dreams Umbra video subtitles are now cached. The previous note treating the
+  compressed SIGGRAPH PDF as the transcript-like source was incomplete and has
+  been corrected in `transcript-addendum.md`.
 - The citation trail scan was pragmatic rather than exhaustive. Semantic Scholar
   API requests were rate-limited from this environment, so the durable follow-up
   notes rely on Advances pages, official project pages, direct papers/decks, and
   indexed paper snippets where direct PDF fetches failed.
+- Public original recordings/captions for Nubis Evolved, Nubis Cubed, and Neural
+  Light Grid were not found via `yt-dlp` YouTube searches in this environment.
+  Keep treating their slide decks/pages as incomplete evidence unless a recording
+  URL is found.

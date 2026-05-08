@@ -30,6 +30,7 @@ current_model:
     input: docs/input.md
     volumetrics_research: research/volumetrics/synthesis.md
     recent_volumetrics_and_gpu_sdf: research/volumetrics/recent-volumetrics-and-gpu-sdf.md
+    volumetrics_transcript_addendum: research/volumetrics/transcript-addendum.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
@@ -64,5 +65,6 @@ next_actions:
   - Add renderer debug controls through the DirectWrite overlay path.
   - Use research/volumetrics/synthesis.md before designing fog, atmospheric scattering, clouds, or sparse volume storage.
   - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
+  - Check research/volumetrics/transcript-addendum.md before relying on slide decks as evidence; video transcripts can change the renderer lesson.
   - Promote runtime knobs into typed CultCache documents.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

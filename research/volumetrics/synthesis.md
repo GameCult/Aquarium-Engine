@@ -138,11 +138,18 @@ pipeline motivated by both aesthetic and technical constraints: CSG/SDF scene
 description, compute-heavy evaluation, multi-resolution point clouds, splats,
 and a painterly target that made some "incorrect" choices useful.
 
-The preserved lesson is process discipline. Explore, measure, and throw away
-systems that do not serve the final image. Aquarium should carry forward
-explicit maps of each rendering experiment: input, output, artifact, cost, and
-why it stayed or died. Dead branches belong in evidence notes, not live renderer
-architecture.
+The transcript addendum sharpens this. The useful survivor was not the first SDF
+renderer, the brick renderer, the hybrid transparency idea, or the froxel-ish
+lighting experiment. It was the evaluator and field representation feeding a
+point/splat renderer whose artifacts matched the desired painterly image. The
+talk is blunt that technically interesting work can still fail when the image
+drifts back toward generic untextured engine output.
+
+The preserved lesson is process discipline with visual accountability. Explore,
+measure, and throw away systems that do not serve the final image. Aquarium
+should carry forward explicit maps of each rendering experiment: input, output,
+artifact, cost, and why it stayed or died. Dead branches belong in evidence
+notes, not live renderer architecture.
 
 ## Suggested Aquarium Volumetric Roadmap
 
