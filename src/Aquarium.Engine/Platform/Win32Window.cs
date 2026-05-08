@@ -200,7 +200,7 @@ public sealed class Win32Window : IDisposable
         }
     }
 
-    public void PaintSplash(string header = "Loading", string body = "Preparing Aquarium")
+    public void PaintSplash(string header = "Aquarium", string body = "Preparing Aquarium")
     {
         if (!GetClientRect(Handle, out var rect))
         {
@@ -225,7 +225,7 @@ public sealed class Win32Window : IDisposable
                 var iconSize = Math.Min(ICON_SIZE_SPLASH, Math.Max(96, Math.Min(ClientWidth, ClientHeight) / 3));
                 var iconX = (ClientWidth - iconSize) / 2;
                 var textAnchorY = (int)MathF.Round(ClientHeight * (2.0f / 3.0f));
-                var iconY = Math.Max(24, textAnchorY - iconSize - 72);
+                var iconY = Math.Max(24, textAnchorY - iconSize - 84);
                 DrawIconEx(deviceContext, iconX, iconY, splashIcon, iconSize, iconSize, 0, IntPtr.Zero, 0x0003);
             }
 
@@ -359,23 +359,24 @@ public sealed class Win32Window : IDisposable
         try
         {
             var anchorY = (int)MathF.Round(height * (2.0f / 3.0f));
+            var headerText = header.ToUpperInvariant();
             var headerRect = new RECT
             {
                 left = 0,
-                top = anchorY - 14,
+                top = anchorY - 30,
                 right = width,
-                bottom = anchorY + 20
+                bottom = anchorY + 24
             };
             var bodyRect = new RECT
             {
                 left = Math.Max(0, width / 2 - 360),
-                top = anchorY + 24,
+                top = anchorY + 28,
                 right = Math.Min(width, width / 2 + 360),
-                bottom = anchorY + 50
+                bottom = anchorY + 56
             };
 
             var oldFont = SelectObject(deviceContext, headerFont);
-            DrawText(deviceContext, header, header.Length, ref headerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DrawText(deviceContext, headerText, headerText.Length, ref headerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(deviceContext, bodyFont);
             SetTextColor(deviceContext, ColorRef(142, 179, 190));
             DrawText(deviceContext, body, body.Length, ref bodyRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
