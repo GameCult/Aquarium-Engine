@@ -455,17 +455,20 @@ float3 planetNormal(float3 p)
     bool isSelf;
     nearestBody(p, center, radius, index, isSelf);
 
-    float3 local = p - center;
-    float3 radial = normalize(local);
-    float3 domain = local / max(radius, 0.001);
-    float seed = hash21(float2(index, 41.17)) * 19.0;
-    float normalFrequency = isSelf ? 5.4 : 7.5;
-    float3 detail = float3(
-        noised3(domain * normalFrequency + seed),
-        noised3(domain.yzx * normalFrequency + seed + 7.13),
-        noised3(domain.zxy * normalFrequency + seed + 13.71));
-    detail -= radial * dot(detail, radial);
-    return normalize(radial + detail * (isSelf ? 0.32 : 0.24));
+    float centerDistance = displacedSphereSdf(p, center, radius, index, isSelf);
+    float normalStep = max(radius * 0.006, SURFACE_EPSILON * 2.0);
+    float3 gradient = float3(
+        displacedSphereSdf(p + float3(normalStep, 0.0, 0.0), center, radius, index, isSelf) - centerDistance,
+        displacedSphereSdf(p + float3(0.0, normalStep, 0.0), center, radius, index, isSelf) - centerDistance,
+        displacedSphereSdf(p + float3(0.0, 0.0, normalStep), center, radius, index, isSelf) - centerDistance);
+
+    float gradientLength = length(gradient);
+    if (gradientLength < 0.00001)
+    {
+        return normalize(p - center);
+    }
+
+    return gradient / gradientLength;
 }
 
 float3 surfaceNormal(float3 p, int materialId)
