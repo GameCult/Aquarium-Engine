@@ -120,6 +120,17 @@ Headless watch smoke:
 .\scripts\dev-watch.ps1 -Headless
 ```
 
+Shipping publish:
+
+```powershell
+.\scripts\publish-win-x64.ps1 -Clean -Zip
+```
+
+This writes a self-contained Windows build to
+`artifacts\publish\win-x64`, verifies the executable, live runtime DLL,
+contracts DLL, icon, bundled fonts, and shader source, then optionally creates
+`artifacts\publish\EpiphanyAquariumEngine-win-x64.zip`.
+
 The first cut opens a Win32 window directly and owns a D3D11 swapchain through
 Vortice. No Stride runtime, no asset protocol, no borrowed game loop wearing a
 fake mustache. See `docs/vortice-spine.md`.
