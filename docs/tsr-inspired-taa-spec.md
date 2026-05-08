@@ -237,6 +237,15 @@ Current Gate 3I implementation:
 - debug mode `1` can remain noisy because it shows the raw stochastic scene;
   mode `0` should now use the analytic Grid estimate plus validated history
 
+Current Gate 3J implementation:
+
+- debug mode `1` is restored to raw current scene color, before Grid analytic
+  reconstruction
+- Grid final color no longer blends previous color history; it uses the analytic
+  current Grid estimate and writes that estimate into history
+- history/age/weight debug modes remain useful diagnostics, but stale Grid color
+  history no longer drives the final visible Grid
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

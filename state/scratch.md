@@ -89,3 +89,6 @@ prototype integrated along the camera ray before surface composition.
   current world hit and uses premultiplied color as the current estimate. Raw
   scene debug mode may still be noisy; final no longer treats stochastic
   hit/miss color as ground truth.
+- Temporal Gate 3J: debug mode 1 is raw scene again. Final Grid pixels use the
+  analytic current estimate directly instead of blending previous Grid color
+  history; history debug surfaces remain diagnostics.

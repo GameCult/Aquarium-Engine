@@ -1391,6 +1391,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float2 pixel = screenUv * resolution;
     float4 current = currentSceneTexture.SampleLevel(gridSampler, input.uv, 0.0);
     float currentTravel = current.a;
+    float3 rawCurrentColor = current.rgb;
     float3 currentColor = current.rgb;
     float4 currentMetadata = sampleCurrentMetadata(input.uv);
     float4 currentControl = sampleCurrentControl(input.uv);
@@ -1467,10 +1468,15 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
 
     float3 resolved = lerp(currentColor, historyColor, historyWeight);
+    if (currentIsGrid)
+    {
+        resolved = currentColor;
+    }
+
     float3 finalColor = aces(resolved);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
-        finalColor = aces(currentColor);
+        finalColor = aces(rawCurrentColor);
     }
     else if (renderDebugMode >= 1.5 && renderDebugMode < 2.5)
     {

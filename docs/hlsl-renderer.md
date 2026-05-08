@@ -195,6 +195,10 @@ Gate 3I reconstructs analytic Grid overlay color in the resolve pass for Grid
 pixels. Raw scene debug mode can still show stochastic hit/miss noise; final
 resolve uses the analytic current estimate plus validated history instead of
 averaging binary coverage like a tiny broken casino.
+Gate 3J restores debug mode `1` to true raw scene color and stops blending
+previous Grid color history into final Grid pixels. Grid history remains a
+diagnostic/output history surface, but final Grid color comes from the analytic
+current estimate.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `4` select them directly. Mode `0` is final resolve,
