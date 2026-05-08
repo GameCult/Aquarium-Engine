@@ -4,12 +4,14 @@ C# engine-core seed for the next Epiphany Aquarium line.
 
 This repo starts after the web and Rust prototypes taught the expensive lesson:
 the Aquarium wants an owned renderer, owned state model, and owned interaction
-grammar. Stride can donate useful structure and tooling, but the engine shape is
-Aquarium-first rather than framework-first.
+grammar. Stride can stay on the shelf as reference material, but the runtime is
+Aquarium-owned: window, renderer, state, and interaction grammar all belong
+here.
 
 ## Intent
 
 - C# host with renderer architecture kept legible in Rider.
+- Vortice/D3D11 first, with the native boundary kept explicit.
 - Grid-centered camera and world-space interaction invariants as first-class
   engine contracts.
 - Diegetic UI surfaces driven by Aquarium objects instead of admin chrome.
@@ -44,6 +46,6 @@ Headless smoke:
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --headless
 ```
 
-The first cut uses Stride as a NuGet-hosted shell through
-`Stride.CommunityToolkit.Windows`. Stride is scaffolding; the Aquarium owns the
-camera/Grid invariant and the renderer direction. See `docs/stride-boundary.md`.
+The first cut opens a Win32 window directly and owns a D3D11 swapchain through
+Vortice. No Stride runtime, no asset protocol, no borrowed game loop wearing a
+fake mustache. See `docs/vortice-spine.md`.

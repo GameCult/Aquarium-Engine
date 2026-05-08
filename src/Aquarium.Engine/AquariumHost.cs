@@ -1,6 +1,6 @@
-using Stride.CommunityToolkit.Engine;
-using Stride.Engine;
-using Stride.Games;
+using System.Diagnostics;
+using Aquarium.Engine.Platform;
+using Aquarium.Engine.Render;
 
 namespace Aquarium.Engine;
 
@@ -8,13 +8,30 @@ public static class AquariumHost
 {
     public static int Run(string[] args)
     {
-        using var game = new Game();
         var runtime = new AquariumRuntime(new AquariumRuntimeOptions(ParseHeadless(args)));
+        using var window = Win32Window.Create("Aquarium Engine", 1280, 720);
+        using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight);
 
-        game.Run(
-            context: null,
-            start: runtime.Start,
-            update: runtime.Update);
+        runtime.Start();
+
+        var frameClock = Stopwatch.StartNew();
+        var lastFrame = frameClock.Elapsed;
+        var frames = 0;
+
+        while (window.PumpMessages())
+        {
+            var now = frameClock.Elapsed;
+            var deltaSeconds = (float)(now - lastFrame).TotalSeconds;
+            lastFrame = now;
+
+            runtime.Update(deltaSeconds);
+            renderer.Render(runtime.Frame);
+
+            if (runtime.Options.Headless && ++frames >= 2)
+            {
+                break;
+            }
+        }
 
         return 0;
     }

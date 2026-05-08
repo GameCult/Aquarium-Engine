@@ -1,4 +1,4 @@
-using Stride.Core.Mathematics;
+using System.Numerics;
 
 namespace Aquarium.Engine;
 
@@ -35,10 +35,10 @@ public sealed class OrbitCameraRig
     public void Orbit(float yawDeltaRadians, float pitchDeltaRadians)
     {
         YawRadians += yawDeltaRadians;
-        PitchRadians = MathUtil.Clamp(
+        PitchRadians = Math.Clamp(
             PitchRadians + pitchDeltaRadians,
-            MathUtil.DegreesToRadians(5.0f),
-            MathUtil.DegreesToRadians(85.0f));
+            Angle.DegreesToRadians(5.0f),
+            Angle.DegreesToRadians(85.0f));
     }
 
     public void Zoom(float wheelSteps)
