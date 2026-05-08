@@ -96,7 +96,7 @@ float3 planetCenter(int index)
     float f = (float)index;
     float angle = f * 0.8975979 + timeSeconds * (0.08 + 0.011 * f);
     float radius = 4.1 + f * 0.77;
-    float2 xy = gridCenter + float2(cos(angle), sin(angle)) * radius;
+    float2 xy = float2(cos(angle), sin(angle)) * radius;
     return float3(xy, 1.15 + planetRadius(index) * 0.72);
 }
 

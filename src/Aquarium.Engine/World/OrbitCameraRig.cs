@@ -92,7 +92,7 @@ public sealed class OrbitCameraRig
 
         if (input.RightMouseDown && input.MouseDelta != Vector2.Zero)
         {
-            Pan(GridPanVector(new Vector2(input.MouseDelta.X, -input.MouseDelta.Y) * Distance * 0.0018f));
+            Pan(GridPanVector(new Vector2(-input.MouseDelta.X, input.MouseDelta.Y) * Distance * 0.0018f));
         }
     }
 
