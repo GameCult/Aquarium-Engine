@@ -47,3 +47,6 @@ prototype integrated along the camera ray before surface composition.
   HDR/travel texture, resolve pass reprojects by current/previous camera basis,
   clamps history to current 3x3 neighborhood, rejects by travel delta, writes
   ping-pong history, and tonemaps after resolve.
+- Temporal Gate 2A: added scene/history metadata storing material id and normal.
+  Resolve now rejects material mismatches and normal discontinuities. Grid
+  stochastic surfaces record Grid travel/normal even when dither misses.

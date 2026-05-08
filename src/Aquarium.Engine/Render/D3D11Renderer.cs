@@ -41,12 +41,21 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Texture2D sceneTexture;
     private readonly ID3D11RenderTargetView sceneRenderTargetView;
     private readonly ID3D11ShaderResourceView sceneShaderResourceView;
+    private readonly ID3D11Texture2D sceneMetadataTexture;
+    private readonly ID3D11RenderTargetView sceneMetadataRenderTargetView;
+    private readonly ID3D11ShaderResourceView sceneMetadataShaderResourceView;
     private readonly ID3D11Texture2D historyTextureA;
     private readonly ID3D11RenderTargetView historyRenderTargetViewA;
     private readonly ID3D11ShaderResourceView historyShaderResourceViewA;
+    private readonly ID3D11Texture2D historyMetadataTextureA;
+    private readonly ID3D11RenderTargetView historyMetadataRenderTargetViewA;
+    private readonly ID3D11ShaderResourceView historyMetadataShaderResourceViewA;
     private readonly ID3D11Texture2D historyTextureB;
     private readonly ID3D11RenderTargetView historyRenderTargetViewB;
     private readonly ID3D11ShaderResourceView historyShaderResourceViewB;
+    private readonly ID3D11Texture2D historyMetadataTextureB;
+    private readonly ID3D11RenderTargetView historyMetadataRenderTargetViewB;
+    private readonly ID3D11ShaderResourceView historyMetadataShaderResourceViewB;
     private readonly ID3D11SamplerState gridSampler;
     private readonly ID3D11SamplerState ditherSampler;
     private readonly ID3D11Buffer frameConstantBuffer;
@@ -127,12 +136,21 @@ public sealed class D3D11Renderer : IDisposable
         sceneTexture = CreateHdrTexture(width, height);
         sceneRenderTargetView = device.CreateRenderTargetView(sceneTexture);
         sceneShaderResourceView = device.CreateShaderResourceView(sceneTexture);
+        sceneMetadataTexture = CreateHdrTexture(width, height);
+        sceneMetadataRenderTargetView = device.CreateRenderTargetView(sceneMetadataTexture);
+        sceneMetadataShaderResourceView = device.CreateShaderResourceView(sceneMetadataTexture);
         historyTextureA = CreateHdrTexture(width, height);
         historyRenderTargetViewA = device.CreateRenderTargetView(historyTextureA);
         historyShaderResourceViewA = device.CreateShaderResourceView(historyTextureA);
+        historyMetadataTextureA = CreateHdrTexture(width, height);
+        historyMetadataRenderTargetViewA = device.CreateRenderTargetView(historyMetadataTextureA);
+        historyMetadataShaderResourceViewA = device.CreateShaderResourceView(historyMetadataTextureA);
         historyTextureB = CreateHdrTexture(width, height);
         historyRenderTargetViewB = device.CreateRenderTargetView(historyTextureB);
         historyShaderResourceViewB = device.CreateShaderResourceView(historyTextureB);
+        historyMetadataTextureB = CreateHdrTexture(width, height);
+        historyMetadataRenderTargetViewB = device.CreateRenderTargetView(historyMetadataTextureB);
+        historyMetadataShaderResourceViewB = device.CreateShaderResourceView(historyMetadataTextureB);
         startupProgress?.Invoke("Loading Aetheria blue-noise dither texture");
         ditherTexture = CreateDitherTexture(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
         ditherShaderResourceView = device.CreateShaderResourceView(ditherTexture);
@@ -241,12 +259,21 @@ public sealed class D3D11Renderer : IDisposable
         historyShaderResourceViewB.Dispose();
         historyRenderTargetViewB.Dispose();
         historyTextureB.Dispose();
+        historyMetadataShaderResourceViewB.Dispose();
+        historyMetadataRenderTargetViewB.Dispose();
+        historyMetadataTextureB.Dispose();
         historyShaderResourceViewA.Dispose();
         historyRenderTargetViewA.Dispose();
         historyTextureA.Dispose();
+        historyMetadataShaderResourceViewA.Dispose();
+        historyMetadataRenderTargetViewA.Dispose();
+        historyMetadataTextureA.Dispose();
         sceneShaderResourceView.Dispose();
         sceneRenderTargetView.Dispose();
         sceneTexture.Dispose();
+        sceneMetadataShaderResourceView.Dispose();
+        sceneMetadataRenderTargetView.Dispose();
+        sceneMetadataTexture.Dispose();
         gridHeightShaderResourceView.Dispose();
         gridHeightRenderTargetView.Dispose();
         gridHeightTexture.Dispose();
@@ -324,6 +351,10 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(0);
         context.PSUnsetShaderResource(1);
         context.PSUnsetShaderResource(2);
+        context.PSUnsetShaderResource(3);
+        context.PSUnsetShaderResource(4);
+        context.PSUnsetShaderResource(5);
+        context.PSUnsetShaderResource(6);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -339,9 +370,12 @@ public sealed class D3D11Renderer : IDisposable
     {
         context.PSUnsetShaderResource(3);
         context.PSUnsetShaderResource(4);
-        context.OMSetRenderTargets(sceneRenderTargetView);
+        context.PSUnsetShaderResource(5);
+        context.PSUnsetShaderResource(6);
+        context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(sceneRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+        context.ClearRenderTargetView(sceneMetadataRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
         context.IASetInputLayout(null);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.VSSetShader(vertexShader);
@@ -359,10 +393,14 @@ public sealed class D3D11Renderer : IDisposable
     {
         var historyReadView = frameIndex % 2 == 0 ? historyShaderResourceViewA : historyShaderResourceViewB;
         var historyWriteView = frameIndex % 2 == 0 ? historyRenderTargetViewB : historyRenderTargetViewA;
+        var historyMetadataReadView = frameIndex % 2 == 0 ? historyMetadataShaderResourceViewA : historyMetadataShaderResourceViewB;
+        var historyMetadataWriteView = frameIndex % 2 == 0 ? historyMetadataRenderTargetViewB : historyMetadataRenderTargetViewA;
 
         context.PSUnsetShaderResource(3);
         context.PSUnsetShaderResource(4);
-        context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView });
+        context.PSUnsetShaderResource(5);
+        context.PSUnsetShaderResource(6);
+        context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView, historyMetadataWriteView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
         context.IASetInputLayout(null);
@@ -372,6 +410,8 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetConstantBuffer(0, frameConstantBuffer);
         context.PSSetShaderResource(3, sceneShaderResourceView);
         context.PSSetShaderResource(4, historyReadView);
+        context.PSSetShaderResource(5, sceneMetadataShaderResourceView);
+        context.PSSetShaderResource(6, historyMetadataReadView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }

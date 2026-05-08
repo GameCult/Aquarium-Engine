@@ -158,10 +158,15 @@ ray and current travel, projects that point into the previous camera basis,
 samples history, clamps it to the current 3x3 neighborhood, rejects by travel
 delta, and only then tonemaps to the backbuffer.
 
-This is Gate 1 of the TAA plan: camera reprojection, jitter, travel rejection,
-neighborhood clamping, and history ping-pong. It deliberately does not pretend to
-solve animated SDF velocity, material/field id rejection, volumetric history, or
-history resurrection yet.
+This started as Gate 1 of the TAA plan: camera reprojection, jitter, travel
+rejection, neighborhood clamping, and history ping-pong. Gate 2A now adds a
+scene metadata target and matching history metadata, storing material id and
+surface normal so history is rejected across material/normal discontinuities.
+The Grid also records its own travel and normal when it is the nearest diegetic
+surface, even if the current stochastic coverage sample does not draw color.
+
+It deliberately does not pretend to solve explicit animated SDF velocity,
+reactive masks, volumetric history, or history resurrection yet.
 
 ## Overlay Text
 

@@ -21,6 +21,8 @@ StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 Texture2D<float> ditherTexture : register(t2);
 Texture2D<float4> currentSceneTexture : register(t3);
 Texture2D<float4> historyTexture : register(t4);
+Texture2D<float4> currentSceneMetadataTexture : register(t5);
+Texture2D<float4> historyMetadataTexture : register(t6);
 SamplerState gridSampler : register(s0);
 SamplerState ditherSampler : register(s1);
 
@@ -1213,7 +1215,13 @@ float3 aces(float3 color)
     return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
 }
 
-float4 AquariumScenePS(VertexOut input) : SV_Target
+struct SceneOut
+{
+    float4 colorTravel : SV_Target0;
+    float4 metadata : SV_Target1;
+};
+
+SceneOut AquariumScenePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
     float2 pixel = screenUv * resolution;
@@ -1224,6 +1232,9 @@ float4 AquariumScenePS(VertexOut input) : SV_Target
     float travel;
     float3 color = 0.0;
     float nearestSolidTravel = farDistance + 1.0;
+    float outputTravel = farDistance + 1.0;
+    float outputMaterialId = 0.0;
+    float3 outputNormal = 0.0;
 
     if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, travel))
     {
@@ -1231,6 +1242,9 @@ float4 AquariumScenePS(VertexOut input) : SV_Target
         color = shade(hitPosition, normal, materialId, rayDirection);
         color *= exp(-travel * 0.012);
         nearestSolidTravel = travel;
+        outputTravel = travel;
+        outputMaterialId = materialId;
+        outputNormal = normal;
     }
 
     float3 gridHitPosition;
@@ -1238,6 +1252,9 @@ float4 AquariumScenePS(VertexOut input) : SV_Target
     if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel) && gridTravel < nearestSolidTravel)
     {
         float4 gridOverlay = shadeGridOverlay(gridHitPosition);
+        outputTravel = gridTravel;
+        outputMaterialId = 1.0;
+        outputNormal = terrainNormal(gridHitPosition);
         if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
         {
             color = gridOverlay.rgb;
@@ -1245,7 +1262,11 @@ float4 AquariumScenePS(VertexOut input) : SV_Target
     }
 
     color += float3(0.001, 0.003, 0.004);
-    return float4(color, min(nearestSolidTravel, farDistance + 1.0));
+
+    SceneOut output;
+    output.colorTravel = float4(color, min(outputTravel, farDistance + 1.0));
+    output.metadata = float4(outputMaterialId, outputNormal);
+    return output;
 }
 
 float3 sampleCurrentScene(float2 uv)
@@ -1276,6 +1297,7 @@ struct ResolveOut
 {
     float4 finalColor : SV_Target0;
     float4 historyColor : SV_Target1;
+    float4 historyMetadata : SV_Target2;
 };
 
 ResolveOut AquariumResolvePS(VertexOut input)
@@ -1285,10 +1307,13 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float4 current = currentSceneTexture.SampleLevel(gridSampler, input.uv, 0.0);
     float currentTravel = current.a;
     float3 currentColor = current.rgb;
+    float4 currentMetadata = currentSceneMetadataTexture.SampleLevel(gridSampler, input.uv, 0.0);
+    float currentMaterialId = currentMetadata.x;
+    float3 currentNormal = currentMetadata.yzw;
 
     float historyWeight = 0.0;
     float3 historyColor = currentColor;
-    if (frameIndex > 0.5 && currentTravel <= farDistance)
+    if (frameIndex > 0.5 && currentTravel <= farDistance && currentMaterialId > 0.5)
     {
         float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
         float3 worldPosition = cameraPosition + currentRay * currentTravel;
@@ -1297,10 +1322,19 @@ ResolveOut AquariumResolvePS(VertexOut input)
         if (all(previousUv >= 0.0) && all(previousUv <= 1.0))
         {
             float4 previous = historyTexture.SampleLevel(gridSampler, previousUv, 0.0);
+            float4 previousMetadata = historyMetadataTexture.SampleLevel(gridSampler, previousUv, 0.0);
             float previousTravel = previous.a;
+            float previousMaterialId = previousMetadata.x;
+            float3 previousNormal = previousMetadata.yzw;
             float travelDelta = abs(previousTravel - currentTravel);
             float travelTolerance = max(0.045, currentTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
+            float materialWeight = abs(previousMaterialId - currentMaterialId) < 0.25 ? 1.0 : 0.0;
+            float normalWeight = 0.0;
+            if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
+            {
+                normalWeight = smoothstep(0.68, 0.96, dot(normalize(previousNormal), normalize(currentNormal)));
+            }
 
             float3 neighborhoodMin;
             float3 neighborhoodMax;
@@ -1310,7 +1344,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * travelWeight * colorWeight;
+            historyWeight = 0.82 * travelWeight * colorWeight * materialWeight * normalWeight;
         }
     }
 
@@ -1318,6 +1352,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     ResolveOut output;
     output.finalColor = float4(aces(resolved), 1.0);
     output.historyColor = float4(resolved, currentTravel);
+    output.historyMetadata = currentMetadata;
     return output;
 }
 
