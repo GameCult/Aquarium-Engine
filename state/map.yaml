@@ -28,6 +28,7 @@ current_model:
     runtime_surface: docs/cult-runtime-surface.md
     native_spine: docs/vortice-spine.md
     input: docs/input.md
+    volumetrics_research: research/volumetrics/synthesis.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
@@ -51,6 +52,7 @@ renderer_state:
   next:
     - Add explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
+    - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
@@ -59,5 +61,6 @@ next_actions:
   - Keep main as the live development branch.
   - Verify publish output after every packaging-affecting change.
   - Add renderer debug controls through the DirectWrite overlay path.
+  - Use research/volumetrics/synthesis.md before designing fog, atmospheric scattering, clouds, or sparse volume storage.
   - Promote runtime knobs into typed CultCache documents.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

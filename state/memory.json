@@ -35,7 +35,10 @@
       "Lighting must be diegetic by default. Self is the initial emitter; later light should come from Aquarium-owned fields and transport, not ambient convenience fill.",
       "If surfaces read brighter than Self, the light story is broken. Diagnose source terms, texture contents, bloom order, and tonemapping before polishing.",
       "HDR bloom belongs before tonemapping and should be gentle in intensity but broad enough to spread true emissive energy.",
-      "Future volumetric lighting should be a field sampled consistently by terrain, planets, fog, particles, and diegetic UI. Do not fake only the planet term if the scene is supposed to bounce light."
+      "Future volumetric lighting should be a field sampled consistently by terrain, planets, fog, particles, and diegetic UI. Do not fake only the planet term if the scene is supposed to bounce light.",
+      "Volumetric design must start from research/volumetrics/synthesis.md. The first pass should follow Wronski/Hillaire production shape: explicit low-resolution frustum volume, injected density/extinction/scattering, Self as first emitter, front-to-back transmittance/in-scattering integration, then consistent composition.",
+      "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
+      "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],
     "text_and_ui": [
       "Overlay text uses DirectWrite/Direct2D after scene rendering. It is crisp final-pixel UI for debug surfaces, terminals, inspectors, and splash/status text.",

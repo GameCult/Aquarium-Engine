@@ -5,3 +5,5 @@ artifacts/
 *.suo
 .vs/
 .idea/
+research/volumetrics/sources/
+research/volumetrics/extracted-text/
