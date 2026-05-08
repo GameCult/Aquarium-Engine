@@ -27,6 +27,7 @@ current_model:
     renderer: docs/hlsl-renderer.md
     runtime_surface: docs/cult-runtime-surface.md
     native_spine: docs/vortice-spine.md
+    sdf_field_renderer_plan: docs/sdf-field-renderer-plan.md
     input: docs/input.md
     volumetrics_research: research/volumetrics/synthesis.md
     recent_volumetrics_and_gpu_sdf: research/volumetrics/recent-volumetrics-and-gpu-sdf.md
@@ -37,6 +38,7 @@ invariants:
   - Grid radius follows camera zoom distance, not pitch/yaw/projection.
   - Body anchors remain world-space and independent of the moving Grid window.
   - World-space domains own Grid texture/weather sampling.
+  - SDF clouds are local world media, not skybox content; they can exist above, below, around, or enclosing the camera.
   - Visible scene lighting is diegetic; no default ambient/global fill.
   - Overlay text is DirectWrite final-pixel UI; scene text needs renderer-owned billboards.
   - CultCache persists live app state through reload.
@@ -55,6 +57,7 @@ renderer_state:
     - Add explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
+    - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
@@ -66,5 +69,6 @@ next_actions:
   - Use research/volumetrics/synthesis.md before designing fog, atmospheric scattering, clouds, or sparse volume storage.
   - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
   - Check research/volumetrics/transcript-addendum.md before relying on slide decks as evidence; video transcripts can change the renderer lesson.
+  - Follow docs/sdf-field-renderer-plan.md when adding SDF solids, SDF clouds, or hybrid field objects.
   - Promote runtime knobs into typed CultCache documents.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

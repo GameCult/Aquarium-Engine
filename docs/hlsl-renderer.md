@@ -37,6 +37,12 @@ Volumetric lighting, brick maps, HDR bloom, and debug controls are not one-pass
 pixel-shader jobs. They need engine systems around the shader rather than more
 stuffing in `AquariumPS`.
 
+The SDF field renderer plan lives in `docs/sdf-field-renderer-plan.md`. Its
+central constraint is that Aquarium/Aetheria-style clouds are local SDF media:
+above, below, around, and sometimes enclosing the camera. They are not a fancy
+skybox, so sky-dome/paraboloid-only cloud optimizations are not valid as the core
+cloud architecture.
+
 ## Deferred Grid Pass
 
 The renderer now has a deferred Grid height target.
@@ -86,6 +92,33 @@ height isolines and gradient-angle field lines follow the older Aetheria UI
 shader pattern: height contours are derived from the Grid height field, while
 angle lines quantize the terrain gradient direction and fade out on flat
 surfaces.
+
+## SDF Cloud Prototype
+
+`AquariumPS` now includes a first analytic SDF cloud-medium prototype. It defines
+four bounded local cloud fields in world/Grid space, including clouds below and
+around the Grid, then integrates density and single-scattering along the camera
+ray before compositing the nearest solid surface:
+
+```text
+color = cloud_scattering + cloud_transmittance * surface_color
+```
+
+This is intentionally a prototype inside the fullscreen shader. It proves the
+coordinate and composition contract for local SDF clouds, but the final renderer
+should move toward the explicit field registry and volume pass described in
+`docs/sdf-field-renderer-plan.md`.
+
+Current prototype traits:
+
+- ellipsoid SDF cloud containers
+- stable world/Grid-space placement
+- distance-guided empty-space stepping
+- procedural erosion/noise inside each field
+- Self-lit scattering and simple forward/back phase shaping
+- no skybox/paraboloid assumption
+- no sparse brick storage yet
+- no debug view yet
 
 ## Overlay Text
 

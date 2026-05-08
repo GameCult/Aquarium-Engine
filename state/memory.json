@@ -22,6 +22,7 @@
       "The camera target is the Grid center on XY. Grid radius derives from zoom distance. Pitch, yaw, FOV, and screen aspect do not resize the Grid.",
       "Body anchors are world-space simulation state. Moving the Grid visibility window must not drag bodies with it.",
       "Grid texture, weather, line, and future fog domains should sample world-space coordinates so panning reveals the field instead of sliding a texture under the camera.",
+      "Aquarium/Aetheria clouds are local SDF media: above, below, around, and sometimes enclosing the camera. Do not build the core cloud path on skybox, hemisphere, paraboloid, or far-only assumptions.",
       "Cursor and camera interactions should project onto the same XY surface used by the Grid contract."
     ],
     "raymarching": [
@@ -40,6 +41,7 @@
       "For GPU SDF or newer volumetric storage, consult research/volumetrics/recent-volumetrics-and-gpu-sdf.md. The durable pattern is cascaded sparse bricks, compressed distance/occupancy, separate static/dynamic updates, toroidal partial updates, and learned fields only when runtime evaluation stays cheap and inspectable.",
       "For research decks with recordings, pull subtitles/transcripts before distilling. The Dreams transcript changed the lesson: preserve the evaluator/field that serves the image, not the elegant SDF/brick/froxel experiment that drifted away from the art direction.",
       "Sea of Thieves clouds are the stylized counterexample: authored opaque cloud geometry filtered through low-res blurred color/depth compositing can beat dense raymarching when clouds are symbolic world objects or gameplay signage. Consider tool-time SDF baking for per-vertex cloud lighting, not runtime volume traversal by reflex.",
+      "The SDF field renderer plan is docs/sdf-field-renderer-plan.md: solids and clouds should share one field grammar, with distance, density, material, medium, bounds, and debug views.",
       "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
       "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],

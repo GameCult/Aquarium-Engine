@@ -2,10 +2,11 @@
 
 ## Current Slice
 
-Merged the native C# engine branch to `main`, then stripped historical branch
-memorial language from the live docs. The repo now needs to stay pure: C# host,
-Vortice/D3D11 renderer, HLSL shaders, CultMath/CultLib, DirectWrite overlay,
-CultCache state, CultNet future transport.
+Planning and first implementation for the SDF field renderer. The core rule:
+Aquarium/Aetheria clouds are local SDF media above, below, around, or enclosing
+the camera, never skybox-only decoration. `docs/sdf-field-renderer-plan.md`
+captures the architecture. `Aquarium.hlsl` now has a first analytic SDF cloud
+prototype integrated along the camera ray before surface composition.
 
 ## Hot Context
 
@@ -17,3 +18,6 @@ CultCache state, CultNet future transport.
   - `.\scripts\dev-reload.ps1 -Headless -RetainSlots 4`
 - Prototype histories remain external references. Do not re-import their source
   trees into this engine repo.
+- Current cloud prototype is deliberately not the final volume pass. Next
+  renderer steps: debug views, field instance contract, then explicit local
+  volume/froxel pass.

@@ -27,6 +27,10 @@ static const float GRID_LINE_PIXEL_FADE = 0.95;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
 static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
+static const int CLOUD_FIELD_COUNT = 4;
+static const float CLOUD_MIN_STEP = 0.055;
+static const float CLOUD_MAX_STEP = 0.46;
+static const float CLOUD_EMPTY_STEP_SCALE = 0.42;
 static const int PLANET_COUNT = 5;
 static const int PRIMITIVE_COUNT = PLANET_COUNT + 1;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
@@ -260,6 +264,165 @@ float terrainHeight(float2 p)
 float sphereSdf(float3 p, float3 center, float radius)
 {
     return length(p - center) - radius;
+}
+
+float ellipsoidSdf(float3 p, float3 radius)
+{
+    float3 safeRadius = max(radius, 0.001);
+    float normalizedDistance = length(p / safeRadius) - 1.0;
+    return normalizedDistance * min(safeRadius.x, min(safeRadius.y, safeRadius.z));
+}
+
+void cloudFieldInfo(int index, out float3 center, out float3 radius, out float3 tint, out float densityScale)
+{
+    float slowTime = timeSeconds * 0.035;
+    if (index == 0)
+    {
+        center = float3(gridCenter + float2(0.0, -1.4), 0.34);
+        radius = float3(4.6, 1.55, 0.74);
+        tint = float3(0.30, 0.86, 0.92);
+        densityScale = 0.23;
+    }
+    else if (index == 1)
+    {
+        center = float3(gridCenter + float2(-3.8, 2.2), -0.52);
+        radius = float3(2.15, 1.36, 0.58);
+        tint = float3(0.24, 0.70, 0.58);
+        densityScale = 0.31;
+    }
+    else if (index == 2)
+    {
+        center = float3(gridCenter + float2(3.25, 2.85), 1.18);
+        radius = float3(1.34, 2.55, 0.86);
+        tint = float3(0.88, 0.72, 0.42);
+        densityScale = 0.26;
+    }
+    else
+    {
+        center = float3(gridCenter + float2(sin(slowTime) * 2.2, cos(slowTime * 0.7) * 2.6), 2.18);
+        radius = float3(2.8, 1.68, 0.92);
+        tint = float3(0.44, 0.62, 1.0);
+        densityScale = 0.18;
+    }
+}
+
+float cloudFieldSdf(float3 p, int index)
+{
+    float3 center;
+    float3 radius;
+    float3 tint;
+    float densityScale;
+    cloudFieldInfo(index, center, radius, tint, densityScale);
+
+    float3 local = p - center;
+    float angle = index * 1.73 + timeSeconds * 0.018 * (index + 1);
+    float c = cos(angle);
+    float s = sin(angle);
+    local.xy = float2(local.x * c - local.y * s, local.x * s + local.y * c);
+    return ellipsoidSdf(local, radius);
+}
+
+float cloudDensity(float3 p, int index, out float3 tint)
+{
+    float3 center;
+    float3 radius;
+    float densityScale;
+    cloudFieldInfo(index, center, radius, tint, densityScale);
+
+    float distanceToCloud = cloudFieldSdf(p, index);
+    float boundary = 1.0 - smoothstep(-0.18, 0.72, distanceToCloud);
+    if (boundary <= 0.0)
+    {
+        return 0.0;
+    }
+
+    float3 local = (p - center) / max(radius, 0.001);
+    float3 wind = float3(0.035, -0.018, 0.011) * timeSeconds;
+    float broad = fbm3(local * 1.45 + wind + index * 7.1) * 0.5 + 0.5;
+    float fine = fbm3(local * 4.6 + wind.yzx * 2.0 + index * 11.3) * 0.5 + 0.5;
+    float erosion = saturate(broad * 0.78 + fine * 0.32);
+    float softCore = smoothstep(0.26, 0.76, erosion);
+    float edgeVeil = smoothstep(0.72, -0.18, abs(distanceToCloud));
+    return boundary * lerp(0.34, 1.0, softCore) * (0.72 + edgeVeil * 0.28) * densityScale;
+}
+
+float nearestCloudDistance(float3 p)
+{
+    float distanceToCloud = 100000.0;
+    [unroll]
+    for (int i = 0; i < CLOUD_FIELD_COUNT; i++)
+    {
+        distanceToCloud = min(distanceToCloud, cloudFieldSdf(p, i));
+    }
+
+    return distanceToCloud;
+}
+
+void sampleCloudMedium(float3 p, float3 rayDirection, out float density, out float3 scattering)
+{
+    density = 0.0;
+    scattering = 0.0;
+
+    [unroll]
+    for (int i = 0; i < CLOUD_FIELD_COUNT; i++)
+    {
+        float3 tint;
+        float fieldDensity = cloudDensity(p, i, tint);
+        if (fieldDensity > 0.0001)
+        {
+            float3 toSun = SUN_POSITION - p;
+            float sunDistanceSq = max(dot(toSun, toSun), 0.001);
+            float3 lightDirection = toSun * rsqrt(sunDistanceSq);
+            float forwardPhase = pow(saturate(dot(rayDirection, lightDirection) * 0.5 + 0.5), 3.0);
+            float backPhase = pow(saturate(dot(-rayDirection, lightDirection) * 0.5 + 0.5), 2.0);
+            float heightGlow = smoothstep(-1.2, 2.4, p.z);
+            float selfLight = 11.0 / sunDistanceSq;
+            float3 lightColor = float3(1.0, 0.76, 0.36) * selfLight;
+            float3 ambientField = lerp(float3(0.02, 0.08, 0.10), tint * 0.22, heightGlow);
+            float silver = forwardPhase * 0.72 + backPhase * 0.24;
+            scattering += fieldDensity * (ambientField + lightColor * (0.18 + silver));
+            density += fieldDensity;
+        }
+    }
+
+    density = saturate(density);
+}
+
+void integrateCloudFields(float3 rayOrigin, float3 rayDirection, float maxTravel, out float3 cloudScattering, out float cloudTransmittance)
+{
+    cloudScattering = 0.0;
+    cloudTransmittance = 1.0;
+
+    float travel = 0.0;
+    [loop]
+    for (int stepIndex = 0; stepIndex < 72; stepIndex++)
+    {
+        if (travel >= maxTravel || cloudTransmittance < 0.025)
+        {
+            break;
+        }
+
+        float3 p = rayOrigin + rayDirection * travel;
+        float density;
+        float3 scattering;
+        sampleCloudMedium(p, rayDirection, density, scattering);
+
+        float distanceToCloud = nearestCloudDistance(p);
+        float stepLength = density > 0.001
+            ? CLOUD_MIN_STEP
+            : clamp(max(distanceToCloud, 0.0) * CLOUD_EMPTY_STEP_SCALE, CLOUD_MIN_STEP, CLOUD_MAX_STEP);
+        stepLength = min(stepLength, maxTravel - travel);
+
+        if (density > 0.001)
+        {
+            float extinction = density * 1.35;
+            float segmentTransmittance = exp(-extinction * stepLength);
+            cloudScattering += cloudTransmittance * scattering * (1.0 - segmentTransmittance) / max(extinction, 0.001);
+            cloudTransmittance *= segmentTransmittance;
+        }
+
+        travel += stepLength;
+    }
 }
 
 float planetCutDepth(float3 localPosition, float radius, int index, bool isSelf)
@@ -858,14 +1021,20 @@ float4 AquariumPS(VertexOut input) : SV_Target
     int materialId;
     float travel;
     float3 color = 0.0;
+    float maxCloudTravel = farDistance;
 
     if (raymarch(cameraPosition, rayDirection, hitPosition, materialId, travel))
     {
         float3 normal = surfaceNormal(hitPosition, materialId);
         color = shade(hitPosition, normal, materialId, rayDirection);
         color *= exp(-travel * 0.012);
+        maxCloudTravel = travel;
     }
 
+    float3 cloudScattering;
+    float cloudTransmittance;
+    integrateCloudFields(cameraPosition, rayDirection, maxCloudTravel, cloudScattering, cloudTransmittance);
+    color = cloudScattering + color * cloudTransmittance;
     color += float3(0.001, 0.003, 0.004);
     return float4(aces(color), 1.0);
 }
