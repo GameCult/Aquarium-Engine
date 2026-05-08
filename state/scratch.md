@@ -21,3 +21,6 @@ prototype integrated along the camera ray before surface composition.
 - Current cloud prototype is deliberately not the final volume pass. Next
   renderer steps: debug views, field instance contract, then explicit local
   volume/froxel pass.
+- First artifact found: near ellipsoid edges can occlude farther clouds if the
+  SDF boundary emits a positive-distance absorbing veil. Keep density inside the
+  sculpted container, eroded, feathered, and low-extinction.

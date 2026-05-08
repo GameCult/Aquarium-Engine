@@ -330,7 +330,7 @@ float cloudDensity(float3 p, int index, out float3 tint)
     cloudFieldInfo(index, center, radius, tint, densityScale);
 
     float distanceToCloud = cloudFieldSdf(p, index);
-    float boundary = 1.0 - smoothstep(-0.18, 0.72, distanceToCloud);
+    float boundary = smoothstep(0.18, -0.54, distanceToCloud);
     if (boundary <= 0.0)
     {
         return 0.0;
@@ -340,10 +340,10 @@ float cloudDensity(float3 p, int index, out float3 tint)
     float3 wind = float3(0.035, -0.018, 0.011) * timeSeconds;
     float broad = fbm3(local * 1.45 + wind + index * 7.1) * 0.5 + 0.5;
     float fine = fbm3(local * 4.6 + wind.yzx * 2.0 + index * 11.3) * 0.5 + 0.5;
-    float erosion = saturate(broad * 0.78 + fine * 0.32);
-    float softCore = smoothstep(0.26, 0.76, erosion);
-    float edgeVeil = smoothstep(0.72, -0.18, abs(distanceToCloud));
-    return boundary * lerp(0.34, 1.0, softCore) * (0.72 + edgeVeil * 0.28) * densityScale;
+    float erosion = saturate(broad * 0.72 + fine * 0.38);
+    float softCore = smoothstep(0.42, 0.86, erosion);
+    float featheredShell = boundary * boundary;
+    return featheredShell * softCore * densityScale;
 }
 
 float nearestCloudDistance(float3 p)
@@ -381,11 +381,11 @@ void sampleCloudMedium(float3 p, float3 rayDirection, out float density, out flo
             float3 ambientField = lerp(float3(0.02, 0.08, 0.10), tint * 0.22, heightGlow);
             float silver = forwardPhase * 0.72 + backPhase * 0.24;
             scattering += fieldDensity * (ambientField + lightColor * (0.18 + silver));
-            density += fieldDensity;
+            density += fieldDensity * 0.62;
         }
     }
 
-    density = saturate(density);
+    density = min(density, 1.0);
 }
 
 void integrateCloudFields(float3 rayOrigin, float3 rayDirection, float maxTravel, out float3 cloudScattering, out float cloudTransmittance)
@@ -415,7 +415,7 @@ void integrateCloudFields(float3 rayOrigin, float3 rayDirection, float maxTravel
 
         if (density > 0.001)
         {
-            float extinction = density * 1.35;
+            float extinction = density * 0.58;
             float segmentTransmittance = exp(-extinction * stepLength);
             cloudScattering += cloudTransmittance * scattering * (1.0 - segmentTransmittance) / max(extinction, 0.001);
             cloudTransmittance *= segmentTransmittance;

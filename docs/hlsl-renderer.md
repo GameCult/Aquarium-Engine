@@ -115,6 +115,8 @@ Current prototype traits:
 - stable world/Grid-space placement
 - distance-guided empty-space stepping
 - procedural erosion/noise inside each field
+- feathered interior density, without positive-distance absorbing shells around
+  the ellipsoid boundary
 - Self-lit scattering and simple forward/back phase shaping
 - no skybox/paraboloid assumption
 - no sparse brick storage yet
