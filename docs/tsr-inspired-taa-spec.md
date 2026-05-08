@@ -207,6 +207,16 @@ Current Gate 3F implementation:
 - debug mode `2` should now show a smoother history signal than raw scene mode
   `1` when the Grid is stable
 
+Current Gate 3G implementation:
+
+- identity/control buffers are point-loaded, not linearly sampled
+- field id equality is exact after point-loading, so Grid/Self/planet boundaries
+  hard-reject mismatched history
+- Grid history color is sampled with the same nearest pixel used for metadata so
+  bright foreground silhouettes do not bilinearly bleed into background Grid
+  history
+- Grid max history weight is reduced from the too-soft `0.975` to `0.94`
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

@@ -79,3 +79,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3F: Grid stochastic coverage now uses high-retention history
   without coverage/reactive authority penalties. Coverage remains a continuity
   signal, not a reason to throw away the accumulation low-alpha lines require.
+- Temporal Gate 3G: identity/control buffers are point-loaded and Grid history
+  color uses nearest identity-aligned sampling. This prevents foreground glow
+  from bilinearly bleeding into background Grid history at silhouettes.

@@ -1316,6 +1316,36 @@ float3 sampleCurrentScene(float2 uv)
     return currentSceneTexture.SampleLevel(gridSampler, uv, 0.0).rgb;
 }
 
+int2 pixelFromUv(float2 uv)
+{
+    return clamp((int2)floor(uv * resolution), int2(0, 0), (int2)resolution - int2(1, 1));
+}
+
+float4 sampleCurrentMetadata(float2 uv)
+{
+    return currentSceneMetadataTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 sampleCurrentControl(float2 uv)
+{
+    return currentSceneControlTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 sampleNearestHistoryColor(float2 uv)
+{
+    return historyTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 sampleNearestHistoryMetadata(float2 uv)
+{
+    return historyMetadataTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 sampleNearestHistoryControl(float2 uv)
+{
+    return historyControlTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
 void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
 {
     float2 texel = 1.0 / resolution;
@@ -1350,8 +1380,8 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float4 current = currentSceneTexture.SampleLevel(gridSampler, input.uv, 0.0);
     float currentTravel = current.a;
     float3 currentColor = current.rgb;
-    float4 currentMetadata = currentSceneMetadataTexture.SampleLevel(gridSampler, input.uv, 0.0);
-    float4 currentControl = currentSceneControlTexture.SampleLevel(gridSampler, input.uv, 0.0);
+    float4 currentMetadata = sampleCurrentMetadata(input.uv);
+    float4 currentControl = sampleCurrentControl(input.uv);
     float currentFieldId = currentMetadata.x;
     float3 currentNormal = currentMetadata.yzw;
     float currentReactive = saturate(currentControl.x);
@@ -1370,11 +1400,12 @@ ResolveOut AquariumResolvePS(VertexOut input)
 
         if (all(previousUv >= 0.0) && all(previousUv <= 1.0))
         {
-            float4 previous = historyTexture.SampleLevel(gridSampler, previousUv, 0.0);
-            float4 previousMetadata = historyMetadataTexture.SampleLevel(gridSampler, previousUv, 0.0);
-            float4 previousControl = historyControlTexture.SampleLevel(gridSampler, previousUv, 0.0);
-            float previousTravel = previous.a;
+            float4 previousMetadata = sampleNearestHistoryMetadata(previousUv);
             float previousFieldId = previousMetadata.x;
+            bool isGridField = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
+            float4 previous = isGridField ? sampleNearestHistoryColor(previousUv) : historyTexture.SampleLevel(gridSampler, previousUv, 0.0);
+            float4 previousControl = sampleNearestHistoryControl(previousUv);
+            float previousTravel = previous.a;
             float3 previousNormal = previousMetadata.yzw;
             float previousCoverage = saturate(previousControl.y);
             float previousMediumOpacity = saturate(previousControl.z);
@@ -1383,8 +1414,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float travelDelta = abs(previousTravel - expectedPreviousTravel);
             float travelTolerance = max(0.045, expectedPreviousTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
-            float fieldWeight = abs(previousFieldId - currentFieldId) < 0.25 ? 1.0 : 0.0;
-            bool isGridField = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
+            float fieldWeight = abs(previousFieldId - currentFieldId) < 0.001 ? 1.0 : 0.0;
             float normalWeight = 0.0;
             if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
             {
@@ -1405,7 +1435,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float surfaceValidationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
             float gridValidationWeight = travelWeight * fieldWeight * normalWeight * coverageContinuityWeight * mediumContinuityWeight;
             float validationWeight = isGridField ? gridValidationWeight : surfaceValidationWeight;
-            float maxHistoryWeight = isGridField ? 0.975 : 0.82;
+            float maxHistoryWeight = isGridField ? 0.94 : 0.82;
             float freshHistoryScale = isGridField ? 0.72 : 0.35;
 
             historyColor = clampedHistory;

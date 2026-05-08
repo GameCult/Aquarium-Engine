@@ -184,6 +184,10 @@ field, travel, normal, coverage, reactive, and age checks.
 Gate 3F gives that stochastic Grid path a higher-retention history blend and no
 coverage/reactive penalty, because low coverage is the signal that needs
 temporal accumulation rather than the signal that should lose history.
+Gate 3G point-loads identity/control history and nearest-loads Grid history
+color, preventing bright foreground silhouettes from bilinearly bleeding into
+background Grid accumulation. Grid retention is also pulled back from `0.975` to
+`0.94` to keep lines less anesthetized.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `4` select them directly. Mode `0` is final resolve,
