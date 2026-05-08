@@ -109,6 +109,10 @@ prototype integrated along the camera ray before surface composition.
   next renderer work before the SDF field renderer is explicit exposure,
   pre-tonemap bloom/veil, and display-transform/luminance debug views. Avoid
   threshold glow; bloom spreads energy already present in scene-linear HDR.
+- HDR implementation pass: renderer now has fixed manual exposure, half/quarter/
+  eighth bloom targets, firefly-safe downsample, separable horizontal/vertical
+  blur per level, pre-tonemap bloom/veil composite, mode 7 bloom contribution,
+  and mode 8 exposed luminance.
 - Dev watcher correction: live runtime reload now waits for the host stdout log
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last

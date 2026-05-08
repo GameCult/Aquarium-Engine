@@ -14,7 +14,7 @@ cbuffer AquariumFrame : register(b0)
     float2 jitterPixels;
     float2 previousJitterPixels;
     float renderDebugMode;
-    float _pad0;
+    float exposure;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -26,6 +26,9 @@ Texture2D<float4> currentSceneMetadataTexture : register(t5);
 Texture2D<float4> historyMetadataTexture : register(t6);
 Texture2D<float4> currentSceneControlTexture : register(t7);
 Texture2D<float4> historyControlTexture : register(t8);
+Texture2D<float4> bloomTexture0 : register(t9);
+Texture2D<float4> bloomTexture1 : register(t10);
+Texture2D<float4> bloomTexture2 : register(t11);
 SamplerState gridSampler : register(s0);
 SamplerState ditherSampler : register(s1);
 
@@ -52,6 +55,8 @@ static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
+static const float BLOOM_INTENSITY = 0.072;
+static const float BLOOM_VEIL_INTENSITY = 0.014;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
@@ -1259,6 +1264,46 @@ float3 aces(float3 color)
     return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
 }
 
+float luminance(float3 color)
+{
+    return dot(color, float3(0.2126, 0.7152, 0.0722));
+}
+
+float3 exposeSceneColor(float3 color)
+{
+    return color * exposure;
+}
+
+float3 sampleExposedScene(float2 uv)
+{
+    return exposeSceneColor(currentSceneTexture.SampleLevel(gridSampler, uv, 0.0).rgb);
+}
+
+float4 fireflySafeDownsample(float2 uv)
+{
+    float3 sumColor = 0.0;
+    float sumWeight = 0.0;
+    uint sourceWidth;
+    uint sourceHeight;
+    bloomTexture0.GetDimensions(sourceWidth, sourceHeight);
+    float2 texel = 1.0 / float2(max(sourceWidth, 1), max(sourceHeight, 1));
+
+    [unroll]
+    for (int y = -1; y <= 1; y++)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; x++)
+        {
+            float3 sampleColor = bloomTexture0.SampleLevel(gridSampler, uv + float2(x, y) * texel, 0.0).rgb;
+            float weight = rcp(1.0 + luminance(sampleColor) * 0.12);
+            sumColor += sampleColor * weight;
+            sumWeight += weight;
+        }
+    }
+
+    return float4(sumColor / max(sumWeight, 0.0001), 1.0);
+}
+
 float3 debugFieldIdColor(float fieldId)
 {
     if (fieldId < 0.5)
@@ -1415,6 +1460,47 @@ struct ResolveOut
     float4 historyControl : SV_Target3;
 };
 
+float4 BloomPrefilterPS(VertexOut input) : SV_Target
+{
+    float3 exposed = sampleExposedScene(input.uv);
+    return float4(exposed, 1.0);
+}
+
+float4 BloomDownsamplePS(VertexOut input) : SV_Target
+{
+    return fireflySafeDownsample(input.uv);
+}
+
+float4 BloomBlurHorizontalPS(VertexOut input) : SV_Target
+{
+    uint sourceWidth;
+    uint sourceHeight;
+    bloomTexture0.GetDimensions(sourceWidth, sourceHeight);
+    float2 texel = float2(1.0 / max(sourceWidth, 1), 0.0);
+    float3 color =
+        bloomTexture0.SampleLevel(gridSampler, input.uv - texel * 2.0, 0.0).rgb * 0.06136 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv - texel, 0.0).rgb * 0.24477 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.38774 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv + texel, 0.0).rgb * 0.24477 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv + texel * 2.0, 0.0).rgb * 0.06136;
+    return float4(color, 1.0);
+}
+
+float4 BloomBlurVerticalPS(VertexOut input) : SV_Target
+{
+    uint sourceWidth;
+    uint sourceHeight;
+    bloomTexture0.GetDimensions(sourceWidth, sourceHeight);
+    float2 texel = float2(0.0, 1.0 / max(sourceHeight, 1));
+    float3 color =
+        bloomTexture0.SampleLevel(gridSampler, input.uv - texel * 2.0, 0.0).rgb * 0.06136 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv - texel, 0.0).rgb * 0.24477 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.38774 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv + texel, 0.0).rgb * 0.24477 +
+        bloomTexture0.SampleLevel(gridSampler, input.uv + texel * 2.0, 0.0).rgb * 0.06136;
+    return float4(color, 1.0);
+}
+
 ResolveOut AquariumResolvePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
@@ -1499,14 +1585,20 @@ ResolveOut AquariumResolvePS(VertexOut input)
 
     float3 resolved = currentColor;
 
-    float3 finalColor = aces(resolved);
+    float3 exposedColor = exposeSceneColor(resolved);
+    float3 bloomColor =
+        bloomTexture0.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.42 +
+        bloomTexture1.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.34 +
+        bloomTexture2.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.24;
+    float3 presentedColor = exposedColor + bloomColor * BLOOM_INTENSITY + luminance(bloomColor) * BLOOM_VEIL_INTENSITY;
+    float3 finalColor = aces(presentedColor);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
-        finalColor = aces(rawCurrentColor);
+        finalColor = aces(exposeSceneColor(rawCurrentColor));
     }
     else if (renderDebugMode >= 1.5 && renderDebugMode < 2.5)
     {
-        finalColor = aces(historyColor);
+        finalColor = aces(exposeSceneColor(historyColor));
     }
     else if (renderDebugMode >= 2.5 && renderDebugMode < 3.5)
     {
@@ -1523,6 +1615,15 @@ ResolveOut AquariumResolvePS(VertexOut input)
     else if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
     {
         finalColor = debugFieldIdColor(currentFieldId);
+    }
+    else if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
+    {
+        finalColor = aces(bloomColor * BLOOM_INTENSITY + luminance(bloomColor) * BLOOM_VEIL_INTENSITY);
+    }
+    else if (renderDebugMode >= 7.5 && renderDebugMode < 8.5)
+    {
+        float ev = log2(max(luminance(exposedColor), 0.0001));
+        finalColor = lerp(float3(0.02, 0.08, 0.20), float3(1.0, 0.82, 0.22), saturate((ev + 7.0) / 10.0));
     }
 
     ResolveOut output;

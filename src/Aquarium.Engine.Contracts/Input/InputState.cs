@@ -89,5 +89,7 @@ public enum KeyCode
     Digit4,
     Digit5,
     Digit6,
+    Digit7,
+    Digit8,
     RenderDebugCycle,
 }

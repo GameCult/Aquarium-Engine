@@ -125,3 +125,18 @@ Before the field renderer:
 This gives SDF solids/clouds a real presentation pipe to land in. Otherwise the
 field renderer will arrive carrying gorgeous radiance values into a cramped SDR
 mail slot, and everyone will pretend the answer is blur radius. It is not.
+
+## Aquarium Implementation Note
+
+The first implementation now follows this shape:
+
+- fixed manual exposure in the frame constants
+- exposed scene-linear HDR source for bloom
+- three-level bloom pyramid at half, quarter, and eighth resolution
+- firefly-safe downsampling
+- separable horizontal/vertical blur per level
+- low-gain bloom/veil contribution before the ACES fit
+- debug mode `7` for bloom contribution and mode `8` for exposed luminance
+
+The remaining missing piece is a persisted/inspectable exposure control and,
+later, a proper authored display-transform boundary.

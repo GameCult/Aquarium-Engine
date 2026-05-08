@@ -209,11 +209,20 @@ writes history, metadata, control, age, and weight for debug and future medium
 work, but mode `0` presents current-frame color instead of blending stale
 surface history into opaque bodies.
 
+The presentation path now applies an explicit exposure before display
+transformation and adds a low-gain pre-tonemap bloom/veil pyramid. The bloom
+pass renders exposed scene-linear HDR color into half-, quarter-, and
+eighth-resolution targets, uses firefly-safe downsampling, blurs each level with
+separable horizontal/vertical passes, then contributes gently before the ACES
+fit. This is not a thresholded glow pass; bright energy spreads without turning
+the frame into a 2000s bloom accident.
+
 Temporal debug modes are available in the running window: `F1` cycles modes and
-number keys `0` through `6` select them directly. Mode `0` is final resolve,
+number keys `0` through `8` select them directly. Mode `0` is final resolve,
 `1` is raw current scene, `2` is the reprojected history sample, `3` is history
-age, `4` is history weight, `5` is current temporal control, and `6` is current
-field identity. The startup mode can still be set with `--render-debug` or
+age, `4` is history weight, `5` is current temporal control, `6` is current
+field identity, `7` is bloom contribution, and `8` is exposed luminance. The
+startup mode can still be set with `--render-debug` or
 `AQUARIUM_RENDER_DEBUG_MODE`.
 
 It deliberately does not pretend to solve general non-rigid field velocity,

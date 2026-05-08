@@ -65,7 +65,7 @@ renderer_state:
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
     - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.
-    - Add explicit exposure, pre-tonemap bloom/veil, and display-transform debug views before the SDF field renderer.
+    - Promote exposure and HDR presentation controls into typed CultCache renderer state.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.

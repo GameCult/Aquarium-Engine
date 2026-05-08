@@ -55,6 +55,8 @@ public sealed class Win32Window : IDisposable
     private const int VK_4 = 0x34;
     private const int VK_5 = 0x35;
     private const int VK_6 = 0x36;
+    private const int VK_7 = 0x37;
+    private const int VK_8 = 0x38;
     private const int VK_F1 = 0x70;
     private const int WHEEL_DELTA = 120;
 
@@ -641,6 +643,12 @@ public sealed class Win32Window : IDisposable
                 break;
             case VK_6:
                 input.SetKey(KeyCode.Digit6, isDown);
+                break;
+            case VK_7:
+                input.SetKey(KeyCode.Digit7, isDown);
+                break;
+            case VK_8:
+                input.SetKey(KeyCode.Digit8, isDown);
                 break;
             case VK_F1:
                 input.SetKey(KeyCode.RenderDebugCycle, isDown);

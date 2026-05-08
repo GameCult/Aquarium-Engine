@@ -76,7 +76,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         if (renderDebugMode > 0)
         {
             renderTarget.DrawText(
-                $"render debug {renderDebugMode}  F1 cycle  0-6 select",
+                $"render debug {renderDebugMode}  F1 cycle  0-8 select",
                 smallFormat,
                 new Rect(18, 56, Math.Min(width - 18, 420), 80),
                 quietTextBrush,
