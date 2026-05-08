@@ -21,12 +21,12 @@ static const float SUN_RADIUS = 1.12;
 static const float GRID_WEATHER_WORLD_SCALE = 42.0;
 static const float GRID_LINE_WORLD_CELL = 2.0;
 static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
-static const float GRID_LINE_PIXEL_WIDTH = 1.15;
-static const float GRID_MAJOR_LINE_PIXEL_WIDTH = 1.65;
-static const float GRID_LINE_PIXEL_FADE = 1.25;
+static const float GRID_LINE_PIXEL_WIDTH = 0.46;
+static const float GRID_MAJOR_LINE_PIXEL_WIDTH = 0.82;
+static const float GRID_LINE_PIXEL_FADE = 0.95;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
-static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 1.05;
-static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.72;
+static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
+static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const int PLANET_COUNT = 5;
 static const int PRIMITIVE_COUNT = PLANET_COUNT + 1;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
@@ -689,7 +689,7 @@ float gridLine(float2 p)
         periodicLineMask(majorDomain.x, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
         periodicLineMask(majorDomain.y, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
 
-    return saturate(minor * 0.72 + major) * terrainMask(p);
+    return saturate(minor * 0.58 + major) * terrainMask(p);
 }
 
 float terrainIsolines(float height)
@@ -822,9 +822,9 @@ float3 shade(float3 position, float3 normal, int materialId, float3 rayDirection
     float contour = terrainIsolines(height);
     float fieldLine = terrainFieldLines(gradient);
     float3 baseColor = gridWeatherColor(position.xy, position.z);
-    float3 gridColor = float3(0.74, 1.0, 0.84) * gridAmount * 0.78;
-    float3 contourColor = float3(0.98, 1.0, 0.78) * contour * 0.22;
-    float3 fieldColor = float3(0.36, 0.92, 1.0) * fieldLine * 0.14;
+    float3 gridColor = float3(0.74, 1.0, 0.84) * gridAmount * 0.56;
+    float3 contourColor = float3(0.98, 1.0, 0.78) * contour * 0.16;
+    float3 fieldColor = float3(0.36, 0.92, 1.0) * fieldLine * 0.10;
     float3 lineColor = gridColor + contourColor + fieldColor;
     float diffuse = nDotL * attenuation * 0.85;
     float selfGlow = exp(-distance(position, SUN_POSITION) * 0.34) * 0.34;
