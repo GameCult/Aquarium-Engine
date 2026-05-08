@@ -96,3 +96,7 @@ prototype integrated along the camera ray before surface composition.
   surfaces visibly juddered. Keep jitter disabled until opaque and Grid resolve
   both hide the offset. Removed the abandoned unjittered Grid retrace; Grid
   analytic final now uses the existing current hit while jitter is zero.
+- Dev watcher correction: live runtime reload now waits for the host stdout log
+  to acknowledge the exact new live DLL path before declaring success. A pointer
+  write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last
+  visible slot without rebuilding when the window has been closed.

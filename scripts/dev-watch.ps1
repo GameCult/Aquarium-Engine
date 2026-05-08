@@ -1,10 +1,12 @@
 param(
     [switch]$Headless,
     [switch]$NoInitialLaunch,
+    [switch]$ReopenWhenClosed,
     [switch]$Once,
     [int]$IntervalMilliseconds = 1000,
     [int]$DebounceMilliseconds = 350,
-    [int]$RetainSlots = 12
+    [int]$RetainSlots = 12,
+    [int]$LiveReloadAckTimeoutSeconds = 6
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +25,10 @@ $ownedProcessStatePath = if ($Headless) { $headlessStatePath } else { $visibleSt
 
 New-Item -ItemType Directory -Force -Path (Split-Path $watchLogPath) | Out-Null
 New-Item -ItemType Directory -Force -Path $liveSlotRoot | Out-Null
+
+if ($Headless -and $ReopenWhenClosed) {
+    throw "-ReopenWhenClosed is for the visible dev window; do not combine it with -Headless."
+}
 
 function Write-WatchLog([string]$message) {
     $line = "$(Get-Date -Format o) $message"
@@ -193,40 +199,75 @@ function Invoke-Reload {
     }
 }
 
+function Get-OwnedProcessState {
+    if (-not (Test-Path $ownedProcessStatePath)) {
+        return $null
+    }
+
+    try {
+        return Import-Clixml -Path $ownedProcessStatePath
+    }
+    catch {
+        Write-WatchLog "Could not read script-owned process state. $($_.Exception.Message)"
+        return $null
+    }
+}
+
 function Test-OwnedProcessRunning {
     if ($NoInitialLaunch) {
         return $true
     }
 
-    if (-not (Test-Path $ownedProcessStatePath)) {
+    $state = Get-OwnedProcessState
+    if (-not $state -or -not $state.pid -or -not $state.slot) {
         return $false
     }
 
+    $process = Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
+    if (-not $process) {
+        return $false
+    }
+
+    $recordedPath = [string]$state.slot
+    $commandLine = $null
     try {
-        $state = Import-Clixml -Path $ownedProcessStatePath
-        if (-not $state.pid -or -not $state.slot) {
-            return $false
-        }
-
-        $process = Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
-        if (-not $process) {
-            return $false
-        }
-
-        $recordedPath = [string]$state.slot
-        $commandLine = $null
-        try {
-            $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)").CommandLine
-        }
-        catch {
-            $commandLine = $null
-        }
-
-        return [bool]($commandLine -and $commandLine -like "*$recordedPath*")
+        $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)").CommandLine
     }
     catch {
-        Write-WatchLog "Could not inspect script-owned process state; will relaunch. $($_.Exception.Message)"
-        return $false
+        $commandLine = $null
+    }
+
+    return [bool]($commandLine -and $commandLine -like "*$recordedPath*")
+}
+
+function Invoke-Reopen {
+    param([string]$reason)
+
+    if ($Headless) {
+        Invoke-Reload $reason
+        return
+    }
+
+    Write-WatchLog "Reopen requested: $reason"
+
+    $arguments = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $reloadScript,
+        "-Reopen",
+        "-RetainSlots", "$RetainSlots"
+    )
+
+    $process = Start-Process `
+        -FilePath "powershell" `
+        -ArgumentList $arguments `
+        -WorkingDirectory $repoRoot `
+        -Wait `
+        -PassThru `
+        -NoNewWindow
+
+    if ($process.ExitCode -ne 0) {
+        throw "dev-reload -Reopen failed with exit code $($process.ExitCode)."
     }
 }
 
@@ -250,6 +291,53 @@ function Invoke-LiveReload {
 
     Set-Content -Path $liveReloadPointerPath -Value $liveAssemblyPath -Encoding UTF8
     Write-WatchLog "Live reload pointer updated: $liveAssemblyPath"
+    Wait-LiveReloadAcknowledged $liveAssemblyPath
+}
+
+function Wait-LiveReloadAcknowledged {
+    param([string]$liveAssemblyPath)
+
+    if ($NoInitialLaunch) {
+        Write-WatchLog "Live reload acknowledgement skipped: -NoInitialLaunch does not own a running process."
+        return
+    }
+
+    if (-not (Test-OwnedProcessRunning)) {
+        throw "live reload pointer was updated, but no script-owned process is running to load it."
+    }
+
+    $state = Get-OwnedProcessState
+    if (-not $state -or -not $state.stdoutLog) {
+        Write-WatchLog "Live reload acknowledgement skipped: no running process log is recorded."
+        return
+    }
+
+    $stdoutLog = [string]$state.stdoutLog
+    $stderrLog = if ($state.stderrLog) { [string]$state.stderrLog } else { $null }
+    $timeoutSeconds = [Math]::Max(1, $LiveReloadAckTimeoutSeconds)
+    $deadline = (Get-Date).AddSeconds($timeoutSeconds)
+    $appliedLine = "Live runtime reload applied: $liveAssemblyPath"
+
+    while ((Get-Date) -lt $deadline) {
+        if (Test-Path $stdoutLog) {
+            $stdoutTail = (Get-Content -Path $stdoutLog -Tail 120 -ErrorAction SilentlyContinue) -join "`n"
+            if ($stdoutTail.Contains($appliedLine)) {
+                Write-WatchLog "Live reload acknowledged by host: $liveAssemblyPath"
+                return
+            }
+        }
+
+        if ($stderrLog -and (Test-Path $stderrLog)) {
+            $stderrTail = (Get-Content -Path $stderrLog -Tail 120 -ErrorAction SilentlyContinue) -join "`n"
+            if ($stderrTail -match "Live runtime reload failed") {
+                throw "host reported live runtime reload failure. See $stderrLog"
+            }
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "live reload pointer was updated, but host did not acknowledge loading $liveAssemblyPath within $timeoutSeconds seconds. Check $stdoutLog and $stderrLog."
 }
 
 $lastGoodFingerprint = Wait-StableFingerprints
@@ -275,7 +363,13 @@ do {
 
     if (-not (Test-OwnedProcessRunning)) {
         try {
-            Invoke-Reload "script-owned process is not running"
+            if ($ReopenWhenClosed) {
+                Invoke-Reopen "script-owned process is not running"
+            }
+            else {
+                Invoke-Reload "script-owned process is not running"
+            }
+
             $lastGoodFingerprint = Wait-StableFingerprints
             $lastFailedFingerprint = $null
             $currentFingerprint = $lastGoodFingerprint

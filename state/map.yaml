@@ -14,6 +14,8 @@ current_model:
     shader: src/Aquarium.Engine/Render/Shaders/Aquarium.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
     runtime_loader: src/Aquarium.Engine/Live/LiveRuntimeLoader.cs
+    dev_reload: scripts/dev-reload.ps1
+    dev_watch: scripts/dev-watch.ps1
   live_runtime:
     contracts: src/Aquarium.Engine.Contracts
     implementation: src/Aquarium.Engine.Live
@@ -44,6 +46,8 @@ invariants:
   - Overlay text is DirectWrite final-pixel UI; scene text needs renderer-owned billboards.
   - CultCache persists live app state through reload.
   - Failed shader/live-runtime reloads must leave the last good frame alive.
+  - Live-runtime reload success requires host acknowledgement of the exact live DLL path, not merely a pointer update.
+  - Closed visible dev windows can be reopened from the last good slot without rebuilding.
 
 renderer_state:
   current:

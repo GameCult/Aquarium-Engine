@@ -78,6 +78,12 @@ fingerprint is not retried until files change again.
 It also watches the recorded script-owned process. If the visible window is
 closed or the recorded process dies, the watcher relaunches from a fresh slot on
 the next poll instead of sitting there with its hands folded like this is fine.
+To reopen a closed visible window from the last good slot without rebuilding,
+run the watcher with:
+
+```powershell
+.\scripts\dev-watch.ps1 -ReopenWhenClosed
+```
 
 Shader edits do not restart the process. The dev reload runner passes the
 source `Aquarium.hlsl` path into the live app, and the renderer polls that file,
@@ -91,8 +97,11 @@ assembly load context, while `dev-watch.ps1` builds live-only changes into
 `artifacts\dev-reload\live-slots` and updates `live-current.txt`. The running
 host sees the pointer change, loads and starts the new runtime first, then
 disposes the old one only after the replacement is valid. A bad live DLL leaves
-the previous runtime alive and reports the reload failure to stderr. Successful
-reloads rehydrate through CultCache without restarting the window or D3D device.
+the previous runtime alive and reports the reload failure to stderr. The watcher
+waits for the host log to acknowledge the exact live DLL path before calling a
+live reload successful; pointer updates without host acknowledgement are treated
+as reload failures. Successful reloads rehydrate through CultCache without
+restarting the window or D3D device.
 Host, renderer, contract, project, script, and `src\Aquarium.Engine\Assets`
 content changes still rebuild and restart the apphost. Runtime content belongs
 to the process image; shader hot reload cannot make a running renderer discover
