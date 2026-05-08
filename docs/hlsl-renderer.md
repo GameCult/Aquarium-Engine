@@ -204,6 +204,10 @@ planet surfaces were visibly juddering. Jitter should remain off until the
 resolve hides it on both opaque surfaces and the Grid. The abandoned unjittered
 Grid retrace has been removed; with jitter disabled, Grid analytic color uses
 the existing current hit.
+Gate 3M cuts temporal history out of final presentation. The resolver still
+writes history, metadata, control, age, and weight for debug and future medium
+work, but mode `0` presents current-frame color instead of blending stale
+surface history into opaque bodies.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `6` select them directly. Mode `0` is final resolve,

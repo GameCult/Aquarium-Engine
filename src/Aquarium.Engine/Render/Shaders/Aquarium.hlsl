@@ -1497,11 +1497,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
         }
     }
 
-    float3 resolved = lerp(currentColor, historyColor, historyWeight);
-    if (currentIsGrid)
-    {
-        resolved = currentColor;
-    }
+    float3 resolved = currentColor;
 
     float3 finalColor = aces(resolved);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)

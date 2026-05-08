@@ -256,6 +256,15 @@ Current Gate 3L implementation:
   analytic color reconstructs from the existing current hit instead of solving
   the surface twice
 
+Current Gate 3M implementation:
+
+- final presentation no longer blends temporal color history for any surface
+- the history, metadata, and control ping-pongs remain for debug views and for
+  the future volumetric temporal contract
+- mode `0` is current-frame color after analytic Grid reconstruction and
+  tonemapping; modes `2` through `4` show what the diagnostic temporal path
+  would have sampled, aged, and weighted
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

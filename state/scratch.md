@@ -93,6 +93,9 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3J: debug mode 1 is raw scene again. Final Grid pixels use the
   analytic current estimate directly instead of blending previous Grid color
   history; history debug surfaces remain diagnostics.
+- Temporal Gate 3M: final presentation now cuts temporal color history for all
+  surfaces while jitter is disabled. History/color/control ping-pongs remain
+  diagnostics and future volumetric scaffolding, not visible authority.
 - Temporal debug correction: mode 5 exposes current temporal control. The first
   look showed the entire Grid red because stale Grid logic marked low support as
   reactive. Grid reactive is now zero; support/coverage remains the green
