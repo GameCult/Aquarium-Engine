@@ -43,6 +43,7 @@
       "Sea of Thieves clouds are the stylized counterexample: authored opaque cloud geometry filtered through low-res blurred color/depth compositing can beat dense raymarching when clouds are symbolic world objects or gameplay signage. Consider tool-time SDF baking for per-vertex cloud lighting, not runtime volume traversal by reflex.",
       "The SDF field renderer plan is docs/sdf-field-renderer-plan.md: solids and clouds should share one field grammar, with distance, density, material, medium, bounds, and debug views.",
       "SDF cloud distance should shape and accelerate the medium, not create a positive-distance absorbing shell. Prototype ellipsoid edges occluded farther clouds until density was changed to eroded interior occupancy with lower extinction.",
+      "A bounded cloud prototype should march analytic ray/volume intervals, not global SDF shells. The first cloud artifact persisted until rays jumped between true ellipsoid entry/exit intervals; otherwise near fields can consume the sample budget and masquerade as occluders.",
       "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
       "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],

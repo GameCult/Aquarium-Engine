@@ -113,7 +113,8 @@ Current prototype traits:
 
 - ellipsoid SDF cloud containers
 - stable world/Grid-space placement
-- distance-guided empty-space stepping
+- analytic ray/ellipsoid interval stepping, so empty space jumps to real cloud
+  entries instead of spending samples on SDF shells
 - procedural erosion/noise inside each field
 - feathered interior density, without positive-distance absorbing shells around
   the ellipsoid boundary

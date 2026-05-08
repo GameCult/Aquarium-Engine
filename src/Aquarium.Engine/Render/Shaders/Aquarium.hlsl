@@ -28,7 +28,7 @@ static const float TERRAIN_ISOLINE_SPACING = 0.12;
 static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const int CLOUD_FIELD_COUNT = 4;
-static const float CLOUD_MIN_STEP = 0.055;
+static const float CLOUD_MIN_STEP = 0.085;
 static const float CLOUD_MAX_STEP = 0.46;
 static const float CLOUD_EMPTY_STEP_SCALE = 0.42;
 static const int PLANET_COUNT = 5;
@@ -306,6 +306,26 @@ void cloudFieldInfo(int index, out float3 center, out float3 radius, out float3 
     }
 }
 
+float cloudFieldAngle(int index)
+{
+    return index * 1.73 + timeSeconds * 0.018 * (index + 1);
+}
+
+float2 rotateCloudFieldXY(float2 value, int index)
+{
+    float angle = cloudFieldAngle(index);
+    float c = cos(angle);
+    float s = sin(angle);
+    return float2(value.x * c - value.y * s, value.x * s + value.y * c);
+}
+
+float3 cloudFieldLocal(float3 p, int index, float3 center)
+{
+    float3 local = p - center;
+    local.xy = rotateCloudFieldXY(local.xy, index);
+    return local;
+}
+
 float cloudFieldSdf(float3 p, int index)
 {
     float3 center;
@@ -314,12 +334,38 @@ float cloudFieldSdf(float3 p, int index)
     float densityScale;
     cloudFieldInfo(index, center, radius, tint, densityScale);
 
-    float3 local = p - center;
-    float angle = index * 1.73 + timeSeconds * 0.018 * (index + 1);
-    float c = cos(angle);
-    float s = sin(angle);
-    local.xy = float2(local.x * c - local.y * s, local.x * s + local.y * c);
-    return ellipsoidSdf(local, radius);
+    return ellipsoidSdf(cloudFieldLocal(p, index, center), radius);
+}
+
+bool cloudRayInterval(float3 rayOrigin, float3 rayDirection, int index, out float enter, out float exit)
+{
+    float3 center;
+    float3 radius;
+    float3 tint;
+    float densityScale;
+    cloudFieldInfo(index, center, radius, tint, densityScale);
+
+    float3 localOrigin = cloudFieldLocal(rayOrigin, index, center) / max(radius, 0.001);
+    float3 localDirection = rayDirection;
+    localDirection.xy = rotateCloudFieldXY(localDirection.xy, index);
+    localDirection /= max(radius, 0.001);
+
+    float a = dot(localDirection, localDirection);
+    float b = 2.0 * dot(localOrigin, localDirection);
+    float c = dot(localOrigin, localOrigin) - 1.0;
+    float discriminant = b * b - 4.0 * a * c;
+    if (discriminant < 0.0 || a <= 0.000001)
+    {
+        enter = 0.0;
+        exit = 0.0;
+        return false;
+    }
+
+    float root = sqrt(discriminant);
+    float invDenominator = 0.5 / a;
+    enter = (-b - root) * invDenominator;
+    exit = (-b + root) * invDenominator;
+    return exit > 0.0;
 }
 
 float cloudDensity(float3 p, int index, out float3 tint)
@@ -330,13 +376,13 @@ float cloudDensity(float3 p, int index, out float3 tint)
     cloudFieldInfo(index, center, radius, tint, densityScale);
 
     float distanceToCloud = cloudFieldSdf(p, index);
-    float boundary = smoothstep(0.18, -0.54, distanceToCloud);
+    float boundary = smoothstep(0.0, 0.54, -distanceToCloud);
     if (boundary <= 0.0)
     {
         return 0.0;
     }
 
-    float3 local = (p - center) / max(radius, 0.001);
+    float3 local = cloudFieldLocal(p, index, center) / max(radius, 0.001);
     float3 wind = float3(0.035, -0.018, 0.011) * timeSeconds;
     float broad = fbm3(local * 1.45 + wind + index * 7.1) * 0.5 + 0.5;
     float fine = fbm3(local * 4.6 + wind.yzx * 2.0 + index * 11.3) * 0.5 + 0.5;
@@ -346,16 +392,32 @@ float cloudDensity(float3 p, int index, out float3 tint)
     return featheredShell * softCore * densityScale;
 }
 
-float nearestCloudDistance(float3 p)
+void cloudIntervalState(float3 rayOrigin, float3 rayDirection, float travel, out bool insideCloud, out float nextEnter, out float nextExit)
 {
-    float distanceToCloud = 100000.0;
+    insideCloud = false;
+    nextEnter = 100000.0;
+    nextExit = 100000.0;
+
     [unroll]
     for (int i = 0; i < CLOUD_FIELD_COUNT; i++)
     {
-        distanceToCloud = min(distanceToCloud, cloudFieldSdf(p, i));
-    }
+        float enter;
+        float exit;
+        if (cloudRayInterval(rayOrigin, rayDirection, i, enter, exit))
+        {
+            enter = max(enter, 0.0);
+            if (travel >= enter && travel < exit)
+            {
+                insideCloud = true;
+                nextExit = min(nextExit, exit);
+            }
+            else if (travel < enter)
+            {
+                nextEnter = min(nextEnter, enter);
+            }
+        }
 
-    return distanceToCloud;
+    }
 }
 
 void sampleCloudMedium(float3 p, float3 rayDirection, out float density, out float3 scattering)
@@ -395,11 +457,27 @@ void integrateCloudFields(float3 rayOrigin, float3 rayDirection, float maxTravel
 
     float travel = 0.0;
     [loop]
-    for (int stepIndex = 0; stepIndex < 72; stepIndex++)
+    for (int stepIndex = 0; stepIndex < 144; stepIndex++)
     {
         if (travel >= maxTravel || cloudTransmittance < 0.025)
         {
             break;
+        }
+
+        bool insideCloud;
+        float nextEnter;
+        float nextExit;
+        cloudIntervalState(rayOrigin, rayDirection, travel, insideCloud, nextEnter, nextExit);
+
+        if (!insideCloud)
+        {
+            if (nextEnter >= 99999.0)
+            {
+                break;
+            }
+
+            travel = min(maxTravel, max(nextEnter, travel + CLOUD_MIN_STEP));
+            continue;
         }
 
         float3 p = rayOrigin + rayDirection * travel;
@@ -407,11 +485,8 @@ void integrateCloudFields(float3 rayOrigin, float3 rayDirection, float maxTravel
         float3 scattering;
         sampleCloudMedium(p, rayDirection, density, scattering);
 
-        float distanceToCloud = nearestCloudDistance(p);
-        float stepLength = density > 0.001
-            ? CLOUD_MIN_STEP
-            : clamp(max(distanceToCloud, 0.0) * CLOUD_EMPTY_STEP_SCALE, CLOUD_MIN_STEP, CLOUD_MAX_STEP);
-        stepLength = min(stepLength, maxTravel - travel);
+        float segmentEnd = min(nextExit, maxTravel);
+        float stepLength = min(CLOUD_MIN_STEP, segmentEnd - travel);
 
         if (density > 0.001)
         {

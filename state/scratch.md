@@ -24,3 +24,6 @@ prototype integrated along the camera ray before surface composition.
 - First artifact found: near ellipsoid edges can occlude farther clouds if the
   SDF boundary emits a positive-distance absorbing veil. Keep density inside the
   sculpted container, eroded, feathered, and low-extinction.
+- Follow-up fix made the march structural: intersect each analytic cloud
+  ellipsoid, jump empty space to the next true entry, and sample only inside
+  cloud intervals so near containers cannot eat the budget before far clouds.
