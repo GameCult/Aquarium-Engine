@@ -21,6 +21,7 @@ static const float SUN_RADIUS = 1.12;
 static const float GRID_WEATHER_WORLD_SCALE = 42.0;
 static const float GRID_LINE_WORLD_CELL = 2.0;
 static const int PLANET_COUNT = 5;
+static const int PRIMITIVE_COUNT = PLANET_COUNT + 1;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
@@ -371,6 +372,29 @@ void bodyDistances(float3 p, out int materialId, out float hitDistance, out floa
     }
 }
 
+void bodyDistancesDirect(float3 p, out int materialId, out float hitDistance, out float stepDistance)
+{
+    hitDistance = 100000.0;
+    stepDistance = 100000.0;
+    materialId = 0;
+
+    [unroll]
+    for (int primitiveId = 0; primitiveId < PRIMITIVE_COUNT; primitiveId++)
+    {
+        int primitiveMaterialId;
+        float primitiveHitDistance;
+        float primitiveStepDistance;
+        primitiveDistances(p, primitiveId, primitiveMaterialId, primitiveHitDistance, primitiveStepDistance);
+        if (primitiveHitDistance < hitDistance)
+        {
+            hitDistance = primitiveHitDistance;
+            materialId = primitiveMaterialId;
+        }
+
+        stepDistance = min(stepDistance, primitiveStepDistance);
+    }
+}
+
 float bodySdf(float3 p, out int materialId)
 {
     float hitDistance;
@@ -455,12 +479,16 @@ float3 planetNormal(float3 p)
     bool isSelf;
     nearestBody(p, center, radius, index, isSelf);
 
-    float centerDistance = displacedSphereSdf(p, center, radius, index, isSelf);
-    float normalStep = max(radius * 0.006, SURFACE_EPSILON * 2.0);
-    float3 gradient = float3(
-        displacedSphereSdf(p + float3(normalStep, 0.0, 0.0), center, radius, index, isSelf) - centerDistance,
-        displacedSphereSdf(p + float3(0.0, normalStep, 0.0), center, radius, index, isSelf) - centerDistance,
-        displacedSphereSdf(p + float3(0.0, 0.0, normalStep), center, radius, index, isSelf) - centerDistance);
+    float normalStep = max(radius * 0.01, SURFACE_EPSILON * 3.0);
+    float3 k0 = float3(1.0, -1.0, -1.0);
+    float3 k1 = float3(-1.0, -1.0, 1.0);
+    float3 k2 = float3(-1.0, 1.0, -1.0);
+    float3 k3 = float3(1.0, 1.0, 1.0);
+    float3 gradient =
+        k0 * displacedSphereSdf(p + k0 * normalStep, center, radius, index, isSelf) +
+        k1 * displacedSphereSdf(p + k1 * normalStep, center, radius, index, isSelf) +
+        k2 * displacedSphereSdf(p + k2 * normalStep, center, radius, index, isSelf) +
+        k3 * displacedSphereSdf(p + k3 * normalStep, center, radius, index, isSelf);
 
     float gradientLength = length(gradient);
     if (gradientLength < 0.00001)
@@ -512,6 +540,19 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
         if (bodyDistance < hitEpsilon)
         {
+            float refinementSpan = max(abs(travel - previousTravel), 0.012);
+            float refinedTravel = travel;
+            for (int refineStep = 0; refineStep < 8; refineStep++)
+            {
+                hitPosition = rayOrigin + rayDirection * refinedTravel;
+                bodyDistancesDirect(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
+                refinedTravel += clamp(bodyDistance * 0.86, -refinementSpan, refinementSpan);
+                refinementSpan *= 0.55;
+            }
+
+            travel = max(refinedTravel, 0.0);
+            hitPosition = rayOrigin + rayDirection * travel;
+            bodyDistancesDirect(hitPosition, bodyMaterialId, bodyDistance, bodyStepDistance);
             materialId = bodyMaterialId;
             return true;
         }
@@ -538,14 +579,15 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
         {
             bodyStep = bodyStepDistance > hitEpsilon
                 ? bodyStepDistance * 0.68
-                : max(bodyDistance * 0.42, 0.045);
+                : max(abs(bodyDistance) * 0.42, 0.004);
         }
 
         float distanceToScene = min(bodyStep, terrainStep);
+        float minStep = bodyStep < terrainStep ? 0.004 : 0.026;
         previousTravel = travel;
         previousTerrainGap = terrainGap;
 
-        travel += max(distanceToScene, 0.026);
+        travel += max(distanceToScene, minStep);
         if (travel > FAR_DISTANCE)
         {
             return false;
