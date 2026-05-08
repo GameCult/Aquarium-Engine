@@ -1311,7 +1311,7 @@ SceneOut AquariumScenePS(VertexOut input)
     float outputMaterialId = 0.0;
     float3 outputNormal = 0.0;
     float outputReactive = 0.0;
-    float outputCoverage = 1.0;
+    float outputCoverage = 0.0;
     float outputMediumOpacity = 0.0;
 
     if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, primitiveId, travel))
@@ -1323,6 +1323,7 @@ SceneOut AquariumScenePS(VertexOut input)
         outputTravel = travel;
         outputMaterialId = primitiveId == 0 ? FIELD_ID_SELF : FIELD_ID_PLANET_BASE + (float)(primitiveId - 1);
         outputNormal = normal;
+        outputCoverage = 1.0;
     }
 
     float3 gridHitPosition;

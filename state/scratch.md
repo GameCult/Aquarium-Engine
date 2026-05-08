@@ -96,7 +96,8 @@ prototype integrated along the camera ray before surface composition.
 - Temporal debug correction: mode 5 exposes current temporal control. The first
   look showed the entire Grid red because stale Grid logic marked low support as
   reactive. Grid reactive is now zero; support/coverage remains the green
-  signal.
+  signal. Empty background coverage is now zero; opaque hits write coverage 1
+  and Grid hits write support coverage.
 - Temporal Gate 3L: projection jitter is scaled to zero because Self/planet
   surfaces visibly juddered. Keep jitter disabled until opaque and Grid resolve
   both hide the offset. Removed the abandoned unjittered Grid retrace; Grid
