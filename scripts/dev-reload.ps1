@@ -2,7 +2,8 @@ param(
     [switch]$Headless,
     [switch]$NoStop,
     [switch]$BuildOnly,
-    [int]$RetainSlots = 12
+    [int]$RetainSlots = 12,
+    [int]$StartupTimeoutSeconds = 5
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,6 +73,55 @@ function Remove-OldSlots {
     }
 }
 
+function Get-StderrTail {
+    if (-not (Test-Path $stderrLogPath)) {
+        return "<stderr log does not exist>"
+    }
+
+    $tail = Get-Content -Path $stderrLogPath -Tail 80 -ErrorAction SilentlyContinue
+    if (-not $tail) {
+        return "<stderr log is empty>"
+    }
+
+    return ($tail -join [Environment]::NewLine)
+}
+
+function Wait-ForStartedAquarium {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [bool]$ExpectWindow
+    )
+
+    $deadline = (Get-Date).AddSeconds([Math]::Max(1, $StartupTimeoutSeconds))
+    while ((Get-Date) -lt $deadline) {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            throw "Aquarium process exited during startup with code $($Process.ExitCode).`n$(Get-StderrTail)"
+        }
+
+        if (-not $ExpectWindow) {
+            return
+        }
+
+        if ($Process.MainWindowHandle -ne [IntPtr]::Zero) {
+            return
+        }
+
+        Start-Sleep -Milliseconds 100
+    }
+
+    if ($ExpectWindow) {
+        try {
+            Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        }
+        catch {
+            # Best effort cleanup before surfacing the broken reload.
+        }
+
+        throw "Aquarium process started but did not open a visible window within $StartupTimeoutSeconds seconds.`n$(Get-StderrTail)"
+    }
+}
+
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $slotName = "$timestamp-$([guid]::NewGuid().ToString("N").Substring(0, 8))"
 $slotPath = Join-Path $slotRoot $slotName
@@ -121,6 +171,7 @@ if ($Headless) {
 }
 
 $process = Start-Process @startProcessParameters
+Wait-ForStartedAquarium -Process $process -ExpectWindow:(-not $Headless)
 
 @{
     slot = $slotPath

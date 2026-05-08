@@ -345,12 +345,10 @@ void bodyDistances(float3 p, out int materialId, out float hitDistance, out floa
         return;
     }
 
-    [unroll]
     for (int slotGroup = 0; slotGroup < FROXEL_SLOT_COUNT; slotGroup++)
     {
         int4 ids = froxelPrimitiveIds[froxelIndex * FROXEL_SLOT_COUNT + slotGroup];
 
-        [unroll]
         for (int slot = 0; slot < 4; slot++)
         {
             int primitiveId = ids[slot];
@@ -378,7 +376,6 @@ void bodyDistancesDirect(float3 p, out int materialId, out float hitDistance, ou
     stepDistance = 100000.0;
     materialId = 0;
 
-    [unroll]
     for (int primitiveId = 0; primitiveId < PRIMITIVE_COUNT; primitiveId++)
     {
         int primitiveMaterialId;
@@ -419,7 +416,6 @@ void refineBodyIntersection(
     bool foundBracket = false;
     float unusedStepDistance;
 
-    [unroll]
     for (int sampleIndex = 0; sampleIndex < 9; sampleIndex++)
     {
         float t = lerp(lowTravel, highTravel, sampleIndex / 8.0);
@@ -455,7 +451,6 @@ void refineBodyIntersection(
     {
         refinedMaterialId = highMaterialId != 0 ? highMaterialId : lowMaterialId;
 
-        [unroll]
         for (int refineStep = 0; refineStep < 8; refineStep++)
         {
             float midTravel = (lowTravel + highTravel) * 0.5;
