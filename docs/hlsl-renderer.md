@@ -166,9 +166,13 @@ The Grid also records its own travel and normal when it is the nearest diegetic
 surface, even if the current stochastic coverage sample does not draw color.
 Gate 2B adds stable field ids for Self/Grid/each planet and maps orbiting planet
 hits back to their previous center before camera reprojection.
+Gate 3A adds a current-frame temporal-control target. It carries reactive
+strength, stochastic/composition coverage, and a reserved medium-opacity slot;
+the resolve now reduces history for low-coverage reactive Grid samples before
+future volumetrics arrive.
 
 It deliberately does not pretend to solve general non-rigid field velocity,
-reactive masks, volumetric history, or history resurrection yet.
+volumetric history, or history resurrection yet.
 
 ## Overlay Text
 

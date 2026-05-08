@@ -44,6 +44,9 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Texture2D sceneMetadataTexture;
     private readonly ID3D11RenderTargetView sceneMetadataRenderTargetView;
     private readonly ID3D11ShaderResourceView sceneMetadataShaderResourceView;
+    private readonly ID3D11Texture2D sceneControlTexture;
+    private readonly ID3D11RenderTargetView sceneControlRenderTargetView;
+    private readonly ID3D11ShaderResourceView sceneControlShaderResourceView;
     private readonly ID3D11Texture2D historyTextureA;
     private readonly ID3D11RenderTargetView historyRenderTargetViewA;
     private readonly ID3D11ShaderResourceView historyShaderResourceViewA;
@@ -139,6 +142,9 @@ public sealed class D3D11Renderer : IDisposable
         sceneMetadataTexture = CreateHdrTexture(width, height);
         sceneMetadataRenderTargetView = device.CreateRenderTargetView(sceneMetadataTexture);
         sceneMetadataShaderResourceView = device.CreateShaderResourceView(sceneMetadataTexture);
+        sceneControlTexture = CreateHdrTexture(width, height);
+        sceneControlRenderTargetView = device.CreateRenderTargetView(sceneControlTexture);
+        sceneControlShaderResourceView = device.CreateShaderResourceView(sceneControlTexture);
         historyTextureA = CreateHdrTexture(width, height);
         historyRenderTargetViewA = device.CreateRenderTargetView(historyTextureA);
         historyShaderResourceViewA = device.CreateShaderResourceView(historyTextureA);
@@ -271,6 +277,9 @@ public sealed class D3D11Renderer : IDisposable
         sceneShaderResourceView.Dispose();
         sceneRenderTargetView.Dispose();
         sceneTexture.Dispose();
+        sceneControlShaderResourceView.Dispose();
+        sceneControlRenderTargetView.Dispose();
+        sceneControlTexture.Dispose();
         sceneMetadataShaderResourceView.Dispose();
         sceneMetadataRenderTargetView.Dispose();
         sceneMetadataTexture.Dispose();
@@ -355,6 +364,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(4);
         context.PSUnsetShaderResource(5);
         context.PSUnsetShaderResource(6);
+        context.PSUnsetShaderResource(7);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -372,10 +382,12 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(4);
         context.PSUnsetShaderResource(5);
         context.PSUnsetShaderResource(6);
-        context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView });
+        context.PSUnsetShaderResource(7);
+        context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView, sceneControlRenderTargetView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(sceneRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
         context.ClearRenderTargetView(sceneMetadataRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+        context.ClearRenderTargetView(sceneControlRenderTargetView, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
         context.IASetInputLayout(null);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.VSSetShader(vertexShader);
@@ -400,6 +412,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(4);
         context.PSUnsetShaderResource(5);
         context.PSUnsetShaderResource(6);
+        context.PSUnsetShaderResource(7);
         context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView, historyMetadataWriteView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -412,6 +425,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(4, historyReadView);
         context.PSSetShaderResource(5, sceneMetadataShaderResourceView);
         context.PSSetShaderResource(6, historyMetadataReadView);
+        context.PSSetShaderResource(7, sceneControlShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }

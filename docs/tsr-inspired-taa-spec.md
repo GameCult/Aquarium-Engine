@@ -20,7 +20,7 @@ The resolver owns these signals:
 
 Later gates add:
 
-- material/field id
+- field id
 - normal
 - explicit velocity
 - reactive mask
@@ -140,9 +140,35 @@ Still missing:
 
 ### Gate 3: Volumetric Temporal Contract
 
+Current Gate 3A implementation:
+
+- scene pass writes a temporal-control target separate from color/travel and
+  field/normal metadata
+- temporal control currently stores:
+
+```text
+x = reactive strength
+y = stochastic/composition coverage
+z = medium opacity placeholder
+w = reserved
+```
+
+- Grid coverage feeds the coverage channel
+- low-coverage Grid samples raise reactive strength and reduce history weight
+- the resolve combines reactive and coverage weights with travel, field, normal,
+  and neighborhood-color validation
+
+This is intentionally still a surface/stochastic coverage contract. It prepares
+the resolver for volumetrics without lying that a single hit depth describes a
+whole participating medium.
+
+Still missing:
+
 - local volume history separate from opaque/surface history
 - accumulated extinction/transmittance history
 - reactive reset for lighting and density changes
+- dominant depth or moment pair for volume reprojection
+- separate history policy for opaque surfaces, stochastic surfaces, and media
 
 ### Gate 4: TSR Features Worth Stealing In Spirit
 

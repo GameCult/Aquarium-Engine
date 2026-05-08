@@ -23,6 +23,7 @@ Texture2D<float4> currentSceneTexture : register(t3);
 Texture2D<float4> historyTexture : register(t4);
 Texture2D<float4> currentSceneMetadataTexture : register(t5);
 Texture2D<float4> historyMetadataTexture : register(t6);
+Texture2D<float4> currentSceneControlTexture : register(t7);
 SamplerState gridSampler : register(s0);
 SamplerState ditherSampler : register(s1);
 
@@ -1248,6 +1249,7 @@ struct SceneOut
 {
     float4 colorTravel : SV_Target0;
     float4 metadata : SV_Target1;
+    float4 control : SV_Target2;
 };
 
 SceneOut AquariumScenePS(VertexOut input)
@@ -1265,6 +1267,9 @@ SceneOut AquariumScenePS(VertexOut input)
     float outputTravel = farDistance + 1.0;
     float outputMaterialId = 0.0;
     float3 outputNormal = 0.0;
+    float outputReactive = 0.0;
+    float outputCoverage = 1.0;
+    float outputMediumOpacity = 0.0;
 
     if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, primitiveId, travel))
     {
@@ -1282,9 +1287,12 @@ SceneOut AquariumScenePS(VertexOut input)
     if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel) && gridTravel < nearestSolidTravel)
     {
         float4 gridOverlay = shadeGridOverlay(gridHitPosition);
+        float gridCoverage = saturate(gridOverlay.a);
         outputTravel = gridTravel;
         outputMaterialId = FIELD_ID_GRID;
         outputNormal = terrainNormal(gridHitPosition);
+        outputCoverage = gridCoverage;
+        outputReactive = 1.0 - smoothstep(0.08, 0.72, gridCoverage);
         if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
         {
             color = gridOverlay.rgb;
@@ -1296,6 +1304,7 @@ SceneOut AquariumScenePS(VertexOut input)
     SceneOut output;
     output.colorTravel = float4(color, min(outputTravel, farDistance + 1.0));
     output.metadata = float4(outputMaterialId, outputNormal);
+    output.control = float4(outputReactive, outputCoverage, outputMediumOpacity, 0.0);
     return output;
 }
 
@@ -1338,8 +1347,11 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentTravel = current.a;
     float3 currentColor = current.rgb;
     float4 currentMetadata = currentSceneMetadataTexture.SampleLevel(gridSampler, input.uv, 0.0);
+    float4 currentControl = currentSceneControlTexture.SampleLevel(gridSampler, input.uv, 0.0);
     float currentFieldId = currentMetadata.x;
     float3 currentNormal = currentMetadata.yzw;
+    float currentReactive = saturate(currentControl.x);
+    float currentCoverage = saturate(currentControl.y);
 
     float historyWeight = 0.0;
     float3 historyColor = currentColor;
@@ -1373,9 +1385,11 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
             float colorDelta = length(clampedHistory - currentColor);
             float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
+            float reactiveWeight = 1.0 - currentReactive;
+            float coverageWeight = currentFieldId == FIELD_ID_GRID ? smoothstep(0.02, 0.55, currentCoverage) : 1.0;
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * travelWeight * colorWeight * fieldWeight * normalWeight;
+            historyWeight = 0.82 * travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight;
         }
     }
 

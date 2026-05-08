@@ -53,3 +53,7 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 2B: field id replaces coarse material id for TAA identity. Each
   planet has a stable field id and analytic previous-center reprojection so
   orbiting body history follows the body instead of camera-only motion.
+- Temporal Gate 3A: scene pass now writes a temporal-control target separate
+  from field/normal metadata. Current channels are reactive strength, stochastic
+  coverage, reserved medium opacity, and reserved spare; the resolve uses the
+  first two to reduce history for low-coverage reactive Grid samples.

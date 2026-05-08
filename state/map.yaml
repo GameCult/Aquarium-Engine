@@ -59,7 +59,7 @@ renderer_state:
     - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
-    - Extend TSR-inspired temporal resolve with material/field ids, normals, explicit animated-body velocity, reactive masks, and volumetric history.
+    - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
