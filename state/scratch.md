@@ -43,3 +43,7 @@ prototype integrated along the camera ray before surface composition.
 - Dev watcher fix: restart fingerprint now includes `src/Aquarium.Engine/Assets`
   so runtime content changes trigger apphost rebuild/restart instead of relying
   on shader or live assembly reload.
+- Temporal pass: added clean-room TSR-inspired Gate 1. Scene renders into
+  HDR/travel texture, resolve pass reprojects by current/previous camera basis,
+  clamps history to current 3x3 neighborhood, rejects by travel delta, writes
+  ping-pong history, and tonemaps after resolve.

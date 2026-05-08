@@ -47,6 +47,7 @@
       "SDF clouds/solids need waterfall architecture, not agile accretion. Define and build the field contract, broad phase, explicit local volume pass, composition contract, and acceleration gates before adding more cloud features.",
       "Until the real field renderer exists, do not composite the analytic SDF cloud scaffold into the Aquarium scene. The Grid should read as a transparent schematic overlay; volumetrics will own scene mass later.",
       "For diegetic Grid transparency over raymarched content, use Aetheria-style stochastic coverage rather than alpha blending, and depth-test it against nearer solid bodies so the Grid does not draw over planets. Aquarium has copied Aetheria's LDR_LLL1_0 blue-noise texture and binds it for Grid dither coverage.",
+      "TSR-inspired TAA is specified in docs/tsr-inspired-taa-spec.md. Gate 1 is an owned clean-room temporal resolve: HDR/travel scene target, Halton jitter, camera reprojection, 3x3 neighborhood clamp, travel rejection, ping-pong history, and tonemap after resolve.",
       "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
       "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],

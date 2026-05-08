@@ -4,15 +4,23 @@ cbuffer AquariumFrame : register(b0)
     float timeSeconds;
     float gridRadius;
     float3 cameraPosition;
-    float _pad0;
-    float2 gridCenter;
     float farDistance;
-    float _pad1;
+    float2 gridCenter;
+    float frameIndex;
+    float previousTimeSeconds;
+    float3 previousCameraPosition;
+    float previousGridRadius;
+    float2 previousGridCenter;
+    float2 jitterPixels;
+    float2 previousJitterPixels;
+    float2 _pad0;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
 StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 Texture2D<float> ditherTexture : register(t2);
+Texture2D<float4> currentSceneTexture : register(t3);
+Texture2D<float4> historyTexture : register(t4);
 SamplerState gridSampler : register(s0);
 SamplerState ditherSampler : register(s1);
 
@@ -109,6 +117,39 @@ float stochasticTransparency(float2 screenUv, float alpha)
     float2 ditherUv = screenUv * (resolution / 512.0);
     float dither = frac(ditherTexture.SampleLevel(ditherSampler, ditherUv, 0.0).r + frameSeed * 1.61803398875);
     return alpha - dither - 0.001 * (1.0 - ceil(alpha));
+}
+
+void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
+{
+    float3 target = float3(center, 0.0);
+    forward = normalize(target - camera);
+    right = normalize(cross(forward, float3(0.0, 0.0, 1.0)));
+    up = cross(right, forward);
+}
+
+float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 center)
+{
+    float2 ndc = ((pixel + jitter) * 2.0 - resolution) / resolution.y;
+    float3 forward;
+    float3 right;
+    float3 up;
+    cameraBasis(camera, center, forward, right, up);
+    return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
+}
+
+float2 projectWorldToPreviousHistoryUv(float3 worldPosition)
+{
+    float3 forward;
+    float3 right;
+    float3 up;
+    cameraBasis(previousCameraPosition, previousGridCenter, forward, right, up);
+
+    float3 toPoint = worldPosition - previousCameraPosition;
+    float forwardDistance = max(dot(toPoint, forward), 0.0001);
+    float2 previousNdc = float2(dot(toPoint, right), dot(toPoint, up)) * (1.6 / forwardDistance);
+    float2 previousPixel = (previousNdc * resolution.y + resolution) * 0.5 - previousJitterPixels;
+    float2 previousScreenUv = previousPixel / resolution;
+    return float2(previousScreenUv.x, 1.0 - previousScreenUv.y);
 }
 
 float noised3(float3 x)
@@ -1172,17 +1213,11 @@ float3 aces(float3 color)
     return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
 }
 
-float4 AquariumPS(VertexOut input) : SV_Target
+float4 AquariumScenePS(VertexOut input) : SV_Target
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
     float2 pixel = screenUv * resolution;
-    float2 ndc = (pixel * 2.0 - resolution) / resolution.y;
-
-    float3 target = float3(gridCenter, 0.0);
-    float3 forward = normalize(target - cameraPosition);
-    float3 right = normalize(cross(forward, float3(0.0, 0.0, 1.0)));
-    float3 up = cross(right, forward);
-    float3 rayDirection = normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
+    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
 
     float3 hitPosition;
     int materialId;
@@ -1210,7 +1245,80 @@ float4 AquariumPS(VertexOut input) : SV_Target
     }
 
     color += float3(0.001, 0.003, 0.004);
-    return float4(aces(color), 1.0);
+    return float4(color, min(nearestSolidTravel, farDistance + 1.0));
+}
+
+float3 sampleCurrentScene(float2 uv)
+{
+    return currentSceneTexture.SampleLevel(gridSampler, uv, 0.0).rgb;
+}
+
+void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
+{
+    float2 texel = 1.0 / resolution;
+    neighborhoodMin = 100000.0;
+    neighborhoodMax = -100000.0;
+
+    [unroll]
+    for (int y = -1; y <= 1; y++)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; x++)
+        {
+            float3 sampleColor = sampleCurrentScene(uv + float2(x, y) * texel);
+            neighborhoodMin = min(neighborhoodMin, sampleColor);
+            neighborhoodMax = max(neighborhoodMax, sampleColor);
+        }
+    }
+}
+
+struct ResolveOut
+{
+    float4 finalColor : SV_Target0;
+    float4 historyColor : SV_Target1;
+};
+
+ResolveOut AquariumResolvePS(VertexOut input)
+{
+    float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
+    float2 pixel = screenUv * resolution;
+    float4 current = currentSceneTexture.SampleLevel(gridSampler, input.uv, 0.0);
+    float currentTravel = current.a;
+    float3 currentColor = current.rgb;
+
+    float historyWeight = 0.0;
+    float3 historyColor = currentColor;
+    if (frameIndex > 0.5 && currentTravel <= farDistance)
+    {
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 worldPosition = cameraPosition + currentRay * currentTravel;
+        float2 previousUv = projectWorldToPreviousHistoryUv(worldPosition);
+
+        if (all(previousUv >= 0.0) && all(previousUv <= 1.0))
+        {
+            float4 previous = historyTexture.SampleLevel(gridSampler, previousUv, 0.0);
+            float previousTravel = previous.a;
+            float travelDelta = abs(previousTravel - currentTravel);
+            float travelTolerance = max(0.045, currentTravel * 0.018);
+            float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
+
+            float3 neighborhoodMin;
+            float3 neighborhoodMax;
+            currentNeighborhood(input.uv, neighborhoodMin, neighborhoodMax);
+            float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
+            float colorDelta = length(clampedHistory - currentColor);
+            float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
+
+            historyColor = clampedHistory;
+            historyWeight = 0.82 * travelWeight * colorWeight;
+        }
+    }
+
+    float3 resolved = lerp(currentColor, historyColor, historyWeight);
+    ResolveOut output;
+    output.finalColor = float4(aces(resolved), 1.0);
+    output.historyColor = float4(resolved, currentTravel);
+    return output;
 }
 
 float4 GridHeightPS(VertexOut input) : SV_Target

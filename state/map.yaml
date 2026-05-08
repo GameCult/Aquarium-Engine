@@ -28,6 +28,7 @@ current_model:
     runtime_surface: docs/cult-runtime-surface.md
     native_spine: docs/vortice-spine.md
     sdf_field_renderer_plan: docs/sdf-field-renderer-plan.md
+    tsr_inspired_taa_spec: docs/tsr-inspired-taa-spec.md
     input: docs/input.md
     volumetrics_research: research/volumetrics/synthesis.md
     recent_volumetrics_and_gpu_sdf: research/volumetrics/recent-volumetrics-and-gpu-sdf.md
@@ -58,6 +59,7 @@ renderer_state:
     - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
+    - Extend TSR-inspired temporal resolve with material/field ids, normals, explicit animated-body velocity, reactive masks, and volumetric history.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
@@ -70,5 +72,6 @@ next_actions:
   - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
   - Check research/volumetrics/transcript-addendum.md before relying on slide decks as evidence; video transcripts can change the renderer lesson.
   - Follow docs/sdf-field-renderer-plan.md when adding SDF solids, SDF clouds, or hybrid field objects.
+  - Follow docs/tsr-inspired-taa-spec.md when changing jitter, history, stochastic coverage, or temporal rejection.
   - Promote runtime knobs into typed CultCache documents.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

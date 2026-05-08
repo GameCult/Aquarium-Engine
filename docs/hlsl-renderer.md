@@ -53,7 +53,8 @@ Current frame order:
    uploads fixed primitive id slots as a structured buffer.
 2. `GridHeightPS` renders body/gravity height into a 128x128 Grid-space
    `R32G32B32A32_Float` render target.
-3. `AquariumPS` raymarches solids and terrain against that height texture.
+3. `AquariumScenePS` raymarches solids and the Grid against that height texture,
+   writing linear HDR color plus ray travel.
 4. Body SDF checks read only the primitive ids binned into the current froxel.
    Empty froxels skip body SDF work entirely.
 5. Displaced body SDFs report a noisy hit distance separately from a conservative
@@ -124,7 +125,7 @@ Current prototype traits:
 
 ## Transparent Grid Overlay
 
-The Grid now renders as a transparent schematic overlay. `AquariumPS` traces
+The Grid now renders as a transparent schematic overlay. `AquariumScenePS` traces
 bodies separately from the Grid surface, shades solid bodies first, then
 intersects the Grid height field. The Grid only draws when its surface is closer
 than the nearest solid body, so it behaves like diegetic scene UI rather than a
@@ -138,6 +139,29 @@ shader resource, following the `_DitheringTex` + `_FrameNumber *
 
 This keeps the current scene legible while leaving future volumetrics to provide
 the real spatial mass.
+
+## Temporal Resolve
+
+The first clean-room TSR-inspired temporal pass is documented in
+`docs/tsr-inspired-taa-spec.md`.
+
+Aquarium now renders the scene into an HDR/travel target first:
+
+```text
+rgb = linear scene color
+a   = ray travel in world units
+```
+
+`AquariumResolvePS` then resolves that target against a ping-pong HDR history
+texture. The resolver reconstructs the current world hit from the jittered camera
+ray and current travel, projects that point into the previous camera basis,
+samples history, clamps it to the current 3x3 neighborhood, rejects by travel
+delta, and only then tonemaps to the backbuffer.
+
+This is Gate 1 of the TAA plan: camera reprojection, jitter, travel rejection,
+neighborhood clamping, and history ping-pong. It deliberately does not pretend to
+solve animated SDF velocity, material/field id rejection, volumetric history, or
+history resurrection yet.
 
 ## Overlay Text
 

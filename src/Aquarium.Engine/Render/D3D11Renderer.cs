@@ -38,6 +38,15 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11ShaderResourceView gridHeightShaderResourceView;
     private readonly ID3D11Texture2D ditherTexture;
     private readonly ID3D11ShaderResourceView ditherShaderResourceView;
+    private readonly ID3D11Texture2D sceneTexture;
+    private readonly ID3D11RenderTargetView sceneRenderTargetView;
+    private readonly ID3D11ShaderResourceView sceneShaderResourceView;
+    private readonly ID3D11Texture2D historyTextureA;
+    private readonly ID3D11RenderTargetView historyRenderTargetViewA;
+    private readonly ID3D11ShaderResourceView historyShaderResourceViewA;
+    private readonly ID3D11Texture2D historyTextureB;
+    private readonly ID3D11RenderTargetView historyRenderTargetViewB;
+    private readonly ID3D11ShaderResourceView historyShaderResourceViewB;
     private readonly ID3D11SamplerState gridSampler;
     private readonly ID3D11SamplerState ditherSampler;
     private readonly ID3D11Buffer frameConstantBuffer;
@@ -50,10 +59,16 @@ public sealed class D3D11Renderer : IDisposable
     private readonly Stopwatch shaderReloadClock = Stopwatch.StartNew();
     private ID3D11VertexShader vertexShader;
     private ID3D11PixelShader gridHeightPixelShader;
-    private ID3D11PixelShader pixelShader;
+    private ID3D11PixelShader scenePixelShader;
+    private ID3D11PixelShader resolvePixelShader;
     private DateTime lastShaderWriteUtc;
     private TimeSpan lastShaderReloadCheck;
     private bool shaderReloadFailureReported;
+    private int frameIndex;
+    private Vector3 previousCameraPosition;
+    private Vector2 previousGridCenter;
+    private float previousGridRadius;
+    private float previousTimeSeconds;
 
     public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null, Action<string>? startupProgress = null)
     {
@@ -101,12 +116,23 @@ public sealed class D3D11Renderer : IDisposable
         var initialShaders = CompileShaderSet(this.shaderPath);
         vertexShader = initialShaders.VertexShader;
         gridHeightPixelShader = initialShaders.GridHeightPixelShader;
-        pixelShader = initialShaders.AquariumPixelShader;
+        scenePixelShader = initialShaders.AquariumScenePixelShader;
+        resolvePixelShader = initialShaders.AquariumResolvePixelShader;
         lastShaderWriteUtc = File.GetLastWriteTimeUtc(this.shaderPath);
         startupProgress?.Invoke("Creating Grid render targets and buffers");
         gridHeightTexture = CreateGridHeightTexture();
         gridHeightRenderTargetView = device.CreateRenderTargetView(gridHeightTexture);
         gridHeightShaderResourceView = device.CreateShaderResourceView(gridHeightTexture);
+        startupProgress?.Invoke("Creating temporal render targets");
+        sceneTexture = CreateHdrTexture(width, height);
+        sceneRenderTargetView = device.CreateRenderTargetView(sceneTexture);
+        sceneShaderResourceView = device.CreateShaderResourceView(sceneTexture);
+        historyTextureA = CreateHdrTexture(width, height);
+        historyRenderTargetViewA = device.CreateRenderTargetView(historyTextureA);
+        historyShaderResourceViewA = device.CreateShaderResourceView(historyTextureA);
+        historyTextureB = CreateHdrTexture(width, height);
+        historyRenderTargetViewB = device.CreateRenderTargetView(historyTextureB);
+        historyShaderResourceViewB = device.CreateShaderResourceView(historyTextureB);
         startupProgress?.Invoke("Loading Aetheria blue-noise dither texture");
         ditherTexture = CreateDitherTexture(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
         ditherShaderResourceView = device.CreateShaderResourceView(ditherTexture);
@@ -131,7 +157,7 @@ public sealed class D3D11Renderer : IDisposable
             MaxLOD = float.MaxValue,
         });
         frameConstantBuffer = device.CreateBuffer(
-            48,
+            96,
             BindFlags.ConstantBuffer,
             ResourceUsage.Default,
             CpuAccessFlags.None,
@@ -148,6 +174,9 @@ public sealed class D3D11Renderer : IDisposable
         froxelPrimitiveShaderResourceView = device.CreateShaderResourceView(
             froxelPrimitiveBuffer,
             new ShaderResourceViewDescription(froxelPrimitiveBuffer, Format.Unknown, 0, FroxelBufferElementCount));
+        previousCameraPosition = Vector3.Zero;
+        previousGridCenter = Vector2.Zero;
+        previousGridRadius = 0.001f;
     }
 
     public void Render(AquariumFrame frame)
@@ -156,24 +185,47 @@ public sealed class D3D11Renderer : IDisposable
 
         var gridOrigin = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
         var farDistance = Vector3.Distance(frame.CameraPosition, gridOrigin) + MathF.Max(frame.Grid.Radius, 0.001f);
+        var jitter = frameIndex == 0 ? Vector2.Zero : HaltonJitter(frameIndex);
+        var previousJitter = frameIndex <= 1 ? Vector2.Zero : HaltonJitter(frameIndex - 1);
+        if (frameIndex == 0)
+        {
+            previousCameraPosition = frame.CameraPosition;
+            previousGridCenter = frame.Grid.Center;
+            previousGridRadius = frame.Grid.Radius;
+            previousTimeSeconds = frame.TimeSeconds;
+        }
+
         var constants = new FrameConstants(
             new float2(width, height),
             frame.TimeSeconds,
             frame.Grid.Radius,
             (float3)frame.CameraPosition,
-            0.0f,
-            (float2)frame.Grid.Center,
             farDistance,
-            0.0f);
+            (float2)frame.Grid.Center,
+            frameIndex,
+            previousTimeSeconds,
+            (float3)previousCameraPosition,
+            previousGridRadius,
+            (float2)previousGridCenter,
+            (float2)jitter,
+            (float2)previousJitter,
+            new float2(0.0f, 0.0f));
 
         BuildFroxelPrimitiveTable(frame);
         context.UpdateSubresource(in constants, frameConstantBuffer);
         context.UpdateSubresource(froxelPrimitiveIds, froxelPrimitiveBuffer);
         RenderGridHeight();
-        RenderAquarium();
+        RenderScene();
+        ResolveTemporal();
         context.Flush();
         overlay.Render(frame);
         swapChain.Present(1, PresentFlags.None);
+
+        previousCameraPosition = frame.CameraPosition;
+        previousGridCenter = frame.Grid.Center;
+        previousGridRadius = frame.Grid.Radius;
+        previousTimeSeconds = frame.TimeSeconds;
+        frameIndex++;
     }
 
     public void Dispose()
@@ -186,10 +238,20 @@ public sealed class D3D11Renderer : IDisposable
         gridSampler.Dispose();
         ditherShaderResourceView.Dispose();
         ditherTexture.Dispose();
+        historyShaderResourceViewB.Dispose();
+        historyRenderTargetViewB.Dispose();
+        historyTextureB.Dispose();
+        historyShaderResourceViewA.Dispose();
+        historyRenderTargetViewA.Dispose();
+        historyTextureA.Dispose();
+        sceneShaderResourceView.Dispose();
+        sceneRenderTargetView.Dispose();
+        sceneTexture.Dispose();
         gridHeightShaderResourceView.Dispose();
         gridHeightRenderTargetView.Dispose();
         gridHeightTexture.Dispose();
-        pixelShader.Dispose();
+        resolvePixelShader.Dispose();
+        scenePixelShader.Dispose();
         gridHeightPixelShader.Dispose();
         vertexShader.Dispose();
         renderTargetView.Dispose();
@@ -204,6 +266,25 @@ public sealed class D3D11Renderer : IDisposable
         {
             Width = GridHeightTextureSize,
             Height = GridHeightTextureSize,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.R32G32B32A32_Float,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+            CPUAccessFlags = CpuAccessFlags.None,
+            MiscFlags = ResourceOptionFlags.None,
+        };
+
+        return device.CreateTexture2D(description);
+    }
+
+    private ID3D11Texture2D CreateHdrTexture(int textureWidth, int textureHeight)
+    {
+        var description = new Texture2DDescription
+        {
+            Width = (uint)textureWidth,
+            Height = (uint)textureHeight,
             MipLevels = 1,
             ArraySize = 1,
             Format = Format.R32G32B32A32_Float,
@@ -254,21 +335,44 @@ public sealed class D3D11Renderer : IDisposable
         context.Draw(3, 0);
     }
 
-    private void RenderAquarium()
+    private void RenderScene()
     {
-        context.OMSetRenderTargets(renderTargetView);
+        context.PSUnsetShaderResource(3);
+        context.PSUnsetShaderResource(4);
+        context.OMSetRenderTargets(sceneRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
-        context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
+        context.ClearRenderTargetView(sceneRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
         context.IASetInputLayout(null);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.VSSetShader(vertexShader);
-        context.PSSetShader(pixelShader);
+        context.PSSetShader(scenePixelShader);
         context.PSSetConstantBuffer(0, frameConstantBuffer);
         context.PSSetShaderResource(0, gridHeightShaderResourceView);
         context.PSSetShaderResource(1, froxelPrimitiveShaderResourceView);
         context.PSSetShaderResource(2, ditherShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.PSSetSampler(1, ditherSampler);
+        context.Draw(3, 0);
+    }
+
+    private void ResolveTemporal()
+    {
+        var historyReadView = frameIndex % 2 == 0 ? historyShaderResourceViewA : historyShaderResourceViewB;
+        var historyWriteView = frameIndex % 2 == 0 ? historyRenderTargetViewB : historyRenderTargetViewA;
+
+        context.PSUnsetShaderResource(3);
+        context.PSUnsetShaderResource(4);
+        context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView });
+        context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
+        context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
+        context.IASetInputLayout(null);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.VSSetShader(vertexShader);
+        context.PSSetShader(resolvePixelShader);
+        context.PSSetConstantBuffer(0, frameConstantBuffer);
+        context.PSSetShaderResource(3, sceneShaderResourceView);
+        context.PSSetShaderResource(4, historyReadView);
+        context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }
 
@@ -308,13 +412,16 @@ public sealed class D3D11Renderer : IDisposable
             var replacement = CompileShaderSet(shaderPath);
             var oldVertexShader = vertexShader;
             var oldGridHeightPixelShader = gridHeightPixelShader;
-            var oldPixelShader = pixelShader;
+            var oldScenePixelShader = scenePixelShader;
+            var oldResolvePixelShader = resolvePixelShader;
 
             vertexShader = replacement.VertexShader;
             gridHeightPixelShader = replacement.GridHeightPixelShader;
-            pixelShader = replacement.AquariumPixelShader;
+            scenePixelShader = replacement.AquariumScenePixelShader;
+            resolvePixelShader = replacement.AquariumResolvePixelShader;
 
-            oldPixelShader.Dispose();
+            oldResolvePixelShader.Dispose();
+            oldScenePixelShader.Dispose();
             oldGridHeightPixelShader.Dispose();
             oldVertexShader.Dispose();
 
@@ -466,6 +573,25 @@ public sealed class D3D11Renderer : IDisposable
         return a + (b - a) * t;
     }
 
+    private static Vector2 HaltonJitter(int index)
+    {
+        return new Vector2(Halton(index & 1023, 2) - 0.5f, Halton(index & 1023, 3) - 0.5f);
+    }
+
+    private static float Halton(int index, int radix)
+    {
+        var result = 0.0f;
+        var fraction = 1.0f / radix;
+        while (index > 0)
+        {
+            result += (index % radix) * fraction;
+            index /= radix;
+            fraction /= radix;
+        }
+
+        return result;
+    }
+
     private static ReadOnlyMemory<byte> CompileShader(string path, string entryPoint, string profile)
     {
         var shaderFlags = ShaderFlags.EnableStrictness;
@@ -480,12 +606,14 @@ public sealed class D3D11Renderer : IDisposable
     {
         var vertexShaderBytecode = CompileShader(path, "FullscreenTriangleVS", "vs_5_0");
         var gridHeightShaderBytecode = CompileShader(path, "GridHeightPS", "ps_5_0");
-        var pixelShaderBytecode = CompileShader(path, "AquariumPS", "ps_5_0");
+        var sceneShaderBytecode = CompileShader(path, "AquariumScenePS", "ps_5_0");
+        var resolveShaderBytecode = CompileShader(path, "AquariumResolvePS", "ps_5_0");
 
         return new ShaderSet(
             device.CreateVertexShader(vertexShaderBytecode.Span, null),
             device.CreatePixelShader(gridHeightShaderBytecode.Span, null),
-            device.CreatePixelShader(pixelShaderBytecode.Span, null));
+            device.CreatePixelShader(sceneShaderBytecode.Span, null),
+            device.CreatePixelShader(resolveShaderBytecode.Span, null));
     }
 
     private readonly record struct FrameConstants(
@@ -493,10 +621,16 @@ public sealed class D3D11Renderer : IDisposable
         float TimeSeconds,
         float GridRadius,
         float3 CameraPosition,
-        float CameraPad,
-        float2 GridCenter,
         float FarDistance,
-        float Pad0);
+        float2 GridCenter,
+        float FrameIndex,
+        float PreviousTimeSeconds,
+        float3 PreviousCameraPosition,
+        float PreviousGridRadius,
+        float2 PreviousGridCenter,
+        float2 JitterPixels,
+        float2 PreviousJitterPixels,
+        float2 Pad0);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 
@@ -506,5 +640,6 @@ public sealed class D3D11Renderer : IDisposable
     private readonly record struct ShaderSet(
         ID3D11VertexShader VertexShader,
         ID3D11PixelShader GridHeightPixelShader,
-        ID3D11PixelShader AquariumPixelShader);
+        ID3D11PixelShader AquariumScenePixelShader,
+        ID3D11PixelShader AquariumResolvePixelShader);
 }
