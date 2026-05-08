@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using System.Numerics;
+using Aquarium.Engine.Input;
 
 namespace Aquarium.Engine.Platform;
 
@@ -6,23 +8,37 @@ public sealed class Win32Window : IDisposable
 {
     private const int CW_USEDEFAULT = unchecked((int)0x80000000);
     private const uint WM_DESTROY = 0x0002;
-    private const uint WM_SIZE = 0x0005;
     private const uint WM_CLOSE = 0x0010;
+    private const uint WM_KEYDOWN = 0x0100;
+    private const uint WM_KEYUP = 0x0101;
+    private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_RBUTTONDOWN = 0x0204;
+    private const uint WM_RBUTTONUP = 0x0205;
+    private const uint WM_MBUTTONDOWN = 0x0207;
+    private const uint WM_MBUTTONUP = 0x0208;
+    private const uint WM_MOUSEWHEEL = 0x020A;
     private const uint PM_REMOVE = 0x0001;
     private const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
     private const uint WS_VISIBLE = 0x10000000;
     private const int SW_SHOW = 5;
     private const int IDC_ARROW = 32512;
+    private const int VK_W = 0x57;
+    private const int VK_A = 0x41;
+    private const int VK_S = 0x53;
+    private const int VK_D = 0x44;
+    private const int WHEEL_DELTA = 120;
 
     private readonly WndProc windowProcedure;
     private readonly string className;
+    private readonly InputState input;
     private bool disposed;
 
-    private Win32Window(IntPtr handle, string className, WndProc windowProcedure, int width, int height)
+    private Win32Window(IntPtr handle, string className, WndProc windowProcedure, InputState input, int width, int height)
     {
         Handle = handle;
         this.className = className;
         this.windowProcedure = windowProcedure;
+        this.input = input;
         ClientWidth = width;
         ClientHeight = height;
     }
@@ -33,7 +49,7 @@ public sealed class Win32Window : IDisposable
 
     public int ClientHeight { get; private set; }
 
-    public static Win32Window Create(string title, int width, int height)
+    public static Win32Window Create(string title, int width, int height, InputState input)
     {
         var className = $"AquariumEngineWindow-{Guid.NewGuid():N}";
         var instance = GetModuleHandle(null);
@@ -48,6 +64,34 @@ public sealed class Win32Window : IDisposable
                     return IntPtr.Zero;
                 case WM_DESTROY:
                     PostQuitMessage(0);
+                    return IntPtr.Zero;
+                case WM_MOUSEMOVE:
+                    input.SetMousePosition(new Vector2(GetSignedLowWord(lParam), GetSignedHighWord(lParam)));
+                    return IntPtr.Zero;
+                case WM_MOUSEWHEEL:
+                    input.AddWheelDelta(GetSignedHighWord(wParam) / (float)WHEEL_DELTA);
+                    return IntPtr.Zero;
+                case WM_MBUTTONDOWN:
+                    input.SetMouseButton(MouseButton.Middle, true);
+                    SetCapture(handle);
+                    return IntPtr.Zero;
+                case WM_MBUTTONUP:
+                    input.SetMouseButton(MouseButton.Middle, false);
+                    ReleaseCapture();
+                    return IntPtr.Zero;
+                case WM_RBUTTONDOWN:
+                    input.SetMouseButton(MouseButton.Right, true);
+                    SetCapture(handle);
+                    return IntPtr.Zero;
+                case WM_RBUTTONUP:
+                    input.SetMouseButton(MouseButton.Right, false);
+                    ReleaseCapture();
+                    return IntPtr.Zero;
+                case WM_KEYDOWN:
+                    SetKey(input, wParam, true);
+                    return IntPtr.Zero;
+                case WM_KEYUP:
+                    SetKey(input, wParam, false);
                     return IntPtr.Zero;
             }
 
@@ -90,7 +134,7 @@ public sealed class Win32Window : IDisposable
         ShowWindow(handle, SW_SHOW);
         UpdateWindow(handle);
 
-        return new Win32Window(handle, className, windowProcedure, width, height);
+        return new Win32Window(handle, className, windowProcedure, input, width, height);
     }
 
     public bool PumpMessages()
@@ -182,6 +226,37 @@ public sealed class Win32Window : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetClientRect(IntPtr handle, out RECT rect);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCapture(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    private static void SetKey(InputState input, IntPtr virtualKey, bool isDown)
+    {
+        switch (virtualKey.ToInt32())
+        {
+            case VK_W:
+                input.SetKey(KeyCode.W, isDown);
+                break;
+            case VK_A:
+                input.SetKey(KeyCode.A, isDown);
+                break;
+            case VK_S:
+                input.SetKey(KeyCode.S, isDown);
+                break;
+            case VK_D:
+                input.SetKey(KeyCode.D, isDown);
+                break;
+        }
+    }
+
+    private static short GetSignedLowWord(IntPtr value) => unchecked((short)((long)value & 0xFFFF));
+
+    private static short GetSignedHighWord(IntPtr value) => unchecked((short)(((long)value >> 16) & 0xFFFF));
+
+    private static short GetSignedHighWord(UIntPtr value) => unchecked((short)(((long)value >> 16) & 0xFFFF));
 
     private delegate IntPtr WndProc(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
 

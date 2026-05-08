@@ -1,3 +1,6 @@
+using System.Numerics;
+using Aquarium.Engine.Input;
+
 namespace Aquarium.Engine;
 
 public sealed class AquariumRuntime
@@ -29,11 +32,10 @@ public sealed class AquariumRuntime
         Console.WriteLine("Vortice D3D11 is present as the host shell; Aquarium owns the invariants.");
     }
 
-    public void Update(float deltaSeconds)
+    public void Update(float deltaSeconds, InputState input)
     {
-        _ = deltaSeconds;
-
         timeSeconds += Math.Max(deltaSeconds, 0.0f);
+        cameraRig.ApplyInput(input, deltaSeconds);
         gridFrame = GridFrame.FromCamera(cameraRig);
     }
 }

@@ -52,3 +52,5 @@ dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --headless
 The first cut opens a Win32 window directly and owns a D3D11 swapchain through
 Vortice. No Stride runtime, no asset protocol, no borrowed game loop wearing a
 fake mustache. See `docs/vortice-spine.md`.
+
+Current camera controls are documented in `docs/input.md`.

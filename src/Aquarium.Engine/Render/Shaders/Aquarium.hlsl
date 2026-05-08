@@ -5,6 +5,8 @@ cbuffer AquariumFrame : register(b0)
     float gridRadius;
     float3 cameraPosition;
     float _pad0;
+    float2 gridCenter;
+    float2 _pad1;
 };
 
 static const float PI = 3.14159265359;
@@ -94,7 +96,7 @@ float3 planetCenter(int index)
     float f = (float)index;
     float angle = f * 0.8975979 + timeSeconds * (0.08 + 0.011 * f);
     float radius = 4.1 + f * 0.77;
-    float2 xy = float2(cos(angle), sin(angle)) * radius;
+    float2 xy = gridCenter + float2(cos(angle), sin(angle)) * radius;
     return float3(xy, 1.15 + planetRadius(index) * 0.72);
 }
 
@@ -150,7 +152,7 @@ float gridLine(float2 p)
 
 float terrainMask(float2 p)
 {
-    float r = length(p) / gridRadius;
+    float r = length(p - gridCenter) / gridRadius;
     return 1.0 - smoothstep(0.78, 1.0, r);
 }
 
@@ -235,7 +237,7 @@ float4 AquariumPS(VertexOut input) : SV_Target
     float2 pixel = input.uv * resolution;
     float2 ndc = (pixel * 2.0 - resolution) / resolution.y;
 
-    float3 target = float3(0.0, 0.0, 0.0);
+    float3 target = float3(gridCenter, 0.0);
     float3 forward = normalize(target - cameraPosition);
     float3 right = normalize(cross(forward, float3(0.0, 0.0, 1.0)));
     float3 up = cross(right, forward);

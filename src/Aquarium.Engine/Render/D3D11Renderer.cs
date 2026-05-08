@@ -65,7 +65,7 @@ public sealed class D3D11Renderer : IDisposable
         vertexShader = device.CreateVertexShader(vertexShaderBytecode.Span, null);
         pixelShader = device.CreatePixelShader(pixelShaderBytecode.Span, null);
         frameConstantBuffer = device.CreateBuffer(
-            32,
+            48,
             BindFlags.ConstantBuffer,
             ResourceUsage.Default,
             CpuAccessFlags.None,
@@ -80,7 +80,9 @@ public sealed class D3D11Renderer : IDisposable
             frame.TimeSeconds,
             frame.Grid.Radius,
             (float3)frame.CameraPosition,
-            0.0f);
+            0.0f,
+            (float2)frame.Grid.Center,
+            new float2(0.0f, 0.0f));
 
         context.OMSetRenderTargets(renderTargetView);
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
@@ -121,5 +123,7 @@ public sealed class D3D11Renderer : IDisposable
         float TimeSeconds,
         float GridRadius,
         float3 CameraPosition,
-        float Pad0);
+        float CameraPad,
+        float2 GridCenter,
+        float2 Pad0);
 }

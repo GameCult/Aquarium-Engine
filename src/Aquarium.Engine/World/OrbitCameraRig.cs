@@ -1,4 +1,5 @@
 using System.Numerics;
+using Aquarium.Engine.Input;
 
 namespace Aquarium.Engine;
 
@@ -49,5 +50,59 @@ public sealed class OrbitCameraRig
     public void Pan(Vector2 gridDelta)
     {
         Target += gridDelta;
+    }
+
+    public void ApplyInput(InputState input, float deltaSeconds)
+    {
+        if (input.MiddleMouseDown)
+        {
+            Orbit(input.MouseDelta.X * -0.0065f, input.MouseDelta.Y * 0.0065f);
+        }
+
+        if (MathF.Abs(input.WheelDelta) > 0.0f)
+        {
+            Zoom(input.WheelDelta);
+        }
+
+        var keyboardPan = Vector2.Zero;
+        if (input.IsKeyDown(KeyCode.W))
+        {
+            keyboardPan.Y += 1.0f;
+        }
+
+        if (input.IsKeyDown(KeyCode.S))
+        {
+            keyboardPan.Y -= 1.0f;
+        }
+
+        if (input.IsKeyDown(KeyCode.D))
+        {
+            keyboardPan.X += 1.0f;
+        }
+
+        if (input.IsKeyDown(KeyCode.A))
+        {
+            keyboardPan.X -= 1.0f;
+        }
+
+        if (keyboardPan != Vector2.Zero)
+        {
+            Pan(GridPanVector(Vector2.Normalize(keyboardPan) * Distance * 0.45f * deltaSeconds));
+        }
+
+        if (input.RightMouseDown && input.MouseDelta != Vector2.Zero)
+        {
+            Pan(GridPanVector(new Vector2(input.MouseDelta.X, -input.MouseDelta.Y) * Distance * 0.0018f));
+        }
+    }
+
+    private Vector2 GridPanVector(Vector2 localDelta)
+    {
+        var forward = Vector2.Normalize(new Vector2(
+            MathF.Cos(YawRadians + MathF.PI),
+            MathF.Sin(YawRadians + MathF.PI)));
+        var right = new Vector2(forward.Y, -forward.X);
+
+        return right * localDelta.X + forward * localDelta.Y;
     }
 }

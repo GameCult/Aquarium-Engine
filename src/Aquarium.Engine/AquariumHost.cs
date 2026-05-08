@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Aquarium.Engine.Input;
 using Aquarium.Engine.Platform;
 using Aquarium.Engine.Render;
 
@@ -9,9 +10,10 @@ public static class AquariumHost
     public static int Run(string[] args)
     {
         var runtime = new AquariumRuntime(new AquariumRuntimeOptions(ParseHeadless(args)));
+        var input = new InputState();
         var width = runtime.Options.Headless ? 640 : 1280;
         var height = runtime.Options.Headless ? 360 : 720;
-        using var window = Win32Window.Create("Aquarium Engine", width, height);
+        using var window = Win32Window.Create("Aquarium Engine", width, height, input);
         using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight);
 
         runtime.Start();
@@ -20,13 +22,19 @@ public static class AquariumHost
         var lastFrame = frameClock.Elapsed;
         var frames = 0;
 
-        while (window.PumpMessages())
+        while (true)
         {
+            input.BeginFrame();
+            if (!window.PumpMessages())
+            {
+                break;
+            }
+
             var now = frameClock.Elapsed;
             var deltaSeconds = (float)(now - lastFrame).TotalSeconds;
             lastFrame = now;
 
-            runtime.Update(deltaSeconds);
+            runtime.Update(deltaSeconds, input);
             renderer.Render(runtime.Frame);
 
             if (runtime.Options.Headless && ++frames >= 2)
