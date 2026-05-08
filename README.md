@@ -78,6 +78,17 @@ compiles changed shaders in the running process, then swaps the D3D shader
 objects only after compilation succeeds. A bad shader edit leaves the previous
 working shaders bound and writes the compiler failure to stderr.
 
+Live gameplay/runtime code is split into `Aquarium.Engine.Live` behind
+`Aquarium.Engine.Contracts`. The host loads that live DLL through a collectible
+assembly load context, while `dev-watch.ps1` builds live-only changes into
+`artifacts\dev-reload\live-slots` and updates `live-current.txt`. The running
+host sees the pointer change, loads and starts the new runtime first, then
+disposes the old one only after the replacement is valid. A bad live DLL leaves
+the previous runtime alive and reports the reload failure to stderr. Successful
+reloads rehydrate through CultCache without restarting the window or D3D device.
+Host, renderer, contract, project, and script changes still rebuild and restart
+the apphost.
+
 Runtime live state is a typed CultCache document, not a loose sidecar file. The
 first document is `epiphany.aquarium.live_state`, currently banking camera
 target, yaw, pitch, distance, time, and save generation every few frames so a

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Aquarium.Engine.Input;
+using Aquarium.Engine.Live;
 using Aquarium.Engine.Platform;
 using Aquarium.Engine.Render;
 
@@ -9,7 +10,9 @@ public static class AquariumHost
 {
     public static int Run(string[] args)
     {
-        using var runtime = new AquariumRuntime(new AquariumRuntimeOptions(ParseHeadless(args), ParseCachePath(args)));
+        var runtimeOptions = new AquariumRuntimeOptions(ParseHeadless(args), ParseCachePath(args));
+        using var runtimeLoader = new LiveRuntimeLoader(runtimeOptions, ParseLiveAssemblyPath(args), ParseLiveReloadPointerPath(args));
+        var runtime = runtimeLoader.Load();
         var input = new InputState();
         var width = runtime.Options.Headless ? 640 : 1280;
         var height = runtime.Options.Headless ? 360 : 720;
@@ -17,8 +20,6 @@ public static class AquariumHost
         using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath);
         window.PaintSplash();
         using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight, ParseShaderPath(args));
-
-        runtime.Start();
 
         var frameClock = Stopwatch.StartNew();
         var lastFrame = frameClock.Elapsed;
@@ -36,8 +37,8 @@ public static class AquariumHost
             var deltaSeconds = (float)(now - lastFrame).TotalSeconds;
             lastFrame = now;
 
-            runtime.Update(deltaSeconds, input);
-            renderer.Render(runtime.Frame);
+            runtimeLoader.Update(deltaSeconds, input);
+            renderer.Render(runtimeLoader.Runtime.Frame);
 
             if (runtime.Options.Headless && ++frames >= 2)
             {
@@ -79,5 +80,33 @@ public static class AquariumHost
         }
 
         return Environment.GetEnvironmentVariable("AQUARIUM_SHADER_SOURCE");
+    }
+
+    private static string? ParseLiveAssemblyPath(IReadOnlyCollection<string> args)
+    {
+        var values = args.ToArray();
+        for (var index = 0; index < values.Length - 1; index++)
+        {
+            if (string.Equals(values[index], "--live-assembly", StringComparison.OrdinalIgnoreCase))
+            {
+                return values[index + 1];
+            }
+        }
+
+        return Environment.GetEnvironmentVariable("AQUARIUM_LIVE_ASSEMBLY");
+    }
+
+    private static string? ParseLiveReloadPointerPath(IReadOnlyCollection<string> args)
+    {
+        var values = args.ToArray();
+        for (var index = 0; index < values.Length - 1; index++)
+        {
+            if (string.Equals(values[index], "--live-reload-pointer", StringComparison.OrdinalIgnoreCase))
+            {
+                return values[index + 1];
+            }
+        }
+
+        return Environment.GetEnvironmentVariable("AQUARIUM_LIVE_RELOAD_POINTER");
     }
 }

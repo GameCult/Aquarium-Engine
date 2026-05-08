@@ -11,10 +11,12 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "src\Aquarium.Engine\Aquarium.Engine.csproj"
+$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj"
 $devRoot = Join-Path $repoRoot "artifacts\dev-reload"
 $slotRoot = Join-Path $devRoot "slots"
 $statePath = Join-Path $devRoot "state.clixml"
 $buildStatePath = Join-Path $devRoot "last-build.clixml"
+$liveReloadPointerPath = Join-Path $devRoot "live-current.txt"
 $cultCachePath = Join-Path $devRoot "cultcache\aquarium-client.msgpack"
 $shaderSourcePath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
 $stdoutLogPath = Join-Path $devRoot "latest.out.log"
@@ -138,6 +140,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet build failed with exit code $LASTEXITCODE."
 }
 
+dotnet build $liveProjectPath `
+    -c Debug `
+    -o $slotPath
+if ($LASTEXITCODE -ne 0) {
+    throw "live runtime build failed with exit code $LASTEXITCODE."
+}
+
 if ($BuildOnly) {
     @{
         slot = $slotPath
@@ -153,11 +162,23 @@ if ($BuildOnly) {
 Stop-PreviousOwnedProcess
 
 $exePath = Join-Path $slotPath "Aquarium.Engine.exe"
+$liveAssemblyPath = Join-Path $slotPath "Aquarium.Engine.Live.dll"
 if (-not (Test-Path $exePath)) {
     throw "Expected apphost was not produced: $exePath"
 }
 
-$arguments = @("--cache", $cultCachePath, "--shader-source", $shaderSourcePath)
+if (-not (Test-Path $liveAssemblyPath)) {
+    throw "Expected live runtime assembly was not produced: $liveAssemblyPath"
+}
+
+Set-Content -Path $liveReloadPointerPath -Value $liveAssemblyPath -Encoding UTF8
+
+$arguments = @(
+    "--cache", $cultCachePath,
+    "--shader-source", $shaderSourcePath,
+    "--live-assembly", $liveAssemblyPath,
+    "--live-reload-pointer", $liveReloadPointerPath
+)
 if ($Headless) {
     $arguments += "--headless"
 }

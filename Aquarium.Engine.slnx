@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Aquarium.Engine.Contracts/Aquarium.Engine.Contracts.csproj" />
     <Project Path="src/Aquarium.Engine/Aquarium.Engine.csproj" />
+    <Project Path="src/Aquarium.Engine.Live/Aquarium.Engine.Live.csproj" />
   </Folder>
 </Solution>

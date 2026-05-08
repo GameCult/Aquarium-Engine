@@ -12,9 +12,13 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $reloadScript = Join-Path $PSScriptRoot "dev-reload.ps1"
+$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj"
 $watchLogPath = Join-Path $repoRoot "artifacts\dev-reload\watch.log"
+$liveSlotRoot = Join-Path $repoRoot "artifacts\dev-reload\live-slots"
+$liveReloadPointerPath = Join-Path $repoRoot "artifacts\dev-reload\live-current.txt"
 
 New-Item -ItemType Directory -Force -Path (Split-Path $watchLogPath) | Out-Null
+New-Item -ItemType Directory -Force -Path $liveSlotRoot | Out-Null
 
 function Write-WatchLog([string]$message) {
     $line = "$(Get-Date -Format o) $message"
@@ -22,7 +26,7 @@ function Write-WatchLog([string]$message) {
     Add-Content -Path $watchLogPath -Value $line
 }
 
-function Get-WatchedFiles {
+function Get-SourceFiles {
     $roots = @(
         (Join-Path $repoRoot "src"),
         (Join-Path $repoRoot "Aquarium.Engine.slnx"),
@@ -49,8 +53,20 @@ function Get-WatchedFiles {
     }
 }
 
-function Get-SourceFingerprint {
-    $fingerprintInput = Get-WatchedFiles |
+function Get-LiveFiles {
+    Get-SourceFiles | Where-Object {
+        $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Engine.Live\*")
+    }
+}
+
+function Get-RestartFiles {
+    Get-SourceFiles | Where-Object {
+        $_.FullName -notlike (Join-Path $repoRoot "src\Aquarium.Engine.Live\*")
+    }
+}
+
+function Get-Fingerprint($files) {
+    $fingerprintInput = $files |
         Sort-Object FullName |
         ForEach-Object {
             "$($_.FullName)|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)"
@@ -68,15 +84,39 @@ function Get-SourceFingerprint {
     }
 }
 
-function Wait-StableFingerprint {
-    $first = Get-SourceFingerprint
-    Start-Sleep -Milliseconds $DebounceMilliseconds
-    $second = Get-SourceFingerprint
+function Get-SourceFingerprint {
+    Get-Fingerprint (Get-SourceFiles)
+}
 
-    while ($first -ne $second) {
+function Get-LiveFingerprint {
+    Get-Fingerprint (Get-LiveFiles)
+}
+
+function Get-RestartFingerprint {
+    Get-Fingerprint (Get-RestartFiles)
+}
+
+function Wait-StableFingerprints {
+    $first = @{
+        all = Get-SourceFingerprint
+        live = Get-LiveFingerprint
+        restart = Get-RestartFingerprint
+    }
+    Start-Sleep -Milliseconds $DebounceMilliseconds
+    $second = @{
+        all = Get-SourceFingerprint
+        live = Get-LiveFingerprint
+        restart = Get-RestartFingerprint
+    }
+
+    while ($first.all -ne $second.all) {
         $first = $second
         Start-Sleep -Milliseconds $DebounceMilliseconds
-        $second = Get-SourceFingerprint
+        $second = @{
+            all = Get-SourceFingerprint
+            live = Get-LiveFingerprint
+            restart = Get-RestartFingerprint
+        }
     }
 
     return $second
@@ -111,17 +151,39 @@ function Invoke-Reload {
     }
 }
 
-$lastGoodFingerprint = Wait-StableFingerprint
+function Invoke-LiveReload {
+    param([string]$reason)
+
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $liveSlot = Join-Path $liveSlotRoot "$timestamp-$([guid]::NewGuid().ToString("N").Substring(0, 8))"
+    New-Item -ItemType Directory -Force -Path $liveSlot | Out-Null
+
+    Write-WatchLog "Live reload requested: $reason"
+    dotnet build $liveProjectPath -c Debug -o $liveSlot
+    if ($LASTEXITCODE -ne 0) {
+        throw "live runtime build failed with exit code $LASTEXITCODE."
+    }
+
+    $liveAssemblyPath = Join-Path $liveSlot "Aquarium.Engine.Live.dll"
+    if (-not (Test-Path $liveAssemblyPath)) {
+        throw "Expected live runtime assembly was not produced: $liveAssemblyPath"
+    }
+
+    Set-Content -Path $liveReloadPointerPath -Value $liveAssemblyPath -Encoding UTF8
+    Write-WatchLog "Live reload pointer updated: $liveAssemblyPath"
+}
+
+$lastGoodFingerprint = Wait-StableFingerprints
 $lastFailedFingerprint = $null
 
 if (-not $NoInitialLaunch) {
     try {
         Invoke-Reload "initial launch"
-        $lastGoodFingerprint = Wait-StableFingerprint
+        $lastGoodFingerprint = Wait-StableFingerprints
         $lastFailedFingerprint = $null
     }
     catch {
-        $lastFailedFingerprint = $lastGoodFingerprint
+        $lastFailedFingerprint = $lastGoodFingerprint.all
         Write-WatchLog "Initial launch failed; keeping any previous good process alive. $($_.Exception.Message)"
     }
 }
@@ -130,9 +192,9 @@ Write-WatchLog "Watching Aquarium sources. Press Ctrl+C to stop."
 
 do {
     Start-Sleep -Milliseconds $IntervalMilliseconds
-    $currentFingerprint = Wait-StableFingerprint
+    $currentFingerprint = Wait-StableFingerprints
 
-    if ($currentFingerprint -eq $lastGoodFingerprint -or $currentFingerprint -eq $lastFailedFingerprint) {
+    if ($currentFingerprint.all -eq $lastGoodFingerprint.all -or $currentFingerprint.all -eq $lastFailedFingerprint) {
         if ($Once) {
             break
         }
@@ -141,12 +203,18 @@ do {
     }
 
     try {
-        Invoke-Reload "source change"
+        if ($currentFingerprint.restart -eq $lastGoodFingerprint.restart -and $currentFingerprint.live -ne $lastGoodFingerprint.live) {
+            Invoke-LiveReload "live source change"
+        }
+        else {
+            Invoke-Reload "host source change"
+        }
+
         $lastGoodFingerprint = $currentFingerprint
         $lastFailedFingerprint = $null
     }
     catch {
-        $lastFailedFingerprint = $currentFingerprint
+        $lastFailedFingerprint = $currentFingerprint.all
         Write-WatchLog "Reload failed; previous good process stays alive. $($_.Exception.Message)"
     }
 

@@ -4,7 +4,7 @@ using Aquarium.Engine.State;
 
 namespace Aquarium.Engine;
 
-public sealed class AquariumRuntime : IDisposable
+public sealed class AquariumRuntime : IAquariumRuntime
 {
     private const float StateSaveIntervalSeconds = 0.20f;
 
@@ -26,7 +26,7 @@ public sealed class AquariumRuntime : IDisposable
             pitchRadians: liveState.CameraPitchRadians,
             distance: liveState.CameraDistance);
         timeSeconds = liveState.TimeSeconds;
-        gridFrame = GridFrame.FromCamera(cameraRig);
+        gridFrame = GridFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
     }
 
     public AquariumRuntimeOptions Options { get; }
@@ -46,7 +46,7 @@ public sealed class AquariumRuntime : IDisposable
     {
         timeSeconds += Math.Max(deltaSeconds, 0.0f);
         cameraRig.ApplyInput(input, deltaSeconds);
-        gridFrame = GridFrame.FromCamera(cameraRig);
+        gridFrame = GridFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
         secondsSinceStateSave += Math.Max(deltaSeconds, 0.0f);
         if (secondsSinceStateSave >= StateSaveIntervalSeconds)
         {
@@ -75,6 +75,10 @@ public sealed class AquariumRuntime : IDisposable
     }
 }
 
-public readonly record struct AquariumRuntimeOptions(bool Headless, string? CultCachePath);
-
-public readonly record struct AquariumFrame(GridFrame Grid, System.Numerics.Vector3 CameraPosition, float TimeSeconds);
+public sealed class AquariumRuntimeFactory : IAquariumRuntimeFactory
+{
+    public IAquariumRuntime Create(AquariumRuntimeOptions options)
+    {
+        return new AquariumRuntime(options);
+    }
+}
