@@ -35,6 +35,9 @@ Everything else earns its way back in.
 
 ## Run
 
+Aquarium currently expects the sibling `CultMath` repo at `E:\Projects\CultMath`
+or the equivalent `..\..\..\CultMath` path from the engine project.
+
 ```powershell
 dotnet build Aquarium.Engine.slnx
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj

@@ -9,7 +9,9 @@ public static class AquariumHost
     public static int Run(string[] args)
     {
         var runtime = new AquariumRuntime(new AquariumRuntimeOptions(ParseHeadless(args)));
-        using var window = Win32Window.Create("Aquarium Engine", 1280, 720);
+        var width = runtime.Options.Headless ? 640 : 1280;
+        var height = runtime.Options.Headless ? 360 : 720;
+        using var window = Win32Window.Create("Aquarium Engine", width, height);
         using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight);
 
         runtime.Start();

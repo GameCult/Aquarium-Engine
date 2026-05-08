@@ -5,6 +5,7 @@ public sealed class AquariumRuntime
     private readonly OrbitCameraRig cameraRig;
 
     private GridFrame gridFrame;
+    private float timeSeconds;
 
     public AquariumRuntime(AquariumRuntimeOptions options)
     {
@@ -19,7 +20,7 @@ public sealed class AquariumRuntime
 
     public AquariumRuntimeOptions Options { get; }
 
-    public AquariumFrame Frame => new(gridFrame, cameraRig.Position);
+    public AquariumFrame Frame => new(gridFrame, cameraRig.Position, timeSeconds);
 
     public void Start()
     {
@@ -32,10 +33,11 @@ public sealed class AquariumRuntime
     {
         _ = deltaSeconds;
 
+        timeSeconds += Math.Max(deltaSeconds, 0.0f);
         gridFrame = GridFrame.FromCamera(cameraRig);
     }
 }
 
 public readonly record struct AquariumRuntimeOptions(bool Headless);
 
-public readonly record struct AquariumFrame(GridFrame Grid, System.Numerics.Vector3 CameraPosition);
+public readonly record struct AquariumFrame(GridFrame Grid, System.Numerics.Vector3 CameraPosition, float TimeSeconds);
