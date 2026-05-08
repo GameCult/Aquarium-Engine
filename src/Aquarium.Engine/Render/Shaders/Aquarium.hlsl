@@ -1404,10 +1404,14 @@ ResolveOut AquariumResolvePS(VertexOut input)
 
     if (currentIsGrid && currentTravel <= farDistance)
     {
-        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-        float3 worldPosition = cameraPosition + currentRay * currentTravel;
-        float4 gridOverlay = shadeGridOverlay(worldPosition);
-        currentColor = gridOverlay.rgb * saturate(gridOverlay.a) + float3(0.001, 0.003, 0.004);
+        float3 currentRay = rayDirectionForPixel(pixel, 0.0, cameraPosition, gridCenter);
+        float3 gridHitPosition;
+        float gridTravel;
+        if (traceGridSurface(cameraPosition, currentRay, gridHitPosition, gridTravel))
+        {
+            float4 gridOverlay = shadeGridOverlay(gridHitPosition);
+            currentColor = gridOverlay.rgb * saturate(gridOverlay.a) + float3(0.001, 0.003, 0.004);
+        }
     }
 
     float historyWeight = 0.0;

@@ -16,6 +16,7 @@ public sealed class D3D11Renderer : IDisposable
     private const string DitherTextureRelativePath = "Assets/Textures/Aetheria-LDR_LLL1_0.r8";
     private static readonly TimeSpan ShaderReloadPollInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ShaderReloadWriteSettleTime = TimeSpan.FromMilliseconds(150);
+    private const float TemporalJitterScale = 0.0f;
     private const int GridHeightTextureSize = 128;
     private const int DitherTextureSize = 512;
     private const int FroxelCountX = 8;
@@ -662,7 +663,7 @@ public sealed class D3D11Renderer : IDisposable
 
     private static Vector2 HaltonJitter(int index)
     {
-        return new Vector2(Halton(index & 1023, 2) - 0.5f, Halton(index & 1023, 3) - 0.5f);
+        return new Vector2(Halton(index & 1023, 2) - 0.5f, Halton(index & 1023, 3) - 0.5f) * TemporalJitterScale;
     }
 
     private static float Halton(int index, int radix)

@@ -92,3 +92,9 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3J: debug mode 1 is raw scene again. Final Grid pixels use the
   analytic current estimate directly instead of blending previous Grid color
   history; history debug surfaces remain diagnostics.
+- Temporal Gate 3K: final Grid analytic estimate uses an unjittered current ray
+  and retraces the Grid hit, so jitter no longer appears as whole-frame Grid
+  swim while color history is bypassed.
+- Temporal Gate 3L: projection jitter is scaled to zero because Self/planet
+  surfaces visibly juddered. Keep jitter disabled until opaque and Grid resolve
+  both hide the offset.
