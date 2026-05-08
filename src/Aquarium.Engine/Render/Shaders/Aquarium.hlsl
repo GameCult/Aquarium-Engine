@@ -234,7 +234,8 @@ float3 aces(float3 color)
 
 float4 AquariumPS(VertexOut input) : SV_Target
 {
-    float2 pixel = input.uv * resolution;
+    float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
+    float2 pixel = screenUv * resolution;
     float2 ndc = (pixel * 2.0 - resolution) / resolution.y;
 
     float3 target = float3(gridCenter, 0.0);
