@@ -44,15 +44,19 @@ The renderer now has a deferred Grid height target.
 
 Current frame order:
 
-1. `GridHeightPS` renders body/gravity height into a 128x128 Grid-space
+1. C# bins Self and planet bounds into a small Grid-space froxel table and
+   uploads fixed primitive id slots as a structured buffer.
+2. `GridHeightPS` renders body/gravity height into a 128x128 Grid-space
    `R32G32B32A32_Float` render target.
-2. `AquariumPS` raymarches solids and terrain against that height texture.
-3. Terrain marching uses heightfield crossing and slope-aware steps instead of
+3. `AquariumPS` raymarches solids and terrain against that height texture.
+4. Body SDF checks read only the primitive ids binned into the current froxel.
+   Empty froxels skip body SDF work entirely.
+5. Terrain marching uses heightfield crossing and slope-aware steps instead of
    pretending `z - height(xy)` is a true Euclidean SDF. Body objects still use
    SDF distance steps.
-4. Terrain normals sample adjacent Grid texels in world space instead of
+6. Terrain normals sample adjacent Grid texels in world space instead of
    re-evaluating analytic height per normal tap.
-5. The Grid target is centered on the camera target; body anchors remain in
+7. The Grid target is centered on the camera target; body anchors remain in
    world space.
 
 The target currently stores height in `.r` only. The next useful expansion is to

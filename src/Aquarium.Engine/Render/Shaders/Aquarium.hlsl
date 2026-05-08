@@ -10,6 +10,7 @@ cbuffer AquariumFrame : register(b0)
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
+StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 SamplerState gridSampler : register(s0);
 
 static const float PI = 3.14159265359;
@@ -21,6 +22,12 @@ static const float GRID_WEATHER_WORLD_SCALE = 42.0;
 static const float GRID_LINE_WORLD_CELL = 2.0;
 static const int PLANET_COUNT = 5;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
+static const int FROXEL_COUNT_X = 8;
+static const int FROXEL_COUNT_Y = 8;
+static const int FROXEL_COUNT_Z = 4;
+static const int FROXEL_SLOT_COUNT = 2;
+static const float FROXEL_MIN_Z = -2.0;
+static const float FROXEL_MAX_Z = 6.0;
 
 struct VertexOut
 {
@@ -275,26 +282,67 @@ float displacedSphereSdf(float3 p, float3 center, float radius, int index, bool 
     return lerp(conservativeDistance, actualDistance, blend);
 }
 
+float primitiveSdf(float3 p, int primitiveId, out int materialId)
+{
+    if (primitiveId == 0)
+    {
+        materialId = 2;
+        return displacedSphereSdf(p, SUN_POSITION, SUN_RADIUS, 17, true);
+    }
+
+    int planetIndex = primitiveId - 1;
+    materialId = 3;
+    return displacedSphereSdf(p, planetCenter(planetIndex), planetRadius(planetIndex), planetIndex, false);
+}
+
+int froxelIndexForPosition(float3 p)
+{
+    float2 xy = gridUv(p.xy);
+    float z = (p.z - FROXEL_MIN_Z) / (FROXEL_MAX_Z - FROXEL_MIN_Z);
+
+    if (xy.x < 0.0 || xy.x >= 1.0 || xy.y < 0.0 || xy.y >= 1.0 || z < 0.0 || z >= 1.0)
+    {
+        return -1;
+    }
+
+    int3 cell = int3(
+        min((int)(xy.x * FROXEL_COUNT_X), FROXEL_COUNT_X - 1),
+        min((int)(xy.y * FROXEL_COUNT_Y), FROXEL_COUNT_Y - 1),
+        min((int)(z * FROXEL_COUNT_Z), FROXEL_COUNT_Z - 1));
+
+    return cell.x + cell.y * FROXEL_COUNT_X + cell.z * FROXEL_COUNT_X * FROXEL_COUNT_Y;
+}
+
 float bodySdf(float3 p, out int materialId)
 {
     float distanceToScene = 100000.0;
     materialId = 0;
 
-    float sun = displacedSphereSdf(p, SUN_POSITION, SUN_RADIUS, 17, true);
-    if (sun < distanceToScene)
+    int froxelIndex = froxelIndexForPosition(p);
+    if (froxelIndex < 0)
     {
-        distanceToScene = sun;
-        materialId = 2;
+        return distanceToScene;
     }
 
     [unroll]
-    for (int i = 0; i < PLANET_COUNT; i++)
+    for (int slotGroup = 0; slotGroup < FROXEL_SLOT_COUNT; slotGroup++)
     {
-        float planet = displacedSphereSdf(p, planetCenter(i), planetRadius(i), i, false);
-        if (planet < distanceToScene)
+        int4 ids = froxelPrimitiveIds[froxelIndex * FROXEL_SLOT_COUNT + slotGroup];
+
+        [unroll]
+        for (int slot = 0; slot < 4; slot++)
         {
-            distanceToScene = planet;
-            materialId = 3;
+            int primitiveId = ids[slot];
+            if (primitiveId >= 0)
+            {
+                int primitiveMaterialId;
+                float primitiveDistance = primitiveSdf(p, primitiveId, primitiveMaterialId);
+                if (primitiveDistance < distanceToScene)
+                {
+                    distanceToScene = primitiveDistance;
+                    materialId = primitiveMaterialId;
+                }
+            }
         }
     }
 

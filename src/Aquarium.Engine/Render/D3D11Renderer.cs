@@ -4,6 +4,8 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 using CultMath;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Aquarium.Engine.Render;
 
@@ -11,6 +13,15 @@ public sealed class D3D11Renderer : IDisposable
 {
     private const string ShaderRelativePath = "Render/Shaders/Aquarium.hlsl";
     private const int GridHeightTextureSize = 128;
+    private const int FroxelCountX = 8;
+    private const int FroxelCountY = 8;
+    private const int FroxelCountZ = 4;
+    private const int FroxelSlotCount = 2;
+    private const int FroxelBufferElementCount = FroxelCountX * FroxelCountY * FroxelCountZ * FroxelSlotCount;
+    private const int PlanetCount = 5;
+    private const float SunRadius = 1.12f;
+    private const float FroxelMinZ = -2.0f;
+    private const float FroxelMaxZ = 6.0f;
 
     private readonly IDXGISwapChain swapChain;
     private readonly ID3D11Device device;
@@ -24,6 +35,9 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11PixelShader gridHeightPixelShader;
     private readonly ID3D11PixelShader pixelShader;
     private readonly ID3D11Buffer frameConstantBuffer;
+    private readonly ID3D11Buffer froxelPrimitiveBuffer;
+    private readonly ID3D11ShaderResourceView froxelPrimitiveShaderResourceView;
+    private readonly Int4[] froxelPrimitiveIds = new Int4[FroxelBufferElementCount];
     private readonly int width;
     private readonly int height;
 
@@ -92,6 +106,17 @@ public sealed class D3D11Renderer : IDisposable
             CpuAccessFlags.None,
             ResourceOptionFlags.None,
             0);
+        froxelPrimitiveBuffer = device.CreateBuffer(
+            froxelPrimitiveIds,
+            BindFlags.ShaderResource,
+            ResourceUsage.Default,
+            CpuAccessFlags.None,
+            ResourceOptionFlags.BufferStructured,
+            0,
+            (uint)Marshal.SizeOf<Int4>());
+        froxelPrimitiveShaderResourceView = device.CreateShaderResourceView(
+            froxelPrimitiveBuffer,
+            new ShaderResourceViewDescription(froxelPrimitiveBuffer, Format.Unknown, 0, FroxelBufferElementCount));
     }
 
     public void Render(AquariumFrame frame)
@@ -105,7 +130,9 @@ public sealed class D3D11Renderer : IDisposable
             (float2)frame.Grid.Center,
             new float2(0.0f, 0.0f));
 
+        BuildFroxelPrimitiveTable(frame);
         context.UpdateSubresource(in constants, frameConstantBuffer);
+        context.UpdateSubresource(froxelPrimitiveIds, froxelPrimitiveBuffer);
         RenderGridHeight();
         RenderAquarium();
         swapChain.Present(1, PresentFlags.None);
@@ -113,6 +140,8 @@ public sealed class D3D11Renderer : IDisposable
 
     public void Dispose()
     {
+        froxelPrimitiveShaderResourceView.Dispose();
+        froxelPrimitiveBuffer.Dispose();
         frameConstantBuffer.Dispose();
         gridSampler.Dispose();
         gridHeightShaderResourceView.Dispose();
@@ -149,6 +178,7 @@ public sealed class D3D11Renderer : IDisposable
     private void RenderGridHeight()
     {
         context.PSUnsetShaderResource(0);
+        context.PSUnsetShaderResource(1);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -171,8 +201,143 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShader(pixelShader);
         context.PSSetConstantBuffer(0, frameConstantBuffer);
         context.PSSetShaderResource(0, gridHeightShaderResourceView);
+        context.PSSetShaderResource(1, froxelPrimitiveShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
+    }
+
+    private void BuildFroxelPrimitiveTable(AquariumFrame frame)
+    {
+        for (var i = 0; i < froxelPrimitiveIds.Length; i++)
+        {
+            froxelPrimitiveIds[i] = new Int4(-1, -1, -1, -1);
+        }
+
+        AddPrimitiveToFroxels(frame, 0, new Vector3(0.0f, 0.0f, 2.2f), SunRadius * 1.22f);
+
+        for (var i = 0; i < PlanetCount; i++)
+        {
+            var radius = PlanetRadius(i);
+            AddPrimitiveToFroxels(frame, i + 1, PlanetCenter(i, frame.TimeSeconds, radius), radius * 1.16f);
+        }
+    }
+
+    private void AddPrimitiveToFroxels(AquariumFrame frame, int primitiveId, Vector3 center, float boundRadius)
+    {
+        var min = center - new Vector3(boundRadius);
+        var max = center + new Vector3(boundRadius);
+        var minCell = FroxelCellForPosition(frame, min);
+        var maxCell = FroxelCellForPosition(frame, max);
+
+        for (var z = minCell.Z; z <= maxCell.Z; z++)
+        {
+            for (var y = minCell.Y; y <= maxCell.Y; y++)
+            {
+                for (var x = minCell.X; x <= maxCell.X; x++)
+                {
+                    AddPrimitiveToFroxel(FroxelIndex(x, y, z), primitiveId);
+                }
+            }
+        }
+    }
+
+    private void AddPrimitiveToFroxel(int froxelIndex, int primitiveId)
+    {
+        var baseElement = froxelIndex * FroxelSlotCount;
+        for (var slotGroup = 0; slotGroup < FroxelSlotCount; slotGroup++)
+        {
+            var elementIndex = baseElement + slotGroup;
+            var element = froxelPrimitiveIds[elementIndex];
+
+            if (element.X == primitiveId || element.Y == primitiveId || element.Z == primitiveId || element.W == primitiveId)
+            {
+                return;
+            }
+
+            if (element.X == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { X = primitiveId };
+                return;
+            }
+
+            if (element.Y == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { Y = primitiveId };
+                return;
+            }
+
+            if (element.Z == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { Z = primitiveId };
+                return;
+            }
+
+            if (element.W == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { W = primitiveId };
+                return;
+            }
+        }
+    }
+
+    private static FroxelCell FroxelCellForPosition(AquariumFrame frame, Vector3 position)
+    {
+        var gridCenter = frame.Grid.Center;
+        var gridRadius = MathF.Max(frame.Grid.Radius, 0.001f);
+        var localX = ((position.X - gridCenter.X) / gridRadius) * 0.5f + 0.5f;
+        var localY = ((position.Y - gridCenter.Y) / gridRadius) * 0.5f + 0.5f;
+        var localZ = (position.Z - FroxelMinZ) / (FroxelMaxZ - FroxelMinZ);
+
+        return new FroxelCell(
+            ClampCell(localX, FroxelCountX),
+            ClampCell(localY, FroxelCountY),
+            ClampCell(localZ, FroxelCountZ));
+    }
+
+    private static int ClampCell(float normalized, int count)
+    {
+        return Math.Clamp((int)MathF.Floor(normalized * count), 0, count - 1);
+    }
+
+    private static int FroxelIndex(int x, int y, int z)
+    {
+        return x + y * FroxelCountX + z * FroxelCountX * FroxelCountY;
+    }
+
+    private static float PlanetRadius(int index)
+    {
+        return Lerp(0.34f, 0.62f, Hash21(index, 19.7f));
+    }
+
+    private static Vector3 PlanetCenter(int index, float timeSeconds, float radius)
+    {
+        var f = (float)index;
+        var angle = f * 0.8975979f + timeSeconds * (0.08f + 0.011f * f);
+        var orbitRadius = 4.1f + f * 0.77f;
+        return new Vector3(
+            MathF.Cos(angle) * orbitRadius,
+            MathF.Sin(angle) * orbitRadius,
+            1.15f + radius * 0.72f);
+    }
+
+    private static float Hash21(float x, float y)
+    {
+        x = Frac(x * 123.34f);
+        y = Frac(y * 456.21f);
+        var d = x * (x + 45.32f) + y * (y + 45.32f);
+        x += d;
+        y += d;
+        return Frac(x * y);
+    }
+
+    private static float Frac(float value)
+    {
+        return value - MathF.Floor(value);
+    }
+
+    private static float Lerp(float a, float b, float t)
+    {
+        return a + (b - a) * t;
     }
 
     private static ReadOnlyMemory<byte> CompileShader(string path, string entryPoint, string profile)
@@ -193,4 +358,9 @@ public sealed class D3D11Renderer : IDisposable
         float CameraPad,
         float2 GridCenter,
         float2 Pad0);
+
+    private readonly record struct FroxelCell(int X, int Y, int Z);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct Int4(int X, int Y, int Z, int W);
 }
