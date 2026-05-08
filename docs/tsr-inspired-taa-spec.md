@@ -217,6 +217,17 @@ Current Gate 3G implementation:
   history
 - Grid max history weight is reduced from the too-soft `0.975` to `0.94`
 
+Current Gate 3H implementation:
+
+- Grid temporal `coverage` is now line/contour/field-line support, not broad
+  overlay alpha
+- broad weather/field tint can still render through stochastic coverage, but it
+  does not keep history age alive across the whole Grid surface
+- Grid history is gated by current support, so stale stochastic hits cannot
+  billow away from the analytic line support
+- Grid max history weight is reduced again to `0.90` with a lower fresh-history
+  scale for crisper line response
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

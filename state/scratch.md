@@ -82,3 +82,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3G: identity/control buffers are point-loaded and Grid history
   color uses nearest identity-aligned sampling. This prevents foreground glow
   from bilinearly bleeding into background Grid history at silhouettes.
+- Temporal Gate 3H: Grid temporal coverage is line support only, not broad
+  overlay alpha. Current support gates Grid history so old stochastic hits do
+  not survive as fine smoke across the surface.

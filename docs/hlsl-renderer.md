@@ -188,6 +188,9 @@ Gate 3G point-loads identity/control history and nearest-loads Grid history
 color, preventing bright foreground silhouettes from bilinearly bleeding into
 background Grid accumulation. Grid retention is also pulled back from `0.975` to
 `0.94` to keep lines less anesthetized.
+Gate 3H makes Grid temporal coverage line support rather than broad overlay
+alpha, so history age/weight cannot survive as smoke across low-alpha field
+tint. Grid retention is pulled back again to `0.90`.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `4` select them directly. Mode `0` is final resolve,

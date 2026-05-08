@@ -1238,6 +1238,17 @@ float4 shadeGridOverlay(float3 position)
     return float4(overlayColor, alpha);
 }
 
+float gridTemporalSupport(float3 position)
+{
+    float mask = terrainMask(position.xy);
+    float gridAmount = gridLine(position.xy);
+    float height = terrainHeight(position.xy);
+    float2 gradient = terrainGradient(position.xy);
+    float contour = terrainIsolines(height);
+    float fieldLine = terrainFieldLines(gradient);
+    return saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16) * mask;
+}
+
 float3 aces(float3 color)
 {
     const float a = 2.51;
@@ -1291,11 +1302,12 @@ SceneOut AquariumScenePS(VertexOut input)
     {
         float4 gridOverlay = shadeGridOverlay(gridHitPosition);
         float gridCoverage = saturate(gridOverlay.a);
+        float gridSupport = gridTemporalSupport(gridHitPosition);
         outputTravel = gridTravel;
         outputMaterialId = FIELD_ID_GRID;
         outputNormal = terrainNormal(gridHitPosition);
-        outputCoverage = gridCoverage;
-        outputReactive = 1.0 - smoothstep(0.08, 0.72, gridCoverage);
+        outputCoverage = gridSupport;
+        outputReactive = 1.0 - smoothstep(0.06, 0.48, gridSupport);
         if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
         {
             color = gridOverlay.rgb;
@@ -1433,10 +1445,11 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
             float surfaceValidationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
-            float gridValidationWeight = travelWeight * fieldWeight * normalWeight * coverageContinuityWeight * mediumContinuityWeight;
+            float gridSupportWeight = smoothstep(0.015, 0.18, currentCoverage);
+            float gridValidationWeight = travelWeight * fieldWeight * normalWeight * coverageContinuityWeight * mediumContinuityWeight * gridSupportWeight;
             float validationWeight = isGridField ? gridValidationWeight : surfaceValidationWeight;
-            float maxHistoryWeight = isGridField ? 0.94 : 0.82;
-            float freshHistoryScale = isGridField ? 0.72 : 0.35;
+            float maxHistoryWeight = isGridField ? 0.90 : 0.82;
+            float freshHistoryScale = isGridField ? 0.58 : 0.35;
 
             historyColor = clampedHistory;
             historyWeight = maxHistoryWeight * lerp(freshHistoryScale, 1.0, historyConfidence) * validationWeight;
