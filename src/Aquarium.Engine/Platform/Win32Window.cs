@@ -21,6 +21,13 @@ public sealed class Win32Window : IDisposable
     private const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
     private const uint WS_VISIBLE = 0x10000000;
     private const int SW_SHOW = 5;
+    private const uint WM_SETICON = 0x0080;
+    private const nuint ICON_SMALL = 0;
+    private const nuint ICON_BIG = 1;
+    private const uint IMAGE_ICON = 1;
+    private const uint LR_LOADFROMFILE = 0x00000010;
+    private const int ICON_SIZE_LARGE = 32;
+    private const int ICON_SIZE_SMALL = 16;
     private const int IDC_ARROW = 32512;
     private const int VK_W = 0x57;
     private const int VK_A = 0x41;
@@ -31,14 +38,26 @@ public sealed class Win32Window : IDisposable
     private readonly WndProc windowProcedure;
     private readonly string className;
     private readonly InputState input;
+    private readonly IntPtr largeIcon;
+    private readonly IntPtr smallIcon;
     private bool disposed;
 
-    private Win32Window(IntPtr handle, string className, WndProc windowProcedure, InputState input, int width, int height)
+    private Win32Window(
+        IntPtr handle,
+        string className,
+        WndProc windowProcedure,
+        InputState input,
+        int width,
+        int height,
+        IntPtr largeIcon,
+        IntPtr smallIcon)
     {
         Handle = handle;
         this.className = className;
         this.windowProcedure = windowProcedure;
         this.input = input;
+        this.largeIcon = largeIcon;
+        this.smallIcon = smallIcon;
         ClientWidth = width;
         ClientHeight = height;
     }
@@ -49,92 +68,117 @@ public sealed class Win32Window : IDisposable
 
     public int ClientHeight { get; private set; }
 
-    public static Win32Window Create(string title, int width, int height, InputState input)
+    public static Win32Window Create(string title, int width, int height, InputState input, string? iconPath = null)
     {
         var className = $"AquariumEngineWindow-{Guid.NewGuid():N}";
         var instance = GetModuleHandle(null);
+        var largeIcon = LoadIconFromPath(iconPath, ICON_SIZE_LARGE);
+        var smallIcon = LoadIconFromPath(iconPath, ICON_SIZE_SMALL);
+        var classNamePointer = Marshal.StringToHGlobalUni(className);
+        var titlePointer = Marshal.StringToHGlobalUni(title);
         WndProc? windowProcedure = null;
 
-        windowProcedure = (handle, message, wParam, lParam) =>
+        try
         {
-            switch (message)
+            windowProcedure = (handle, message, wParam, lParam) =>
             {
-                case WM_CLOSE:
-                    DestroyWindow(handle);
-                    return IntPtr.Zero;
-                case WM_DESTROY:
-                    PostQuitMessage(0);
-                    return IntPtr.Zero;
-                case WM_MOUSEMOVE:
-                    input.SetMousePosition(new Vector2(GetSignedLowWord(lParam), GetSignedHighWord(lParam)));
-                    return IntPtr.Zero;
-                case WM_MOUSEWHEEL:
-                    input.AddWheelDelta(GetSignedHighWord(wParam) / (float)WHEEL_DELTA);
-                    return IntPtr.Zero;
-                case WM_MBUTTONDOWN:
-                    input.SetMouseButton(MouseButton.Middle, true);
-                    SetCapture(handle);
-                    return IntPtr.Zero;
-                case WM_MBUTTONUP:
-                    input.SetMouseButton(MouseButton.Middle, false);
-                    ReleaseCapture();
-                    return IntPtr.Zero;
-                case WM_RBUTTONDOWN:
-                    input.SetMouseButton(MouseButton.Right, true);
-                    SetCapture(handle);
-                    return IntPtr.Zero;
-                case WM_RBUTTONUP:
-                    input.SetMouseButton(MouseButton.Right, false);
-                    ReleaseCapture();
-                    return IntPtr.Zero;
-                case WM_KEYDOWN:
-                    SetKey(input, wParam, true);
-                    return IntPtr.Zero;
-                case WM_KEYUP:
-                    SetKey(input, wParam, false);
-                    return IntPtr.Zero;
+                switch (message)
+                {
+                    case WM_CLOSE:
+                        DestroyWindow(handle);
+                        return IntPtr.Zero;
+                    case WM_DESTROY:
+                        PostQuitMessage(0);
+                        return IntPtr.Zero;
+                    case WM_MOUSEMOVE:
+                        input.SetMousePosition(new Vector2(GetSignedLowWord(lParam), GetSignedHighWord(lParam)));
+                        return IntPtr.Zero;
+                    case WM_MOUSEWHEEL:
+                        input.AddWheelDelta(GetSignedHighWord(wParam) / (float)WHEEL_DELTA);
+                        return IntPtr.Zero;
+                    case WM_MBUTTONDOWN:
+                        input.SetMouseButton(MouseButton.Middle, true);
+                        SetCapture(handle);
+                        return IntPtr.Zero;
+                    case WM_MBUTTONUP:
+                        input.SetMouseButton(MouseButton.Middle, false);
+                        ReleaseCapture();
+                        return IntPtr.Zero;
+                    case WM_RBUTTONDOWN:
+                        input.SetMouseButton(MouseButton.Right, true);
+                        SetCapture(handle);
+                        return IntPtr.Zero;
+                    case WM_RBUTTONUP:
+                        input.SetMouseButton(MouseButton.Right, false);
+                        ReleaseCapture();
+                        return IntPtr.Zero;
+                    case WM_KEYDOWN:
+                        SetKey(input, wParam, true);
+                        return IntPtr.Zero;
+                    case WM_KEYUP:
+                        SetKey(input, wParam, false);
+                        return IntPtr.Zero;
+                }
+
+                return DefWindowProc(handle, message, wParam, lParam);
+            };
+
+            var windowClass = new WNDCLASSEX
+            {
+                cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
+                lpfnWndProc = windowProcedure,
+                hInstance = instance,
+                hIcon = largeIcon,
+                hCursor = LoadCursor(IntPtr.Zero, IDC_ARROW),
+                lpszClassName = classNamePointer,
+                hIconSm = smallIcon,
+            };
+
+            if (RegisterClassEx(ref windowClass) == 0)
+            {
+                throw new InvalidOperationException($"RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
             }
 
-            return DefWindowProc(handle, message, wParam, lParam);
-        };
+            var handle = CreateWindowEx(
+                0,
+                classNamePointer,
+                titlePointer,
+                WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                width,
+                height,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                instance,
+                IntPtr.Zero);
 
-        var windowClass = new WNDCLASSEX
-        {
-            cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
-            lpfnWndProc = windowProcedure,
-            hInstance = instance,
-            hCursor = LoadCursor(IntPtr.Zero, IDC_ARROW),
-            lpszClassName = className,
-        };
+            if (handle == IntPtr.Zero)
+            {
+                throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastWin32Error()}");
+            }
 
-        if (RegisterClassEx(ref windowClass) == 0)
-        {
-            throw new InvalidOperationException($"RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
+            ShowWindow(handle, SW_SHOW);
+            if (largeIcon != IntPtr.Zero)
+            {
+                SendMessage(handle, WM_SETICON, ICON_BIG, largeIcon);
+            }
+
+            if (smallIcon != IntPtr.Zero)
+            {
+                SendMessage(handle, WM_SETICON, ICON_SMALL, smallIcon);
+            }
+
+            UpdateWindow(handle);
+            SetWindowText(handle, title);
+
+            return new Win32Window(handle, className, windowProcedure, input, width, height, largeIcon, smallIcon);
         }
-
-        var handle = CreateWindowEx(
-            0,
-            className,
-            title,
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            width,
-            height,
-            IntPtr.Zero,
-            IntPtr.Zero,
-            instance,
-            IntPtr.Zero);
-
-        if (handle == IntPtr.Zero)
+        finally
         {
-            throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastWin32Error()}");
+            Marshal.FreeHGlobal(classNamePointer);
+            Marshal.FreeHGlobal(titlePointer);
         }
-
-        ShowWindow(handle, SW_SHOW);
-        UpdateWindow(handle);
-
-        return new Win32Window(handle, className, windowProcedure, input, width, height);
     }
 
     public bool PumpMessages()
@@ -173,20 +217,40 @@ public sealed class Win32Window : IDisposable
             DestroyWindow(Handle);
         }
 
+        if (largeIcon != IntPtr.Zero)
+        {
+            DestroyIcon(largeIcon);
+        }
+
+        if (smallIcon != IntPtr.Zero)
+        {
+            DestroyIcon(smallIcon);
+        }
+
         GC.SuppressFinalize(this);
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static IntPtr LoadIconFromPath(string? iconPath, int size)
+    {
+        if (string.IsNullOrWhiteSpace(iconPath) || !File.Exists(iconPath))
+        {
+            return IntPtr.Zero;
+        }
+
+        return LoadImage(IntPtr.Zero, iconPath, IMAGE_ICON, size, size, LR_LOADFROMFILE);
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DllImport("user32.dll", EntryPoint = "RegisterClassExW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern ushort RegisterClassEx(ref WNDCLASSEX windowClass);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DllImport("user32.dll", EntryPoint = "CreateWindowExW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateWindowEx(
         uint extendedStyle,
-        string className,
-        string windowName,
+        IntPtr className,
+        IntPtr windowName,
         uint style,
         int x,
         int y,
@@ -200,6 +264,18 @@ public sealed class Win32Window : IDisposable
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr handle, int commandShow);
 
+    [DllImport("user32.dll", EntryPoint = "SetWindowTextW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool SetWindowText(IntPtr handle, string text);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(IntPtr instance, string imageName, uint type, int desiredWidth, int desiredHeight, uint load);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr icon);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr handle, uint message, nuint wParam, IntPtr lParam);
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UpdateWindow(IntPtr handle);
 
@@ -209,19 +285,19 @@ public sealed class Win32Window : IDisposable
     [DllImport("user32.dll")]
     private static extern void PostQuitMessage(int exitCode);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", EntryPoint = "DefWindowProcW", SetLastError = true)]
     private static extern IntPtr DefWindowProc(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DllImport("user32.dll", EntryPoint = "PeekMessageW", SetLastError = true)]
     private static extern bool PeekMessage(out MSG message, IntPtr handle, uint filterMin, uint filterMax, uint removeMessage);
 
     [DllImport("user32.dll")]
     private static extern bool TranslateMessage(ref MSG message);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "DispatchMessageW")]
     private static extern IntPtr DispatchMessage(ref MSG message);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", EntryPoint = "LoadCursorW", SetLastError = true)]
     private static extern IntPtr LoadCursor(IntPtr instance, int cursorName);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -272,8 +348,8 @@ public sealed class Win32Window : IDisposable
         public IntPtr hIcon;
         public IntPtr hCursor;
         public IntPtr hbrBackground;
-        public string? lpszMenuName;
-        public string lpszClassName;
+        public IntPtr lpszMenuName;
+        public IntPtr lpszClassName;
         public IntPtr hIconSm;
     }
 

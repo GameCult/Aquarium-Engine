@@ -1,5 +1,7 @@
 # Epiphany Aquarium Engine
 
+![Epiphany Aquarium Engine icon](Aquarium-Engine-Icon.png)
+
 C# engine-core seed for the next Epiphany Aquarium line.
 
 This repo starts after the web and Rust prototypes taught the expensive lesson:
