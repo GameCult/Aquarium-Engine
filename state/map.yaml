@@ -35,6 +35,7 @@ current_model:
     volumetrics_research: research/volumetrics/synthesis.md
     recent_volumetrics_and_gpu_sdf: research/volumetrics/recent-volumetrics-and-gpu-sdf.md
     volumetrics_transcript_addendum: research/volumetrics/transcript-addendum.md
+    hdr_pbr_presentation: research/rendering/hdr-pbr-presentation.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
@@ -64,6 +65,7 @@ renderer_state:
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
     - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.
+    - Add explicit exposure, pre-tonemap bloom/veil, and display-transform debug views before the SDF field renderer.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
@@ -76,6 +78,7 @@ next_actions:
   - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
   - Check research/volumetrics/transcript-addendum.md before relying on slide decks as evidence; video transcripts can change the renderer lesson.
   - Follow docs/sdf-field-renderer-plan.md when adding SDF solids, SDF clouds, or hybrid field objects.
+  - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
   - Follow docs/tsr-inspired-taa-spec.md when changing jitter, history, stochastic coverage, or temporal rejection.
   - Promote runtime knobs into typed CultCache documents.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

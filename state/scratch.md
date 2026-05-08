@@ -105,6 +105,10 @@ prototype integrated along the camera ray before surface composition.
   surfaces visibly juddered. Keep jitter disabled until opaque and Grid resolve
   both hide the offset. Removed the abandoned unjittered Grid retrace; Grid
   analytic final now uses the existing current hit while jitter is zero.
+- HDR/PBR research pass: `research/rendering/hdr-pbr-presentation.md` says the
+  next renderer work before the SDF field renderer is explicit exposure,
+  pre-tonemap bloom/veil, and display-transform/luminance debug views. Avoid
+  threshold glow; bloom spreads energy already present in scene-linear HDR.
 - Dev watcher correction: live runtime reload now waits for the host stdout log
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last
