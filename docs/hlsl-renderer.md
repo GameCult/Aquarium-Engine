@@ -22,10 +22,10 @@ Terrain-hugging orbit cups should come back through a real object table or
 precomputed frame constants, not repeated procedural work inside every SDF
 sample. That was the tiny furnace. It has been told to sit down.
 
-## Bevy Feature Port
+## Ported Renderer Lessons
 
-The first Bevy feature port brings across the pieces that fit a single HLSL
-raymarch pass:
+The first native renderer pass carries the pieces that fit a single HLSL
+raymarch path:
 
 - body-driven `powerPulse` Grid wells
 - world-space Grid weather with domain warping and filament layers
@@ -33,10 +33,9 @@ raymarch pass:
 - material-specific normals so terrain and body shading do not re-evaluate the
   entire scene six times per visible pixel
 
-The Bevy SH/froxel lighting, brick maps, HDR bloom graph, and debug terminal are
-not directly ported yet. Those need engine systems around the shader rather than
-more one-pass pixel shader stuffing. The machete remains on the wall, tastefully
-lit.
+Volumetric lighting, brick maps, HDR bloom, and debug controls are not one-pass
+pixel-shader jobs. They need engine systems around the shader rather than more
+stuffing in `AquariumPS`.
 
 ## Deferred Grid Pass
 

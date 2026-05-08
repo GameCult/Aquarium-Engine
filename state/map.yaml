@@ -1,0 +1,63 @@
+project:
+  name: Aquarium Engine
+  root: E:\Projects\Aquarium-Engine
+  upstream: https://github.com/GameCult/Aquarium-Engine
+  purpose: >
+    Native C# engine core for the Epiphany Aquarium client. The engine owns the
+    Win32/D3D11 host, HLSL renderer, input loop, live runtime boundary,
+    CultCache-backed state, and future diegetic UI/runtime integration.
+
+current_model:
+  host:
+    window: src/Aquarium.Engine/Platform/Win32Window.cs
+    renderer: src/Aquarium.Engine/Render/D3D11Renderer.cs
+    shader: src/Aquarium.Engine/Render/Shaders/Aquarium.hlsl
+    overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
+    runtime_loader: src/Aquarium.Engine/Live/LiveRuntimeLoader.cs
+  live_runtime:
+    contracts: src/Aquarium.Engine.Contracts
+    implementation: src/Aquarium.Engine.Live
+    state_store: src/Aquarium.Engine.Live/State/AquariumCultStateStore.cs
+    state_document: epiphany.aquarium.live_state
+  dependencies:
+    cult_math: E:\Projects\CultMath
+    cult_lib: E:\Projects\CultLib
+  docs:
+    doctrine: docs/aquarium-engine-doctrine.md
+    renderer: docs/hlsl-renderer.md
+    runtime_surface: docs/cult-runtime-surface.md
+    native_spine: docs/vortice-spine.md
+    input: docs/input.md
+
+invariants:
+  - The camera target is the Grid center on the global XY plane.
+  - Grid radius follows camera zoom distance, not pitch/yaw/projection.
+  - Body anchors remain world-space and independent of the moving Grid window.
+  - World-space domains own Grid texture/weather sampling.
+  - Visible scene lighting is diegetic; no default ambient/global fill.
+  - Overlay text is DirectWrite final-pixel UI; scene text needs renderer-owned billboards.
+  - CultCache persists live app state through reload.
+  - Failed shader/live-runtime reloads must leave the last good frame alive.
+
+renderer_state:
+  current:
+    - D3D11 swapchain through Vortice.
+    - Fullscreen HLSL raymarch for Grid terrain, Self, and planets.
+    - Deferred Grid height render target.
+    - Primitive froxel/bin table for body broad phase.
+    - Stable planet-local displaced SDF domains.
+    - DirectWrite overlay text after scene rendering.
+    - Splash screen with bundled app icon and GameCult typefaces.
+  next:
+    - Add explicit renderer debug modes for hits, normals, depth, bins, and lighting.
+    - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
+    - Move Grid gradients into the Grid target for cheaper terrain normals.
+    - Rebuild lighting as an Aquarium-owned field before adding richer fog.
+    - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
+
+next_actions:
+  - Keep main as the live development branch.
+  - Verify publish output after every packaging-affecting change.
+  - Add renderer debug controls through the DirectWrite overlay path.
+  - Promote runtime knobs into typed CultCache documents.
+  - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

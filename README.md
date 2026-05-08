@@ -1,14 +1,9 @@
-# Epiphany Aquarium Engine
+# Aquarium Engine
 
-![Epiphany Aquarium Engine icon](Aquarium-Engine-Icon.png)
+![Aquarium Engine icon](Aquarium-Engine-Icon.png)
 
-C# engine-core seed for the next Epiphany Aquarium line.
-
-This repo starts after the web and Rust prototypes taught the expensive lesson:
-the Aquarium wants an owned renderer, owned state model, and owned interaction
-grammar. Stride can stay on the shelf as reference material, but the runtime is
-Aquarium-owned: window, renderer, state, and interaction grammar all belong
-here.
+C# engine core for Aquarium: a native, owned renderer and interaction runtime
+for a living Epiphany client.
 
 ## Intent
 
@@ -23,19 +18,16 @@ here.
 - CultCache for settings, persistent client state, and reload recovery.
 - Procedural audio and visual state treated as coupled signals.
 
-## Borrowed Lessons
+## Current Shape
 
-- The web client proved the interaction grammar: objects first, panels only as
-  local unfold surfaces.
-- The Bevy prototype proved the renderer direction: raymarched bodies,
-  Grid-space fields, HDR, bloom, and camera/Grid invariants.
-- The Rust synth work proved the audio module deserves its own small, sharp API.
+The engine opens a Win32 window, owns a D3D11 swapchain, raymarches the visible
+Aquarium world in HLSL, and draws crisp overlay text through DirectWrite. The
+camera target is the Grid center. Grid radius follows zoom distance. Body anchors
+remain world-space.
 
-## First Build Target
-
-Create the smallest C# executable that opens a window, owns the camera/Grid
-invariant, and renders one sun plus orbiting planets with diegetic labels.
-Everything else earns its way back in.
+The live runtime is split behind `Aquarium.Engine.Contracts`, so gameplay code
+can reload while the host, window, renderer, and D3D device stay alive. Runtime
+state is banked through CultCache MessagePack documents instead of loose JSON.
 
 ## Run
 
@@ -131,8 +123,22 @@ This writes a self-contained Windows build to
 contracts DLL, icon, bundled fonts, and shader source, then optionally creates
 `artifacts\publish\EpiphanyAquariumEngine-win-x64.zip`.
 
-The first cut opens a Win32 window directly and owns a D3D11 swapchain through
-Vortice. No Stride runtime, no asset protocol, no borrowed game loop wearing a
-fake mustache. See `docs/vortice-spine.md`.
+## Persistent State
 
-Current camera controls are documented in `docs/input.md`.
+This repo carries its own Aquarium memory:
+
+- `state/map.yaml`: canonical project map and next actions.
+- `state/memory.json`: durable taste, doctrine, renderer rules, and warnings.
+- `state/evidence.jsonl`: compact lessons that should change future behavior.
+- `state/scratch.md`: disposable working context for the current pass.
+
+Keep that state current when the engine learns something durable. Dead lessons
+go out with the trash; the repo is not a scrapbook.
+
+## Docs
+
+- `docs/aquarium-engine-doctrine.md`: engine doctrine and invariants.
+- `docs/vortice-spine.md`: native host/renderer spine.
+- `docs/hlsl-renderer.md`: current shader path.
+- `docs/input.md`: camera and input contract.
+- `docs/cult-runtime-surface.md`: CultCache/CultNet runtime surface.
