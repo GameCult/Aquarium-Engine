@@ -1378,8 +1378,9 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float previousCoverage = saturate(previousControl.y);
             float previousMediumOpacity = saturate(previousControl.z);
             float previousHistoryAge = max(previousControl.w, 0.0);
-            float travelDelta = abs(previousTravel - currentTravel);
-            float travelTolerance = max(0.045, currentTravel * 0.018);
+            float expectedPreviousTravel = distance(previousCameraPosition, previousWorldPosition);
+            float travelDelta = abs(previousTravel - expectedPreviousTravel);
+            float travelTolerance = max(0.045, expectedPreviousTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
             float fieldWeight = abs(previousFieldId - currentFieldId) < 0.25 ? 1.0 : 0.0;
             float normalWeight = 0.0;

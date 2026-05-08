@@ -53,6 +53,7 @@
       "TAA Gate 3A adds a separate current-frame temporal-control target: reactive strength, stochastic/composition coverage, reserved medium opacity, and reserved spare. The resolver reduces history for low-coverage reactive Grid samples; future volumetrics must extend this contract rather than pretending one opaque hit depth is enough.",
       "TAA Gate 3B ping-pongs temporal-control history. Resolve now compares previous/current coverage and reserved medium opacity at the reprojected UV, reducing history across composition and future medium discontinuities.",
       "TAA Gate 3C stores accepted history age in temporal-control history w. Validation grows age, failed validation resets it, and history authority ramps with age so fresh history can contribute without instantly gaining full trust.",
+      "TAA travel validation must compare previous history travel to the reprojected previous-world point's distance from the previous camera. Comparing previous travel directly to current travel falsely rejects stable history during camera motion.",
       "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
       "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],

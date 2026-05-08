@@ -48,6 +48,8 @@ For the first implementation, motion is camera-derived:
 2. Project that world hit into the previous camera basis.
 3. Remove previous jitter to find the previous history UV.
 4. Sample previous history if the UV is valid.
+5. Compare previous history travel against the reprojected point's expected
+   distance from the previous camera, not against current-frame travel.
 
 This is sufficient for camera motion and stochastic Grid coverage. It is not the
 final answer for animated bodies, field animation, or volumetrics.
@@ -176,6 +178,14 @@ Current Gate 3C implementation:
 - history authority ramps with age, so newly accepted history can contribute but
   does not immediately get the same weight as stable history
 - age resets to zero on validation failure
+
+Current Gate 3D implementation:
+
+- travel validation uses the reprojected previous-world position's distance from
+  the previous camera
+- raw current-frame travel is no longer compared directly to previous history
+  travel, because camera motion changes the ray distance even when the world hit
+  is stable
 
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a

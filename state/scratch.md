@@ -63,3 +63,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3C: temporal-control history `w` stores accepted history age.
   Validation grows age, failed validation resets it, and history authority ramps
   with age instead of fully trusting fresh samples immediately.
+- Temporal Gate 3D: travel validation compares previous history travel against
+  the reprojected point's expected distance from the previous camera. Do not
+  compare previous travel directly to current travel under camera motion.

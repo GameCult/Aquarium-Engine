@@ -175,6 +175,9 @@ compare previous/current coverage and reserved medium opacity at the reprojected
 UV.
 Gate 3C stores accepted history age in the control-history `w` channel and
 ramps history authority as that age grows.
+Gate 3D fixes travel validation to compare previous history travel against the
+reprojected point's expected distance from the previous camera, not the current
+frame's camera-to-hit travel.
 
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.
