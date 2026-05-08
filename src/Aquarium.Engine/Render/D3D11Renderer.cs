@@ -50,11 +50,12 @@ public sealed class D3D11Renderer : IDisposable
     private TimeSpan lastShaderReloadCheck;
     private bool shaderReloadFailureReported;
 
-    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null)
+    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null, Action<string>? startupProgress = null)
     {
         this.width = width;
         this.height = height;
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
+        startupProgress?.Invoke("Creating D3D11 device and swapchain");
 
         var featureLevels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
         var swapChainDescription = new SwapChainDescription
@@ -85,16 +86,19 @@ public sealed class D3D11Renderer : IDisposable
 
         Console.WriteLine("D3D11 device and swapchain created.");
 
+        startupProgress?.Invoke("Creating swapchain render targets");
         using var backBuffer = swapChain.GetBuffer<ID3D11Texture2D>(0);
         renderTargetView = device.CreateRenderTargetView(backBuffer);
         using var backBufferSurface = swapChain.GetBuffer<IDXGISurface>(0);
         overlay = new DirectWriteOverlay(backBufferSurface, width, height);
 
+        startupProgress?.Invoke("Compiling aquarium shaders");
         var initialShaders = CompileShaderSet(this.shaderPath);
         vertexShader = initialShaders.VertexShader;
         gridHeightPixelShader = initialShaders.GridHeightPixelShader;
         pixelShader = initialShaders.AquariumPixelShader;
         lastShaderWriteUtc = File.GetLastWriteTimeUtc(this.shaderPath);
+        startupProgress?.Invoke("Creating Grid render targets and buffers");
         gridHeightTexture = CreateGridHeightTexture();
         gridHeightRenderTargetView = device.CreateRenderTargetView(gridHeightTexture);
         gridHeightShaderResourceView = device.CreateShaderResourceView(gridHeightTexture);

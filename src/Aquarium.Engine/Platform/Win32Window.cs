@@ -30,6 +30,20 @@ public sealed class Win32Window : IDisposable
     private const int ICON_SIZE_SMALL = 16;
     private const int ICON_SIZE_SPLASH = 192;
     private const int IDC_ARROW = 32512;
+    private const int TRANSPARENT = 1;
+    private const int FW_THIN = 100;
+    private const int FW_REGULAR = 400;
+    private const uint FR_PRIVATE = 0x00000010;
+    private const uint DEFAULT_CHARSET = 1;
+    private const uint OUT_DEFAULT_PRECIS = 0;
+    private const uint CLIP_DEFAULT_PRECIS = 0;
+    private const uint ANTIALIASED_QUALITY = 4;
+    private const uint DEFAULT_PITCH = 0;
+    private const uint FF_DONTCARE = 0;
+    private const uint DT_CENTER = 0x00000001;
+    private const uint DT_VCENTER = 0x00000004;
+    private const uint DT_SINGLELINE = 0x00000020;
+    private const int LOGPIXELSY = 90;
     private const int VK_W = 0x57;
     private const int VK_A = 0x41;
     private const int VK_S = 0x53;
@@ -186,7 +200,7 @@ public sealed class Win32Window : IDisposable
         }
     }
 
-    public void PaintSplash()
+    public void PaintSplash(string header = "Loading", string body = "Preparing Aquarium")
     {
         if (!GetClientRect(Handle, out var rect))
         {
@@ -210,10 +224,12 @@ public sealed class Win32Window : IDisposable
             {
                 var iconSize = Math.Min(ICON_SIZE_SPLASH, Math.Max(96, Math.Min(ClientWidth, ClientHeight) / 3));
                 var iconX = (ClientWidth - iconSize) / 2;
-                var iconY = (ClientHeight - iconSize) / 2;
+                var textAnchorY = (int)MathF.Round(ClientHeight * (2.0f / 3.0f));
+                var iconY = Math.Max(24, textAnchorY - iconSize - 72);
                 DrawIconEx(deviceContext, iconX, iconY, splashIcon, iconSize, iconSize, 0, IntPtr.Zero, 0x0003);
             }
 
+            PaintSplashText(deviceContext, ClientWidth, ClientHeight, header, body);
             GdiFlush();
         }
         finally
@@ -330,6 +346,80 @@ public sealed class Win32Window : IDisposable
         }
     }
 
+    private static void PaintSplashText(IntPtr deviceContext, int width, int height, string header, string body)
+    {
+        LoadPrivateSplashFont("Montserrat[wght].ttf");
+        LoadPrivateSplashFont("UbuntuSans[wdth,wght].ttf");
+
+        var oldBackgroundMode = SetBkMode(deviceContext, TRANSPARENT);
+        var oldTextColor = SetTextColor(deviceContext, ColorRef(224, 244, 255));
+        var headerFont = CreateSplashFont(deviceContext, 26, FW_THIN, "Montserrat");
+        var bodyFont = CreateSplashFont(deviceContext, 12, FW_REGULAR, "Ubuntu Sans");
+
+        try
+        {
+            var anchorY = (int)MathF.Round(height * (2.0f / 3.0f));
+            var headerRect = new RECT
+            {
+                left = 0,
+                top = anchorY - 14,
+                right = width,
+                bottom = anchorY + 20
+            };
+            var bodyRect = new RECT
+            {
+                left = Math.Max(0, width / 2 - 360),
+                top = anchorY + 24,
+                right = Math.Min(width, width / 2 + 360),
+                bottom = anchorY + 50
+            };
+
+            var oldFont = SelectObject(deviceContext, headerFont);
+            DrawText(deviceContext, header, header.Length, ref headerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(deviceContext, bodyFont);
+            SetTextColor(deviceContext, ColorRef(142, 179, 190));
+            DrawText(deviceContext, body, body.Length, ref bodyRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(deviceContext, oldFont);
+        }
+        finally
+        {
+            DeleteObject(bodyFont);
+            DeleteObject(headerFont);
+            SetTextColor(deviceContext, oldTextColor);
+            SetBkMode(deviceContext, oldBackgroundMode);
+        }
+    }
+
+    private static IntPtr CreateSplashFont(IntPtr deviceContext, int pointSize, int weight, string faceName)
+    {
+        var dpiY = Math.Max(1, GetDeviceCaps(deviceContext, LOGPIXELSY));
+        var height = -MulDiv(pointSize, dpiY, 72);
+        return CreateFont(
+            height,
+            0,
+            0,
+            0,
+            weight,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            ANTIALIASED_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE,
+            faceName);
+    }
+
+    private static void LoadPrivateSplashFont(string fileName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fileName);
+        if (File.Exists(path))
+        {
+            AddFontResourceEx(path, FR_PRIVATE, IntPtr.Zero);
+        }
+    }
+
     private static float SmoothStep(float edge0, float edge1, float value)
     {
         var t = Math.Clamp((value - edge0) / Math.Max(edge1 - edge0, 0.0001f), 0.0f, 1.0f);
@@ -342,6 +432,11 @@ public sealed class Win32Window : IDisposable
         var g = (byte)Math.Clamp(MathF.Round((g0 + (g1 - g0) * t) * intensity), byte.MinValue, byte.MaxValue);
         var b = (byte)Math.Clamp(MathF.Round((b0 + (b1 - b0) * t) * intensity), byte.MinValue, byte.MaxValue);
         return (uint)(b | (g << 8) | (r << 16));
+    }
+
+    private static uint ColorRef(byte red, byte green, byte blue)
+    {
+        return (uint)(red | (green << 8) | (blue << 16));
     }
 
     private static IntPtr LoadIconFromPath(string? iconPath, int size)
@@ -426,6 +521,47 @@ public sealed class Win32Window : IDisposable
 
     [DllImport("gdi32.dll")]
     private static extern bool GdiFlush();
+
+    [DllImport("gdi32.dll", EntryPoint = "AddFontResourceExW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int AddFontResourceEx(string name, uint flags, IntPtr reserved);
+
+    [DllImport("gdi32.dll", EntryPoint = "CreateFontW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateFont(
+        int height,
+        int width,
+        int escapement,
+        int orientation,
+        int weight,
+        uint italic,
+        uint underline,
+        uint strikeOut,
+        uint charSet,
+        uint outputPrecision,
+        uint clipPrecision,
+        uint quality,
+        uint pitchAndFamily,
+        string faceName);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr SelectObject(IntPtr deviceContext, IntPtr gdiObject);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern bool DeleteObject(IntPtr gdiObject);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern int SetBkMode(IntPtr deviceContext, int mode);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern uint SetTextColor(IntPtr deviceContext, uint color);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern int GetDeviceCaps(IntPtr deviceContext, int index);
+
+    [DllImport("kernel32.dll")]
+    private static extern int MulDiv(int number, int numerator, int denominator);
+
+    [DllImport("user32.dll", EntryPoint = "DrawTextW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int DrawText(IntPtr deviceContext, string text, int textLength, ref RECT rect, uint format);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UpdateWindow(IntPtr handle);

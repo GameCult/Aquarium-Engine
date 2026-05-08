@@ -86,3 +86,8 @@ The overlay owns a private DirectWrite font collection built from bundled Google
 Fonts files in `Assets/Fonts`: Montserrat for thin small-cap display text and
 Ubuntu Sans for body/debug copy. The runtime does not depend on those fonts
 being installed in Windows.
+
+Startup status text is drawn by the Win32 splash path before D3D exists. That
+path uses GDI with the same bundled font files registered privately for the
+process, then reports coarse initialization stages while the renderer creates
+the device, swapchain targets, shaders, and buffers.
