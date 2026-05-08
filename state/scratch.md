@@ -76,3 +76,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal debug keys: F1 cycles, 0 final, 1 raw current scene, 2 reprojected
   history, 3 history age, 4 history weight. Use these to prove whether the
   presented frame is resolved and whether history is alive.
+- Temporal Gate 3F: Grid stochastic coverage now uses high-retention history
+  without coverage/reactive authority penalties. Coverage remains a continuity
+  signal, not a reason to throw away the accumulation low-alpha lines require.

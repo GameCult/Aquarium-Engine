@@ -181,6 +181,9 @@ frame's camera-to-hit travel.
 Gate 3E gives stochastic Grid history its own validation path: it bypasses
 opaque-surface neighborhood color clamp/color-delta rejection while still using
 field, travel, normal, coverage, reactive, and age checks.
+Gate 3F gives that stochastic Grid path a higher-retention history blend and no
+coverage/reactive penalty, because low coverage is the signal that needs
+temporal accumulation rather than the signal that should lose history.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `4` select them directly. Mode `0` is final resolve,

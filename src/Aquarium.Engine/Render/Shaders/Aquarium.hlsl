@@ -1402,10 +1402,14 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
-            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
+            float surfaceValidationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
+            float gridValidationWeight = travelWeight * fieldWeight * normalWeight * coverageContinuityWeight * mediumContinuityWeight;
+            float validationWeight = isGridField ? gridValidationWeight : surfaceValidationWeight;
+            float maxHistoryWeight = isGridField ? 0.975 : 0.82;
+            float freshHistoryScale = isGridField ? 0.72 : 0.35;
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
+            historyWeight = maxHistoryWeight * lerp(freshHistoryScale, 1.0, historyConfidence) * validationWeight;
             historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
         }
     }

@@ -197,6 +197,16 @@ Current Gate 3E implementation:
   background and crushing the very history that should accumulate stochastic
   coverage
 
+Current Gate 3F implementation:
+
+- stochastic Grid history uses a high-retention blend policy distinct from
+  opaque surfaces
+- Grid history weight no longer scales down with current coverage or reactive
+  strength; low coverage is exactly where temporal accumulation is needed
+- opaque surfaces keep the stricter color/reactive validation path
+- debug mode `2` should now show a smoother history signal than raw scene mode
+  `1` when the Grid is stable
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.
