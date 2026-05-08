@@ -50,7 +50,8 @@ Current frame order:
    `R32G32B32A32_Float` render target.
 3. `AquariumPS` raymarches solids and terrain against that height texture.
 4. Body SDF checks read only the primitive ids binned into the current froxel.
-   Empty froxels skip body SDF work entirely.
+   Primitive bins are padded by one froxel so rays can see nearby SDFs before
+   they cross the solid bounds. Empty froxels skip body SDF work entirely.
 5. Terrain marching uses heightfield crossing and slope-aware steps instead of
    pretending `z - height(xy)` is a true Euclidean SDF. Body objects still use
    SDF distance steps.

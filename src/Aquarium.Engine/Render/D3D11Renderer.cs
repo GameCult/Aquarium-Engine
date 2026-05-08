@@ -22,6 +22,7 @@ public sealed class D3D11Renderer : IDisposable
     private const float SunRadius = 1.12f;
     private const float FroxelMinZ = -2.0f;
     private const float FroxelMaxZ = 6.0f;
+    private const int FroxelCandidatePadding = 1;
 
     private readonly IDXGISwapChain swapChain;
     private readonly ID3D11Device device;
@@ -226,8 +227,8 @@ public sealed class D3D11Renderer : IDisposable
     {
         var min = center - new Vector3(boundRadius);
         var max = center + new Vector3(boundRadius);
-        var minCell = FroxelCellForPosition(frame, min);
-        var maxCell = FroxelCellForPosition(frame, max);
+        var minCell = ExpandMinCell(FroxelCellForPosition(frame, min));
+        var maxCell = ExpandMaxCell(FroxelCellForPosition(frame, max));
 
         for (var z = minCell.Z; z <= maxCell.Z; z++)
         {
@@ -292,6 +293,22 @@ public sealed class D3D11Renderer : IDisposable
             ClampCell(localX, FroxelCountX),
             ClampCell(localY, FroxelCountY),
             ClampCell(localZ, FroxelCountZ));
+    }
+
+    private static FroxelCell ExpandMinCell(FroxelCell cell)
+    {
+        return new FroxelCell(
+            Math.Max(cell.X - FroxelCandidatePadding, 0),
+            Math.Max(cell.Y - FroxelCandidatePadding, 0),
+            Math.Max(cell.Z - FroxelCandidatePadding, 0));
+    }
+
+    private static FroxelCell ExpandMaxCell(FroxelCell cell)
+    {
+        return new FroxelCell(
+            Math.Min(cell.X + FroxelCandidatePadding, FroxelCountX - 1),
+            Math.Min(cell.Y + FroxelCandidatePadding, FroxelCountY - 1),
+            Math.Min(cell.Z + FroxelCandidatePadding, FroxelCountZ - 1));
     }
 
     private static int ClampCell(float normalized, int count)
