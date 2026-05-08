@@ -72,6 +72,12 @@ slot, and only replaces the running Aquarium after the new build succeeds. If a
 build fails, the previous good process keeps running and that same broken source
 fingerprint is not retried until files change again.
 
+Shader edits do not restart the process. The dev reload runner passes the
+source `Aquarium.hlsl` path into the live app, and the renderer polls that file,
+compiles changed shaders in the running process, then swaps the D3D shader
+objects only after compilation succeeds. A bad shader edit leaves the previous
+working shaders bound and writes the compiler failure to stderr.
+
 Runtime live state is a typed CultCache document, not a loose sidecar file. The
 first document is `epiphany.aquarium.live_state`, currently banking camera
 target, yaw, pitch, distance, time, and save generation every few frames so a

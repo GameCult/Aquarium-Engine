@@ -16,7 +16,7 @@ public static class AquariumHost
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Aquarium-Engine-Icon.ico");
         using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath);
         window.PaintSplash();
-        using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight);
+        using var renderer = new D3D11Renderer(window.Handle, window.ClientWidth, window.ClientHeight, ParseShaderPath(args));
 
         runtime.Start();
 
@@ -65,5 +65,19 @@ public static class AquariumHost
         }
 
         return Environment.GetEnvironmentVariable("AQUARIUM_CULTCACHE_PATH");
+    }
+
+    private static string? ParseShaderPath(IReadOnlyCollection<string> args)
+    {
+        var values = args.ToArray();
+        for (var index = 0; index < values.Length - 1; index++)
+        {
+            if (string.Equals(values[index], "--shader-source", StringComparison.OrdinalIgnoreCase))
+            {
+                return values[index + 1];
+            }
+        }
+
+        return Environment.GetEnvironmentVariable("AQUARIUM_SHADER_SOURCE");
     }
 }

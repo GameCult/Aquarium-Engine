@@ -4,6 +4,7 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 using CultMath;
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -12,6 +13,8 @@ namespace Aquarium.Engine.Render;
 public sealed class D3D11Renderer : IDisposable
 {
     private const string ShaderRelativePath = "Render/Shaders/Aquarium.hlsl";
+    private static readonly TimeSpan ShaderReloadPollInterval = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan ShaderReloadWriteSettleTime = TimeSpan.FromMilliseconds(150);
     private const int GridHeightTextureSize = 128;
     private const int FroxelCountX = 8;
     private const int FroxelCountY = 8;
@@ -31,20 +34,26 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11RenderTargetView gridHeightRenderTargetView;
     private readonly ID3D11ShaderResourceView gridHeightShaderResourceView;
     private readonly ID3D11SamplerState gridSampler;
-    private readonly ID3D11VertexShader vertexShader;
-    private readonly ID3D11PixelShader gridHeightPixelShader;
-    private readonly ID3D11PixelShader pixelShader;
     private readonly ID3D11Buffer frameConstantBuffer;
     private readonly ID3D11Buffer froxelPrimitiveBuffer;
     private readonly ID3D11ShaderResourceView froxelPrimitiveShaderResourceView;
     private readonly Int4[] froxelPrimitiveIds = new Int4[FroxelBufferElementCount];
     private readonly int width;
     private readonly int height;
+    private readonly string shaderPath;
+    private readonly Stopwatch shaderReloadClock = Stopwatch.StartNew();
+    private ID3D11VertexShader vertexShader;
+    private ID3D11PixelShader gridHeightPixelShader;
+    private ID3D11PixelShader pixelShader;
+    private DateTime lastShaderWriteUtc;
+    private TimeSpan lastShaderReloadCheck;
+    private bool shaderReloadFailureReported;
 
-    public D3D11Renderer(IntPtr windowHandle, int width, int height)
+    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null)
     {
         this.width = width;
         this.height = height;
+        this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
 
         var featureLevels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
         var swapChainDescription = new SwapChainDescription
@@ -78,14 +87,11 @@ public sealed class D3D11Renderer : IDisposable
         using var backBuffer = swapChain.GetBuffer<ID3D11Texture2D>(0);
         renderTargetView = device.CreateRenderTargetView(backBuffer);
 
-        var shaderPath = Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
-        var vertexShaderBytecode = CompileShader(shaderPath, "FullscreenTriangleVS", "vs_5_0");
-        var gridHeightShaderBytecode = CompileShader(shaderPath, "GridHeightPS", "ps_5_0");
-        var pixelShaderBytecode = CompileShader(shaderPath, "AquariumPS", "ps_5_0");
-
-        vertexShader = device.CreateVertexShader(vertexShaderBytecode.Span, null);
-        gridHeightPixelShader = device.CreatePixelShader(gridHeightShaderBytecode.Span, null);
-        pixelShader = device.CreatePixelShader(pixelShaderBytecode.Span, null);
+        var initialShaders = CompileShaderSet(this.shaderPath);
+        vertexShader = initialShaders.VertexShader;
+        gridHeightPixelShader = initialShaders.GridHeightPixelShader;
+        pixelShader = initialShaders.AquariumPixelShader;
+        lastShaderWriteUtc = File.GetLastWriteTimeUtc(this.shaderPath);
         gridHeightTexture = CreateGridHeightTexture();
         gridHeightRenderTargetView = device.CreateRenderTargetView(gridHeightTexture);
         gridHeightShaderResourceView = device.CreateShaderResourceView(gridHeightTexture);
@@ -121,6 +127,8 @@ public sealed class D3D11Renderer : IDisposable
 
     public void Render(AquariumFrame frame)
     {
+        TryHotReloadShaders();
+
         var constants = new FrameConstants(
             new float2(width, height),
             frame.TimeSeconds,
@@ -204,6 +212,66 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(1, froxelPrimitiveShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
+    }
+
+    private void TryHotReloadShaders()
+    {
+        var now = shaderReloadClock.Elapsed;
+        if (now - lastShaderReloadCheck < ShaderReloadPollInterval)
+        {
+            return;
+        }
+
+        lastShaderReloadCheck = now;
+        DateTime writeTimeUtc;
+        try
+        {
+            writeTimeUtc = File.GetLastWriteTimeUtc(shaderPath);
+        }
+        catch (Exception error)
+        {
+            if (!shaderReloadFailureReported)
+            {
+                Console.Error.WriteLine($"Shader hot reload cannot stat {shaderPath}: {error.Message}");
+                shaderReloadFailureReported = true;
+            }
+
+            return;
+        }
+
+        if (writeTimeUtc <= lastShaderWriteUtc || DateTime.UtcNow - writeTimeUtc < ShaderReloadWriteSettleTime)
+        {
+            return;
+        }
+
+        shaderReloadFailureReported = false;
+        try
+        {
+            var replacement = CompileShaderSet(shaderPath);
+            var oldVertexShader = vertexShader;
+            var oldGridHeightPixelShader = gridHeightPixelShader;
+            var oldPixelShader = pixelShader;
+
+            vertexShader = replacement.VertexShader;
+            gridHeightPixelShader = replacement.GridHeightPixelShader;
+            pixelShader = replacement.AquariumPixelShader;
+
+            oldPixelShader.Dispose();
+            oldGridHeightPixelShader.Dispose();
+            oldVertexShader.Dispose();
+
+            lastShaderWriteUtc = writeTimeUtc;
+            Console.WriteLine($"Shader hot reload applied: {shaderPath}");
+        }
+        catch (Exception error)
+        {
+            lastShaderWriteUtc = writeTimeUtc;
+            if (!shaderReloadFailureReported)
+            {
+                Console.Error.WriteLine($"Shader hot reload failed; keeping previous shaders. {error.Message}");
+                shaderReloadFailureReported = true;
+            }
+        }
     }
 
     private void BuildFroxelPrimitiveTable(AquariumFrame frame)
@@ -350,6 +418,18 @@ public sealed class D3D11Renderer : IDisposable
         return Compiler.CompileFromFile(path, entryPoint, profile, shaderFlags, EffectFlags.None);
     }
 
+    private ShaderSet CompileShaderSet(string path)
+    {
+        var vertexShaderBytecode = CompileShader(path, "FullscreenTriangleVS", "vs_5_0");
+        var gridHeightShaderBytecode = CompileShader(path, "GridHeightPS", "ps_5_0");
+        var pixelShaderBytecode = CompileShader(path, "AquariumPS", "ps_5_0");
+
+        return new ShaderSet(
+            device.CreateVertexShader(vertexShaderBytecode.Span, null),
+            device.CreatePixelShader(gridHeightShaderBytecode.Span, null),
+            device.CreatePixelShader(pixelShaderBytecode.Span, null));
+    }
+
     private readonly record struct FrameConstants(
         float2 Resolution,
         float TimeSeconds,
@@ -363,4 +443,9 @@ public sealed class D3D11Renderer : IDisposable
 
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct Int4(int X, int Y, int Z, int W);
+
+    private readonly record struct ShaderSet(
+        ID3D11VertexShader VertexShader,
+        ID3D11PixelShader GridHeightPixelShader,
+        ID3D11PixelShader AquariumPixelShader);
 }

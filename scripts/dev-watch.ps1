@@ -44,7 +44,7 @@ function Get-WatchedFiles {
             Where-Object {
                 $_.FullName -notmatch "\\bin\\" -and
                 $_.FullName -notmatch "\\obj\\" -and
-                $_.Extension -in @(".cs", ".csproj", ".hlsl", ".json", ".slnx")
+                $_.Extension -in @(".cs", ".csproj", ".json", ".slnx")
             }
     }
 }

@@ -16,6 +16,7 @@ $slotRoot = Join-Path $devRoot "slots"
 $statePath = Join-Path $devRoot "state.clixml"
 $buildStatePath = Join-Path $devRoot "last-build.clixml"
 $cultCachePath = Join-Path $devRoot "cultcache\aquarium-client.msgpack"
+$shaderSourcePath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
 $stdoutLogPath = Join-Path $devRoot "latest.out.log"
 $stderrLogPath = Join-Path $devRoot "latest.err.log"
 
@@ -156,7 +157,7 @@ if (-not (Test-Path $exePath)) {
     throw "Expected apphost was not produced: $exePath"
 }
 
-$arguments = @("--cache", $cultCachePath)
+$arguments = @("--cache", $cultCachePath, "--shader-source", $shaderSourcePath)
 if ($Headless) {
     $arguments += "--headless"
 }
