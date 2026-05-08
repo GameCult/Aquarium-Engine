@@ -168,6 +168,15 @@ Current Gate 3B implementation:
   not write the channel yet
 - current temporal control is written into the history set for the next frame
 
+Current Gate 3C implementation:
+
+- temporal-control history `w` stores accepted history age in frames
+- validation grows age when reprojected history survives the travel, field,
+  normal, color, coverage, and medium-opacity checks
+- history authority ramps with age, so newly accepted history can contribute but
+  does not immediately get the same weight as stable history
+- age resets to zero on validation failure
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

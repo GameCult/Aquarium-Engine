@@ -173,6 +173,8 @@ future volumetrics arrive.
 Gate 3B ping-pongs that control target as history too, so the resolver can
 compare previous/current coverage and reserved medium opacity at the reprojected
 UV.
+Gate 3C stores accepted history age in the control-history `w` channel and
+ramps history authority as that age grows.
 
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.

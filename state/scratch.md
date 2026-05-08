@@ -60,3 +60,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3B: temporal control now has its own ping-pong history. Resolve
   samples previous control at the reprojected UV and reduces history across
   coverage or reserved medium-opacity discontinuities.
+- Temporal Gate 3C: temporal-control history `w` stores accepted history age.
+  Validation grows age, failed validation resets it, and history authority ramps
+  with age instead of fully trusting fresh samples immediately.

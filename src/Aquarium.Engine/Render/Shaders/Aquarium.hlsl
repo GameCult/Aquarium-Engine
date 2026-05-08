@@ -50,6 +50,7 @@ static const int PRIMITIVE_COUNT = PLANET_COUNT + 1;
 static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
+static const float MAX_HISTORY_AGE = 32.0;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
@@ -1357,6 +1358,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentMediumOpacity = saturate(currentControl.z);
 
     float historyWeight = 0.0;
+    float historyAge = 0.0;
     float3 historyColor = currentColor;
     if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
     {
@@ -1375,6 +1377,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float3 previousNormal = previousMetadata.yzw;
             float previousCoverage = saturate(previousControl.y);
             float previousMediumOpacity = saturate(previousControl.z);
+            float previousHistoryAge = max(previousControl.w, 0.0);
             float travelDelta = abs(previousTravel - currentTravel);
             float travelTolerance = max(0.045, currentTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
@@ -1395,9 +1398,12 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float coverageWeight = currentFieldId == FIELD_ID_GRID ? smoothstep(0.02, 0.55, currentCoverage) : 1.0;
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
+            float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
+            historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
+            historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
         }
     }
 
@@ -1406,7 +1412,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     output.finalColor = float4(aces(resolved), 1.0);
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
-    output.historyControl = currentControl;
+    output.historyControl = float4(currentControl.xyz, historyAge);
     return output;
 }
 
