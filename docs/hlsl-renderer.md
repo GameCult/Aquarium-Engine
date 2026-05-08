@@ -191,6 +191,10 @@ background Grid accumulation. Grid retention is also pulled back from `0.975` to
 Gate 3H makes Grid temporal coverage line support rather than broad overlay
 alpha, so history age/weight cannot survive as smoke across low-alpha field
 tint. Grid retention is pulled back again to `0.90`.
+Gate 3I reconstructs analytic Grid overlay color in the resolve pass for Grid
+pixels. Raw scene debug mode can still show stochastic hit/miss noise; final
+resolve uses the analytic current estimate plus validated history instead of
+averaging binary coverage like a tiny broken casino.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
 number keys `0` through `4` select them directly. Mode `0` is final resolve,

@@ -228,6 +228,15 @@ Current Gate 3H implementation:
 - Grid max history weight is reduced again to `0.90` with a lower fresh-history
   scale for crisper line response
 
+Current Gate 3I implementation:
+
+- Grid resolve reconstructs the analytic Grid overlay at the current world hit
+  and uses premultiplied overlay color as the current color estimate
+- the scene pass may still use stochastic coverage, but the temporal resolver
+  no longer treats the current binary hit/miss sample as the true radiance
+- debug mode `1` can remain noisy because it shows the raw stochastic scene;
+  mode `0` should now use the analytic Grid estimate plus validated history
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

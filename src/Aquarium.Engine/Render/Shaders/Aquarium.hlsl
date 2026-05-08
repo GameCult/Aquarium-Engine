@@ -1399,6 +1399,15 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
     float currentMediumOpacity = saturate(currentControl.z);
+    bool currentIsGrid = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
+
+    if (currentIsGrid && currentTravel <= farDistance)
+    {
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 worldPosition = cameraPosition + currentRay * currentTravel;
+        float4 gridOverlay = shadeGridOverlay(worldPosition);
+        currentColor = gridOverlay.rgb * saturate(gridOverlay.a) + float3(0.001, 0.003, 0.004);
+    }
 
     float historyWeight = 0.0;
     float historyAge = 0.0;

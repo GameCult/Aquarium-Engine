@@ -85,3 +85,7 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3H: Grid temporal coverage is line support only, not broad
   overlay alpha. Current support gates Grid history so old stochastic hits do
   not survive as fine smoke across the surface.
+- Temporal Gate 3I: Grid resolve reconstructs analytic overlay color at the
+  current world hit and uses premultiplied color as the current estimate. Raw
+  scene debug mode may still be noisy; final no longer treats stochastic
+  hit/miss color as ground truth.
