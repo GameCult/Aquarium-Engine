@@ -31,3 +31,6 @@ prototype integrated along the camera ray before surface composition.
   target renderer as a waterfall machine: field contract, broad phase, explicit
   local volume pass, composition, then acceleration. Current shader cloud code is
   temporary scaffolding only.
+- Current scene correction: analytic cloud scaffold is no longer composited.
+  Bodies render as solids; the Grid traces separately and blends as a transparent
+  schematic overlay so future volumetrics can own actual scene mass.

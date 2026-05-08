@@ -1030,6 +1030,69 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
     return false;
 }
 
+bool raymarchBodies(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out int materialId, out float travel)
+{
+    float entryTravel;
+    float exitTravel;
+    float bodyHit = traceNearestBodyInterval(
+        rayOrigin,
+        rayDirection,
+        0.0,
+        entryTravel,
+        travel,
+        exitTravel,
+        materialId);
+
+    hitPosition = rayOrigin + rayDirection * travel;
+    return bodyHit > 0.5 && travel <= farDistance;
+}
+
+bool traceGridSurface(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out float travel)
+{
+    travel = 0.0;
+    float previousTravel = 0.0;
+    float previousTerrainGap = rayOrigin.z - terrainHeight(rayOrigin.xy);
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < 96; stepIndex++)
+    {
+        hitPosition = rayOrigin + rayDirection * travel;
+        float fade = terrainMask(hitPosition.xy);
+        if (fade <= 0.0001 && hitPosition.z < 4.0)
+        {
+            return false;
+        }
+
+        float terrainGap = hitPosition.z - terrainHeight(hitPosition.xy);
+        float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
+        if (fade > 0.0001 && (terrainGap <= hitEpsilon || (previousTerrainGap > 0.0 && terrainGap <= 0.0)))
+        {
+            float alpha = previousTerrainGap / max(previousTerrainGap - terrainGap, 0.0001);
+            travel = lerp(previousTravel, travel, saturate(alpha));
+            hitPosition = rayOrigin + rayDirection * travel;
+            return true;
+        }
+
+        float2 terrainSlope = terrainGradient(hitPosition.xy);
+        float terrainRate = abs(rayDirection.z - dot(terrainSlope, rayDirection.xy));
+        float terrainStep = terrainGap > 0.0
+            ? terrainGap / max(terrainRate, 0.22)
+            : 0.026;
+
+        terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
+        previousTravel = travel;
+        previousTerrainGap = terrainGap;
+
+        travel += max(terrainStep, 0.026);
+        if (travel > farDistance)
+        {
+            return false;
+        }
+    }
+
+    return false;
+}
+
 float3 shade(float3 position, float3 normal, int materialId, float3 rayDirection)
 {
     float3 toSun = SUN_POSITION - position;
@@ -1070,6 +1133,25 @@ float3 shade(float3 position, float3 normal, int materialId, float3 rayDirection
     return (baseColor * (diffuse + selfGlow) + lineColor) * mask;
 }
 
+float4 shadeGridOverlay(float3 position)
+{
+    float mask = terrainMask(position.xy);
+    float gridAmount = gridLine(position.xy);
+    float height = terrainHeight(position.xy);
+    float2 gradient = terrainGradient(position.xy);
+    float contour = terrainIsolines(height);
+    float fieldLine = terrainFieldLines(gradient);
+    float3 baseColor = gridWeatherColor(position.xy, position.z);
+    float3 gridColor = float3(0.74, 1.0, 0.84) * gridAmount;
+    float3 contourColor = float3(0.98, 1.0, 0.78) * contour;
+    float3 fieldColor = float3(0.36, 0.92, 1.0) * fieldLine;
+    float lineAlpha = saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16);
+    float fieldAlpha = saturate((0.035 + length(gradient) * 0.16) * mask);
+    float alpha = saturate((fieldAlpha + lineAlpha) * mask);
+    float3 overlayColor = baseColor * fieldAlpha * 1.4 + gridColor * 0.9 + contourColor * 0.32 + fieldColor * 0.22;
+    return float4(overlayColor, alpha);
+}
+
 float3 aces(float3 color)
 {
     const float a = 2.51;
@@ -1096,20 +1178,22 @@ float4 AquariumPS(VertexOut input) : SV_Target
     int materialId;
     float travel;
     float3 color = 0.0;
-    float maxCloudTravel = farDistance;
 
-    if (raymarch(cameraPosition, rayDirection, hitPosition, materialId, travel))
+    if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, travel))
     {
         float3 normal = surfaceNormal(hitPosition, materialId);
         color = shade(hitPosition, normal, materialId, rayDirection);
         color *= exp(-travel * 0.012);
-        maxCloudTravel = travel;
     }
 
-    float3 cloudScattering;
-    float cloudTransmittance;
-    integrateCloudFields(cameraPosition, rayDirection, maxCloudTravel, cloudScattering, cloudTransmittance);
-    color = cloudScattering + color * cloudTransmittance;
+    float3 gridHitPosition;
+    float gridTravel;
+    if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel))
+    {
+        float4 gridOverlay = shadeGridOverlay(gridHitPosition);
+        color = lerp(color, gridOverlay.rgb, gridOverlay.a);
+    }
+
     color += float3(0.001, 0.003, 0.004);
     return float4(aces(color), 1.0);
 }

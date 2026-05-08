@@ -183,15 +183,16 @@ If we cannot see why a pixel looks wrong, the renderer is already lying.
 
 ## Current Temporary Scaffold
 
-`Aquarium.hlsl` currently contains an analytic local cloud scaffold. It exists to
-keep pixels alive while the real field renderer is built, not to define the
-architecture.
+`Aquarium.hlsl` currently contains an analytic local cloud scaffold, but it is no
+longer composited into the scene. It exists as evidence and disposable machinery
+while the real field renderer is built, not to define the architecture.
 
 Rules for that scaffold:
 
 - Fix correctness bugs when they block evaluation.
 - Do not add new cloud features there.
 - Do not tune around structural failures.
+- Do not re-enable it as scene mass.
 - Replace it with the field registry, broad phase, and explicit volume pass.
 - Treat every artifact as evidence for the final machine, not as an invitation
   to add another little compromise. The compromise pile is how renderers become

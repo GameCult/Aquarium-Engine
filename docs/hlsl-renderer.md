@@ -93,26 +93,20 @@ shader pattern: height contours are derived from the Grid height field, while
 angle lines quantize the terrain gradient direction and fade out on flat
 surfaces.
 
-## SDF Cloud Prototype
+## SDF Cloud Scaffold
 
-`AquariumPS` now includes a first analytic SDF cloud-medium prototype. It defines
+`Aquarium.hlsl` still contains an analytic SDF cloud-medium scaffold. It defines
 four bounded local cloud fields in world/Grid space, including clouds below and
-around the Grid, then integrates density and single-scattering along the camera
-ray before compositing the nearest solid surface:
+around the Grid, but `AquariumPS` no longer composites those clouds into the
+scene. The scaffold is retained only as evidence and throwaway machinery while
+the waterfall field renderer is built.
 
 ```text
 color = cloud_scattering + cloud_transmittance * surface_color
 ```
 
-This is intentionally a prototype inside the fullscreen shader. It proves the
-coordinate and composition contract for local SDF clouds, but the final renderer
-should move toward the explicit field registry and volume pass described in
-`docs/sdf-field-renderer-plan.md`.
-
-Do not grow this scaffold sideways. The SDF cloud path is now a waterfall
-renderer task: field contract, broad phase, explicit volume pass, then
-composition and acceleration. Correctness fixes belong here only when needed to
-keep the scene inspectable while the real machine is built.
+That composition shape belongs to the future explicit field/volume renderer, not
+to the current fullscreen shader.
 
 Current prototype traits:
 
@@ -127,6 +121,17 @@ Current prototype traits:
 - no skybox/paraboloid assumption
 - no sparse brick storage yet
 - no debug view yet
+
+## Transparent Grid Overlay
+
+The Grid now renders as a transparent schematic overlay. `AquariumPS` traces
+bodies separately from the Grid surface, shades solid bodies first, then
+intersects the Grid height field and blends lines, isolines, field lines, and a
+thin weather tint over the scene. The Grid no longer owns the opaque terrain hit
+that stops scene composition.
+
+This keeps the current scene legible while leaving future volumetrics to provide
+the real spatial mass.
 
 ## Overlay Text
 
