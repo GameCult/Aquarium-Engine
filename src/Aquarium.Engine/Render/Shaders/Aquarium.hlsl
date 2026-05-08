@@ -275,11 +275,10 @@ float displacedSphereSdf(float3 p, float3 center, float radius, int index, bool 
     return lerp(conservativeDistance, actualDistance, blend);
 }
 
-float sceneSdf(float3 p, out int materialId)
+float bodySdf(float3 p, out int materialId)
 {
-    float terrain = p.z - terrainHeight(p.xy);
-    float distanceToScene = terrain;
-    materialId = 1;
+    float distanceToScene = 100000.0;
+    materialId = 0;
 
     float sun = displacedSphereSdf(p, SUN_POSITION, SUN_RADIUS, 17, true);
     if (sun < distanceToScene)
@@ -302,15 +301,32 @@ float sceneSdf(float3 p, out int materialId)
     return distanceToScene;
 }
 
+float sceneSdf(float3 p, out int materialId)
+{
+    float terrain = p.z - terrainHeight(p.xy);
+    float distanceToScene = terrain;
+    materialId = 1;
+
+    int bodyMaterialId;
+    float body = bodySdf(p, bodyMaterialId);
+    if (body < distanceToScene)
+    {
+        distanceToScene = body;
+        materialId = bodyMaterialId;
+    }
+
+    return distanceToScene;
+}
+
 float sceneDistance(float3 p)
 {
     int materialId;
     return sceneSdf(p, materialId);
 }
 
-float3 terrainNormal(float3 p)
+float2 terrainGradient(float2 p)
 {
-    float2 uv = saturate(gridUv(p.xy));
+    float2 uv = saturate(gridUv(p));
     float2 texel = 1.0 / GRID_HEIGHT_TEXEL_COUNT;
     float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.001);
 
@@ -319,16 +335,13 @@ float3 terrainNormal(float3 p)
     float hDown = gridHeightTexture.SampleLevel(gridSampler, uv - float2(0.0, texel.y), 0.0).r;
     float hUp = gridHeightTexture.SampleLevel(gridSampler, uv + float2(0.0, texel.y), 0.0).r;
 
-    float3 tangentX = float3(texelWorld * 2.0, 0.0, hRight - hLeft);
-    float3 tangentY = float3(0.0, texelWorld * 2.0, hUp - hDown);
-    float3 normal = normalize(cross(tangentX, tangentY));
+    return float2(hRight - hLeft, hUp - hDown) / (texelWorld * 2.0);
+}
 
-    if (normal.z < 0.0)
-    {
-        normal = -normal;
-    }
-
-    return normal;
+float3 terrainNormal(float3 p)
+{
+    float2 gradient = terrainGradient(p.xy);
+    return normalize(float3(-gradient.x, -gradient.y, 1.0));
 }
 
 void nearestBody(float3 p, out float3 center, out float radius, out int index, out bool isSelf)
@@ -398,6 +411,8 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
 {
     travel = 0.0;
     materialId = 0;
+    float previousTravel = 0.0;
+    float previousTerrainGap = rayOrigin.z - terrainHeight(rayOrigin.xy);
 
     [loop]
     for (int stepIndex = 0; stepIndex < 52; stepIndex++)
@@ -409,15 +424,37 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             return false;
         }
 
-        float distanceToScene = sceneSdf(hitPosition, materialId);
+        int bodyMaterialId;
+        float bodyDistance = bodySdf(hitPosition, bodyMaterialId);
         float hitEpsilon = max(SURFACE_EPSILON, travel * 0.00035);
-        if (distanceToScene < hitEpsilon)
+        if (bodyDistance < hitEpsilon)
         {
-            hitPosition = rayOrigin + rayDirection * travel;
+            materialId = bodyMaterialId;
             return true;
         }
 
-        travel += max(distanceToScene * 0.86, 0.026);
+        float terrainGap = hitPosition.z - terrainHeight(hitPosition.xy);
+        if (fade > 0.0001 && (terrainGap <= hitEpsilon || (previousTerrainGap > 0.0 && terrainGap <= 0.0)))
+        {
+            float alpha = previousTerrainGap / max(previousTerrainGap - terrainGap, 0.0001);
+            travel = lerp(previousTravel, travel, saturate(alpha));
+            hitPosition = rayOrigin + rayDirection * travel;
+            materialId = 1;
+            return true;
+        }
+
+        float2 terrainSlope = terrainGradient(hitPosition.xy);
+        float terrainRate = abs(rayDirection.z - dot(terrainSlope, rayDirection.xy));
+        float terrainStep = terrainGap > 0.0
+            ? terrainGap / max(terrainRate, 0.22)
+            : 0.026;
+
+        terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
+        float distanceToScene = min(bodyDistance * 0.86, terrainStep);
+        previousTravel = travel;
+        previousTerrainGap = terrainGap;
+
+        travel += max(distanceToScene, 0.026);
         if (travel > FAR_DISTANCE)
         {
             return false;
