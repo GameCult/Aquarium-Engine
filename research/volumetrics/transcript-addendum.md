@@ -10,6 +10,8 @@ transcripts. Treating them that way loses engineering context.
   `sources/transcripts/dreams-umbra-ignite-2015.en.vtt`
 - AMD GPUOpen / Lou Kramer, "Real-time Sparse Distance Fields for Games", GDC
   2023: `sources/transcripts/gpuopen-sparse-sdf-gdc2023.en.vtt`
+- Sea of Thieves / Valentine Kozin, "Tech Art and Shader Development", GDC
+  2019: `sources/transcripts/sea-of-thieves-tech-art-gdc2019.en.vtt`
 
 Readable working text extracts live under `extracted-text/`. Both cache folders
 are gitignored.
@@ -98,6 +100,67 @@ distillation:
 Aquarium lesson: sparse SDF is an update system before it is a tracing trick.
 The hard part is not sampling a distance. The hard part is knowing what changed,
 what can stay resident, how to cap work, and how to see when the structure lied.
+
+## Sea of Thieves Cloud Correction
+
+Sea of Thieves belongs in the cloud notes because it is an unusually good
+counterweight to photoreal raymarched clouds. Rare wanted cloudscapes, storms,
+and skull/ship-shaped cloud signals to feel like world objects, not distant
+painted skybox cards. The production solution was deliberately not a full
+raymarcher.
+
+The SIGGRAPH 2018 abstract and GDC 2019 transcript describe the cloud renderer:
+
+1. Render opaque polygonal cloud geometry with cheap forward/per-vertex lighting
+   approximating subsurface scattering.
+2. Write it to an off-screen buffer.
+3. Downsample to quarter resolution.
+4. Blur color and depth separately.
+5. Composite back with a camera-facing quad.
+6. Use blurred depth to reconstruct approximate world position for fogging,
+   translucency, and sky blending.
+7. Add distortion plus low/high-frequency noise to break hard geometry into
+   fluffy cloud contours.
+8. Sharpen far clouds with alpha thresholding so distant silhouettes stay
+   cartoon-readable.
+9. Pre-distribute cloud meshes over a several-mile square, move them by wind,
+   and wrap them around the player so the sky feels continuous.
+10. Synchronize the wind/offset across clients so all players see matching cloud
+   placement.
+11. Let level artists author radial high/low-pressure zones that push cloud
+   meshes away or concentrate them.
+
+The GDC transcript adds useful production detail. They tried billboards with
+normal maps and also raymarching through 3D textures for storms. The shipped path
+won because it gave strong authored geometry, cheap rendering, and readable
+gameplay silhouettes. Lighting was squeezed into very few channels: sunlight and
+skylight were encoded separately, which later made glowing skull eyes awkward.
+That is a perfect little pipeline tax: compression decisions become feature
+constraints.
+
+The transcript also describes a Houdini prototype for per-vertex cloud lighting:
+convert polygonal cloud geometry to an SDF, raymarch through that SDF in tooling,
+then bake per-vertex lobe/occlusion data so runtime does not need the heavy SDF.
+The result loses some thin-detail accuracy but preserves the broad brightness and
+subsurface feel well enough for stylized clouds.
+
+### Aquarium Lessons
+
+- Not every cloud-like thing should be volumetric raymarching. If the design
+  needs readable symbolic cloud shapes, geometry plus filtered compositing may
+  be the better machine.
+- Clouds can be diegetic signage. Sea of Thieves uses skulls, ships, storms, and
+  world-event cloud silhouettes as navigational/social signals. Aquarium field
+  events could use authored volumetric/geometry silhouettes the same way.
+- Use tool-time SDF/raymarching to bake cheap runtime terms when exact runtime
+  volume traversal is not buying enough.
+- Preserve approximate world position/depth through the cloud composite. Without
+  that, clouds cannot participate coherently in fog, sky blending, or scene
+  depth.
+- Multiplayer/shared-world clouds need a synchronized field/offset, not
+  per-client random sky decoration.
+- Channel budgets are design budgets. If we pack light terms too aggressively,
+  later features such as colored event glows will come back with a knife.
 
 ## Video Search Notes
 

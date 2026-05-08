@@ -117,6 +117,22 @@ authoring fields, simulation fields, and lighting fields separate until they
 deserve to merge. The current Grid weather color should not become the fog
 density API by accident.
 
+### Sea of Thieves: Geometry Clouds For Symbolic Skies
+
+Sea of Thieves takes the opposite useful path from photoreal cloud raymarching.
+Rare needed clouds to be art-directed world objects: storm masses, skulls, ship
+shapes, and gameplay-readable sky signs. Their system renders opaque polygonal
+cloud geometry to an off-screen buffer, blurs color/depth at reduced resolution,
+reconstructs approximate world position during composite for fog/sky blending,
+and uses distortion/noise to make solid geometry read as fluffy cloud. Cloud
+meshes are wind-offset and wrapped around the player, with the offset
+synchronized across clients.
+
+Aquarium lesson: symbolic weather and field events may want authored silhouettes
+before they want physically dense participating media. Use tool-time SDF or
+raymarching to bake cheap lighting/occlusion terms when needed, but keep runtime
+representation aligned to the visual job.
+
 ### GigaVoxels: Stream What Rays Ask For
 
 GigaVoxels is less about fog and more about large sparse volumetric worlds. Its

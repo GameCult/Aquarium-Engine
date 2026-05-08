@@ -99,6 +99,26 @@ Aquarium implication: Grid fog should not become a cloud renderer by accident.
 If field storms or volumetric beings appear later, give them their own volume
 asset path and let the shared volumetric compositor consume them.
 
+### Sea of Thieves: Author The Shape When The Shape Is The Feature
+
+Sea of Thieves is the useful stylized counterexample to the Nubis/Frostbite
+thread. Rare needed clouds that were readable world objects and event markers:
+storms, skulls, ship silhouettes, and navigational sky signals. Their technical
+art material describes a non-raymarched approach: render opaque cloud geometry to
+an off-screen buffer, quarter-res blur color/depth, reconstruct approximate world
+position during composite, distort/noise the silhouette into fluff, and wrap a
+wind-driven cloud field around the player with synchronized offsets.
+
+The key lesson is not "fake clouds." It is choosing the representation that gives
+artists and gameplay the needed control. Geometry clouds made symbolic silhouettes
+and event clouds cheap and stable. Tool-time SDF/raymarching could still be used
+to bake per-vertex lighting/occlusion lobes, keeping runtime light.
+
+Aquarium implication: if the Grid needs omen clouds, field crowns, transport
+signals, or weather glyphs, start with authored geometry/field silhouettes plus a
+cloudy composite. Save dense volume raymarching for media where interior density
+and traversal actually matter.
+
 ### GPU SDF Has Become A Sparse Brick Problem
 
 Epic's 2015 SDF occlusion work is still valuable for tracing: local object SDFs
@@ -189,6 +209,9 @@ generic knobs arranged like a confession.
    through the same final composition contract.
 7. Treat neural/learned field work as offline authoring/compression until a
    runtime path is cheap, inspectable, and deterministic enough for hot reload.
+8. For symbolic weather or event clouds, consider Sea of Thieves-style authored
+   cloud geometry filtered into fluffy composited depth before reaching for a
+   dense cloud volume.
 
 ## Rejected For Now
 

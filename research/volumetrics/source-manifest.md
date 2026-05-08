@@ -46,6 +46,8 @@ are gitignored; rerun the listed URLs if the cache is missing.
 | Real-time underwater spectral rendering page | `realtime-underwater-spectral-rendering-2024.html` | https://diglib.eg.org/items/85d7d151-2738-4f99-9378-dc41a57e2c65 | Eurographics 2024 page for domain-specific participating-media rendering. |
 | Real-time underwater spectral rendering PDF | `real-time-underwater-spectral-rendering-2024.pdf` | http://zaguan.unizar.es/record/135350/files/texto_completo.pdf?download=1 | Repository PDF mirror used after Wiley blocked automated download. |
 | Ghost of Tsushima rendering page | `tsushima-real-time-samurai-cinema-2021.html` | https://advances.realtimerendering.com/s2021/jpatry_advances2021/index.html | Cached for atmosphere/tonemapping context; not central to the current volumetric plan. |
+| Sea of Thieves technical art | `sea-of-thieves-technical-art-siggraph2018.pdf` | https://history.siggraph.org/wp-content/uploads/2022/09/2018-Talks-Ang_The-Technical-Art-of-Sea-of-Thieves.pdf | SIGGRAPH 2018 technical art abstract; includes cloudscape rendering summary. |
+| Sea of Thieves GDC transcript | `transcripts/sea-of-thieves-tech-art-gdc2019.en.vtt` | https://www.youtube.com/watch?v=KxnFr5ugAHs | Cached with `python -m yt_dlp`; readable extract in `extracted-text/sea-of-thieves-tech-art-gdc2019-transcript.txt`. |
 
 ## Not Fully Cached
 
