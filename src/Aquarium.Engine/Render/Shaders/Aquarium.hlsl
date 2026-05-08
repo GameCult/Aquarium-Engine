@@ -14,6 +14,9 @@ static const float FAR_DISTANCE = 90.0;
 static const float SURFACE_EPSILON = 0.0015;
 static const float3 SUN_POSITION = float3(0.0, 0.0, 2.2);
 static const float SUN_RADIUS = 1.12;
+static const float GRID_WEATHER_WORLD_SCALE = 42.0;
+static const float GRID_LINE_WORLD_CELL = 2.0;
+static const int PLANET_COUNT = 5;
 
 struct VertexOut
 {
@@ -68,22 +71,112 @@ float fbm(float2 p)
     return sum;
 }
 
-float terrainHeight(float2 p)
+float hash31(float3 p)
 {
-    float2 warp = float2(
-        fbm(p * 0.055 + float2(0.0, timeSeconds * 0.035)),
-        fbm(p * 0.052 + float2(19.4, -timeSeconds * 0.025))) - 0.5;
-
-    float low = fbm(p * 0.075 + warp * 2.5);
-    float ridges = abs(fbm(p * 0.18 + warp * 4.5) - 0.5);
-    float center = exp(-dot(p, p) * 0.006);
-
-    return (low - 0.42) * 1.8 + ridges * 0.55 - center * 1.1;
+    p = frac(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return frac((p.x + p.y) * p.z) * 2.0 - 1.0;
 }
 
-float sphereSdf(float3 p, float3 center, float radius)
+float noised3(float3 x)
 {
-    return length(p - center) - radius;
+    float3 p = floor(x);
+    float3 w = frac(x);
+    float3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
+
+    float a = hash31(p + float3(0.0, 0.0, 0.0));
+    float b = hash31(p + float3(1.0, 0.0, 0.0));
+    float c = hash31(p + float3(0.0, 1.0, 0.0));
+    float d = hash31(p + float3(1.0, 1.0, 0.0));
+    float e = hash31(p + float3(0.0, 0.0, 1.0));
+    float f = hash31(p + float3(1.0, 0.0, 1.0));
+    float g = hash31(p + float3(0.0, 1.0, 1.0));
+    float h = hash31(p + float3(1.0, 1.0, 1.0));
+
+    float k0 = a;
+    float k1 = b - a;
+    float k2 = c - a;
+    float k3 = e - a;
+    float k4 = a - b - c + d;
+    float k5 = a - c - e + g;
+    float k6 = a - b - e + f;
+    float k7 = -a + b + c - d + e - f - g + h;
+
+    return k0
+        + k1 * u.x
+        + k2 * u.y
+        + k3 * u.z
+        + k4 * u.x * u.y
+        + k5 * u.y * u.z
+        + k6 * u.z * u.x
+        + k7 * u.x * u.y * u.z;
+}
+
+float fbm3(float3 p)
+{
+    float value = 0.0;
+    float amplitude = 0.5;
+
+    [unroll]
+    for (int i = 0; i < 3; i++)
+    {
+        value += noised3(p) * amplitude;
+        p = p.yzx * 2.03 + float3(3.7, 1.9, 5.1);
+        amplitude *= 0.52;
+    }
+
+    return clamp(value, -1.0, 1.0);
+}
+
+float ridge(float value)
+{
+    return 1.0 - abs(value * 2.0 - 1.0);
+}
+
+float powerPulse(float distanceValue, float radius, float power)
+{
+    float normalized = saturate(distanceValue / max(radius, 0.001));
+    float shaped = pow(1.0 - normalized, power);
+    return shaped * shaped * (3.0 - 2.0 * shaped);
+}
+
+float2 gridLocal(float2 p)
+{
+    return (p - gridCenter) / max(gridRadius, 0.001);
+}
+
+float terrainMask(float2 p)
+{
+    float r = length(gridLocal(p));
+    return 1.0 - smoothstep(0.78, 1.0, r);
+}
+
+float3 gridWeatherColor(float2 p, float height)
+{
+    float radius = length(gridLocal(p));
+    float edge = terrainMask(p);
+    float2 worldDomain = p / GRID_WEATHER_WORLD_SCALE;
+    float2 lowWarp = float2(
+        fbm(worldDomain * 1.35 + float2(0.0, height * 0.10 + timeSeconds * 0.018)),
+        fbm(worldDomain.yx * 1.17 + float2(4.7, -2.3 + height * 0.08 - timeSeconds * 0.014))) - 0.5;
+    float2 drift = float2(0.018, -0.011) * timeSeconds;
+    float2 warped = worldDomain + lowWarp * 0.36 + drift;
+    float sheet = pow(saturate(fbm(warped * 2.65 + height * 0.12) * 0.85), 1.25);
+    float2 fineWarp = float2(
+        fbm(warped * 4.8 + float2(1.9, 7.1 + timeSeconds * 0.041)),
+        fbm(warped.yx * 4.2 + float2(-3.4, 5.6 - timeSeconds * 0.036))) - 0.5;
+    float filamentNoise = fbm((warped + fineWarp * 0.075) * 9.5 + height * 0.24);
+    float filament = pow(saturate(ridge(filamentNoise)), 3.4);
+    float horizonDark = smoothstep(0.52, 1.02, radius);
+
+    float3 deep = float3(0.006, 0.026, 0.045);
+    float3 blue = float3(0.025, 0.20, 0.34);
+    float3 teal = float3(0.09, 0.68, 0.62);
+    float3 green = float3(0.55, 0.92, 0.36);
+    float3 color = lerp(deep, lerp(blue, teal, sheet), edge);
+    color += green * filament * edge * 0.18;
+    color *= lerp(1.0, 0.22, horizonDark);
+    return color;
 }
 
 float planetRadius(int index)
@@ -100,13 +193,71 @@ float3 planetCenter(int index)
     return float3(xy, 1.15 + planetRadius(index) * 0.72);
 }
 
+float terrainHeight(float2 p)
+{
+    float positive = 0.0;
+    float negative = 0.0;
+
+    float selfWell = powerPulse(length(p - SUN_POSITION.xy), 8.5, 2.85);
+    float selfWave = sin(length(p - SUN_POSITION.xy) * 1.2 - timeSeconds * 0.74);
+    float selfHeight = -selfWell * 1.34 + selfWave * selfWell * 0.055;
+    positive += max(selfHeight, 0.0);
+    negative += max(-selfHeight, 0.0);
+
+    [unroll]
+    for (int i = 0; i < PLANET_COUNT; i++)
+    {
+        float2 delta = p - planetCenter(i).xy;
+        float well = powerPulse(length(delta), 3.8 + planetRadius(i) * 2.5, 2.1);
+        float wave = sin(length(delta) * 2.4 - timeSeconds * 1.35);
+        float signedHeight = -well * 0.42 + wave * well * 0.022;
+        positive += max(signedHeight, 0.0);
+        negative += max(-signedHeight, 0.0);
+    }
+
+    float slow = sin((p.x * 0.08 + p.y * 0.06) + timeSeconds * 0.27)
+        * sin((p.x * -0.04 + p.y * 0.07) - timeSeconds * 0.19) * 0.035;
+    positive += max(slow, 0.0);
+    negative += max(-slow, 0.0);
+    return positive - negative;
+}
+
+float sphereSdf(float3 p, float3 center, float radius)
+{
+    return length(p - center) - radius;
+}
+
+float planetDisplacement(float3 localPosition, float radius, int index, bool isSelf)
+{
+    float3 domain = localPosition / max(radius, 0.001);
+    float seed = hash21(float2(index, 41.17)) * 19.0;
+    float broad = fbm3(domain * 1.55 + seed + timeSeconds * (isSelf ? 0.12 : 0.0));
+    float fine = fbm3(domain * 5.2 + seed * 1.73 + timeSeconds * (isSelf ? -0.18 : 0.0));
+    float ridged = pow(saturate(ridge(fine * 0.5 + 0.5)), isSelf ? 1.6 : 2.8);
+    float amplitude = isSelf ? 0.20 : 0.105;
+    return (broad * 0.62 + ridged * 0.38) * radius * amplitude;
+}
+
+float displacedSphereSdf(float3 p, float3 center, float radius, int index, bool isSelf)
+{
+    float3 local = p - center;
+    float baseDistance = length(local) - radius;
+    float farPadding = radius * (isSelf ? 0.24 : 0.14);
+    if (baseDistance > farPadding)
+    {
+        return baseDistance - farPadding;
+    }
+
+    return baseDistance - planetDisplacement(local, radius, index, isSelf);
+}
+
 float sceneSdf(float3 p, out int materialId)
 {
     float terrain = p.z - terrainHeight(p.xy);
     float distanceToScene = terrain;
     materialId = 1;
 
-    float sun = sphereSdf(p, SUN_POSITION, SUN_RADIUS);
+    float sun = displacedSphereSdf(p, SUN_POSITION, SUN_RADIUS, 17, true);
     if (sun < distanceToScene)
     {
         distanceToScene = sun;
@@ -114,9 +265,9 @@ float sceneSdf(float3 p, out int materialId)
     }
 
     [unroll]
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < PLANET_COUNT; i++)
     {
-        float planet = sphereSdf(p, planetCenter(i), planetRadius(i));
+        float planet = displacedSphereSdf(p, planetCenter(i), planetRadius(i), i, false);
         if (planet < distanceToScene)
         {
             distanceToScene = planet;
@@ -133,27 +284,51 @@ float sceneDistance(float3 p)
     return sceneSdf(p, materialId);
 }
 
-float3 sceneNormal(float3 p)
+float3 terrainNormal(float3 p)
 {
-    float2 e = float2(0.0025, 0.0);
-    return normalize(float3(
-        sceneDistance(p + e.xyy) - sceneDistance(p - e.xyy),
-        sceneDistance(p + e.yxy) - sceneDistance(p - e.yxy),
-        sceneDistance(p + e.yyx) - sceneDistance(p - e.yyx)));
+    float2 e = float2(0.035, 0.0);
+    float h0 = terrainHeight(p.xy - e.xy);
+    float h1 = terrainHeight(p.xy + e.xy);
+    float h2 = terrainHeight(p.xy - e.yx);
+    float h3 = terrainHeight(p.xy + e.yx);
+    return normalize(float3(h0 - h1, h2 - h3, e.x * 2.0));
+}
+
+float3 planetNormal(float3 p)
+{
+    float bestDistance = abs(length(p - SUN_POSITION) - SUN_RADIUS);
+    float3 bestCenter = SUN_POSITION;
+
+    [unroll]
+    for (int i = 0; i < PLANET_COUNT; i++)
+    {
+        float3 center = planetCenter(i);
+        float distanceToBody = abs(length(p - center) - planetRadius(i));
+        if (distanceToBody < bestDistance)
+        {
+            bestDistance = distanceToBody;
+            bestCenter = center;
+        }
+    }
+
+    return normalize(p - bestCenter);
+}
+
+float3 surfaceNormal(float3 p, int materialId)
+{
+    if (materialId == 1)
+    {
+        return terrainNormal(p);
+    }
+
+    return planetNormal(p);
 }
 
 float gridLine(float2 p)
 {
-    float2 cell = abs(frac(p) - 0.5);
+    float2 cell = abs(frac(p / GRID_LINE_WORLD_CELL) - 0.5);
     float lineDistance = min(cell.x, cell.y);
-    float width = 0.018;
-    return 1.0 - smoothstep(width, width + 0.01, lineDistance);
-}
-
-float terrainMask(float2 p)
-{
-    float r = length(p - gridCenter) / gridRadius;
-    return 1.0 - smoothstep(0.78, 1.0, r);
+    return (1.0 - smoothstep(0.018, 0.042, lineDistance * GRID_LINE_WORLD_CELL)) * terrainMask(p);
 }
 
 bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out int materialId, out float travel)
@@ -162,7 +337,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
     materialId = 0;
 
     [loop]
-    for (int stepIndex = 0; stepIndex < 96; stepIndex++)
+    for (int stepIndex = 0; stepIndex < 52; stepIndex++)
     {
         hitPosition = rayOrigin + rayDirection * travel;
         float fade = terrainMask(hitPosition.xy);
@@ -177,7 +352,7 @@ bool raymarch(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out
             return true;
         }
 
-        travel += max(distanceToScene * 0.72, 0.018);
+        travel += max(distanceToScene * 0.86, 0.026);
         if (travel > FAR_DISTANCE)
         {
             return false;
@@ -213,8 +388,7 @@ float3 shade(float3 position, float3 normal, int materialId, float3 rayDirection
     float mask = terrainMask(position.xy);
     float gridAmount = gridLine(position.xy);
     float contour = 1.0 - smoothstep(0.015, 0.04, abs(frac(terrainHeight(position.xy) * 1.2) - 0.5));
-    float flow = fbm(position.xy * 0.23 + timeSeconds * 0.035);
-    float3 baseColor = lerp(float3(0.02, 0.19, 0.14), float3(0.05, 0.62, 0.52), flow);
+    float3 baseColor = gridWeatherColor(position.xy, position.z);
     float3 lineColor = float3(0.8, 1.0, 0.82) * (gridAmount * 0.85 + contour * 0.16);
     float diffuse = nDotL * attenuation * 0.85;
     float selfGlow = exp(-distance(position, SUN_POSITION) * 0.34) * 0.34;
@@ -251,7 +425,7 @@ float4 AquariumPS(VertexOut input) : SV_Target
 
     if (raymarch(cameraPosition, rayDirection, hitPosition, materialId, travel))
     {
-        float3 normal = sceneNormal(hitPosition);
+        float3 normal = surfaceNormal(hitPosition, materialId);
         color = shade(hitPosition, normal, materialId, rayDirection);
         color *= exp(-travel * 0.012);
     }
