@@ -178,6 +178,9 @@ ramps history authority as that age grows.
 Gate 3D fixes travel validation to compare previous history travel against the
 reprojected point's expected distance from the previous camera, not the current
 frame's camera-to-hit travel.
+Gate 3E gives stochastic Grid history its own validation path: it bypasses
+opaque-surface neighborhood color clamp/color-delta rejection while still using
+field, travel, normal, coverage, reactive, and age checks.
 
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.

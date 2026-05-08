@@ -187,6 +187,16 @@ Current Gate 3D implementation:
   travel, because camera motion changes the ray distance even when the world hit
   is stable
 
+Current Gate 3E implementation:
+
+- stochastic Grid history bypasses opaque-surface neighborhood color clamping
+  and current-frame color-delta rejection
+- Grid validation still uses field id, travel, normal, coverage continuity,
+  reactive weight, and history age
+- this prevents a current dither miss from declaring the true neighborhood to be
+  background and crushing the very history that should accumulate stochastic
+  coverage
+
 This is intentionally still a surface/stochastic coverage contract. It prepares
 the resolver for volumetrics without lying that a single hit depth describes a
 whole participating medium.

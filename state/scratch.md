@@ -66,3 +66,6 @@ prototype integrated along the camera ray before surface composition.
 - Temporal Gate 3D: travel validation compares previous history travel against
   the reprojected point's expected distance from the previous camera. Do not
   compare previous travel directly to current travel under camera motion.
+- Temporal Gate 3E: stochastic Grid history bypasses opaque-surface color clamp
+  and color-delta rejection. A current dither miss is not evidence that the
+  true Grid color is background.

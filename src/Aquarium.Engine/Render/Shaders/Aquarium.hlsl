@@ -1383,6 +1383,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float travelTolerance = max(0.045, expectedPreviousTravel * 0.018);
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
             float fieldWeight = abs(previousFieldId - currentFieldId) < 0.25 ? 1.0 : 0.0;
+            bool isGridField = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
             float normalWeight = 0.0;
             if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
             {
@@ -1392,11 +1393,11 @@ ResolveOut AquariumResolvePS(VertexOut input)
             float3 neighborhoodMin;
             float3 neighborhoodMax;
             currentNeighborhood(input.uv, neighborhoodMin, neighborhoodMax);
-            float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
+            float3 clampedHistory = isGridField ? previous.rgb : clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
             float colorDelta = length(clampedHistory - currentColor);
-            float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
+            float colorWeight = isGridField ? 1.0 : 1.0 - smoothstep(0.18, 1.2, colorDelta);
             float reactiveWeight = 1.0 - currentReactive;
-            float coverageWeight = currentFieldId == FIELD_ID_GRID ? smoothstep(0.02, 0.55, currentCoverage) : 1.0;
+            float coverageWeight = isGridField ? smoothstep(0.02, 0.55, currentCoverage) : 1.0;
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
