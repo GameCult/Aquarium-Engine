@@ -81,7 +81,7 @@ static const float GRID_LINE_PIXEL_FADE = 0.95;
 static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
-static const float GRID_ALPHA_SCALE = 0.24;
+static const float GRID_ALPHA_SCALE = 0.56;
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
@@ -319,9 +319,9 @@ float3 gridEventColor(float3 p, out float alpha)
     float contour = isolineMask(height);
     float fieldLine = fieldLineMask(gradient);
     float support = saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16);
-    float3 color = GRID_COLOR * gridAmount * 0.90;
-    color += float3(0.98, 1.0, 0.78) * contour * 0.16;
-    color += float3(0.36, 0.92, 1.0) * fieldLine * 0.12;
+    float3 color = GRID_COLOR * gridAmount * 1.05;
+    color += float3(0.98, 1.0, 0.78) * contour * 0.34;
+    color += float3(0.36, 0.92, 1.0) * fieldLine * 0.22;
     alpha = saturate(support * GRID_ALPHA_SCALE);
     return color;
 }
