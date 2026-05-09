@@ -201,3 +201,8 @@ prototype integrated along the camera ray before surface composition.
   The medium pass writes per-froxel density/transmittance/in-scattering, resolve
   integrates the froxel transport for final composite, and direct ray debug
   remains the reference for checking shape and continuity.
+- Grid/fog composition correction: Grid travel is still written for temporal
+  stability, but the Grid is not a solid medium terminator. Froxel composition
+  stops at Self/planet solids only; Grid pixels integrate medium to the visible
+  far distance so the schematic overlay cannot cut holes through fog or occlude
+  itself.

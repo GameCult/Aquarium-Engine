@@ -1822,7 +1822,8 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float3 froxelMediumInScattering = 0.0;
     if (mediumBlend > 0.0001)
     {
-        float mediumTravel = currentTravel <= farDistance ? currentTravel : farDistance;
+        bool solidMediumTerminator = currentTravel <= farDistance && currentFieldId > 0.5 && !currentIsGrid;
+        float mediumTravel = solidMediumTerminator ? currentTravel : farDistance;
         integrateMediumFroxelAtlas(input.uv, mediumTravel, froxelMediumDensity, froxelMediumTransmittance, froxelMediumInScattering);
     }
 
