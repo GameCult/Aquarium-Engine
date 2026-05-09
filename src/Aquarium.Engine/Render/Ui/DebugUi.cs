@@ -26,7 +26,9 @@ internal sealed class DebugUi
 
     private readonly List<DebugUiControl> controls = [];
     private int? activeSliderId;
+    private int? activeControlId;
     private bool closeButtonHovered;
+    private bool closeButtonActive;
     private Rect panelBounds;
     private Vector2 mousePosition;
 
@@ -66,20 +68,24 @@ internal sealed class DebugUi
         mousePosition = input.MousePosition;
         WantsMouse = Contains(panelBounds, mousePosition);
         closeButtonHovered = Contains(CloseButtonBounds(), mousePosition);
+        closeButtonActive = closeButtonHovered && input.LeftMouseDown;
         foreach (var control in controls)
         {
             control.IsHovered = control.IsInteractive && control.HitTest(mousePosition);
+            control.IsActive = control.Id == activeControlId && input.LeftMouseDown;
         }
 
         if (!input.LeftMouseDown)
         {
             activeSliderId = null;
+            activeControlId = null;
         }
 
         if (activeSliderId is { } sliderId)
         {
             if (controls.FirstOrDefault(control => control.Id == sliderId) is SliderControl activeSlider)
             {
+                activeSlider.IsActive = true;
                 activeSlider.Drag(mousePosition);
             }
 
@@ -106,6 +112,7 @@ internal sealed class DebugUi
             }
 
             control.Click(mousePosition);
+            activeControlId = control.Id;
             if (control is SliderControl slider)
             {
                 activeSliderId = slider.Id;
@@ -123,6 +130,7 @@ internal sealed class DebugUi
         ID2D1SolidColorBrush panelBrush,
         ID2D1SolidColorBrush rowBrush,
         ID2D1SolidColorBrush hoverRowBrush,
+        ID2D1SolidColorBrush activeRowBrush,
         ID2D1SolidColorBrush outlineBrush,
         ID2D1SolidColorBrush primaryBrush,
         ID2D1SolidColorBrush quietBrush,
@@ -156,19 +164,24 @@ internal sealed class DebugUi
         var close = CloseButtonBounds();
         if (closeButtonHovered)
         {
-            target.FillRectangle(close, hoverRowBrush);
+            target.FillRectangle(close, closeButtonActive ? activeRowBrush : hoverRowBrush);
         }
 
-        target.DrawText(
-            "x",
-            titleFormat,
-            close,
-            closeButtonHovered ? accentBrush : quietBrush,
-            DrawTextOptions.Clip);
+        var closeBrush = closeButtonHovered ? accentBrush : quietBrush;
+        target.DrawLine(
+            new Vector2(close.Left + 6.0f, close.Top + 6.0f),
+            new Vector2(close.Right - 6.0f, close.Bottom - 6.0f),
+            closeBrush,
+            closeButtonActive ? 2.0f : 1.25f);
+        target.DrawLine(
+            new Vector2(close.Right - 6.0f, close.Top + 6.0f),
+            new Vector2(close.Left + 6.0f, close.Bottom - 6.0f),
+            closeBrush,
+            closeButtonActive ? 2.0f : 1.25f);
 
         foreach (var control in controls)
         {
-            control.Draw(target, smallFormat, rowBrush, hoverRowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush, dimAccentBrush);
+            control.Draw(target, smallFormat, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush, dimAccentBrush);
         }
 
         DrawTooltip(target, smallFormat, panelBrush, outlineBrush, primaryBrush, accentBrush, viewportWidth, viewportHeight);
@@ -308,6 +321,8 @@ internal sealed class DebugUi
 
         public bool IsHovered { get; set; }
 
+        public bool IsActive { get; set; }
+
         public virtual bool IsInteractive => true;
 
         public virtual bool HitTest(Vector2 mouse) => Contains(Bounds, mouse);
@@ -321,6 +336,7 @@ internal sealed class DebugUi
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
@@ -331,9 +347,10 @@ internal sealed class DebugUi
             ID2D1RenderTarget target,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
             ID2D1SolidColorBrush outlineBrush)
         {
-            target.FillRectangle(Bounds, IsHovered ? hoverRowBrush : rowBrush);
+            target.FillRectangle(Bounds, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
             target.DrawLine(
                 new Vector2(Bounds.Left, Bounds.Bottom),
                 new Vector2(Bounds.Right, Bounds.Bottom),
@@ -363,6 +380,7 @@ internal sealed class DebugUi
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
@@ -387,13 +405,14 @@ internal sealed class DebugUi
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush)
         {
-            DrawRow(target, rowBrush, hoverRowBrush, outlineBrush);
+            DrawRow(target, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush);
             target.DrawText(Label, format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
             target.DrawText("apply", format, ValueBounds(), primaryBrush, DrawTextOptions.Clip);
         }
@@ -408,13 +427,14 @@ internal sealed class DebugUi
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush)
         {
-            DrawRow(target, rowBrush, hoverRowBrush, outlineBrush);
+            DrawRow(target, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush);
             target.DrawText(Label.ToUpperInvariant(), format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
 
             var box = RectFromEdges(Bounds.Right - 28.0f, Bounds.Top + 8.0f, Bounds.Right - 13.0f, Bounds.Bottom - 8.0f);
@@ -431,7 +451,7 @@ internal sealed class DebugUi
     {
         public override bool HitTest(Vector2 mouse)
         {
-            return Contains(Bounds, mouse);
+            return Contains(SliderInteractionBounds(), mouse);
         }
 
         public void Drag(Vector2 mouse)
@@ -457,23 +477,25 @@ internal sealed class DebugUi
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush)
         {
-            DrawRow(target, rowBrush, hoverRowBrush, outlineBrush);
+            DrawRow(target, rowBrush, rowBrush, rowBrush, outlineBrush);
             target.DrawText(Label.ToUpperInvariant(), format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
             target.DrawText(ReadDisplay(), format, ValueBounds(), primaryBrush, DrawTextOptions.Clip);
 
             var track = TrackBounds();
             var t = ReadNormalized();
             var fill = RectFromEdges(track.Left, track.Top, track.Left + (track.Right - track.Left) * t, track.Bottom);
-            target.FillRectangle(track, dimAccentBrush);
+            target.FillRectangle(track, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : dimAccentBrush);
             target.FillRectangle(fill, accentBrush);
             var thumbX = fill.Right;
-            target.FillRectangle(RectFromEdges(thumbX - 4.0f, track.Top - 4.0f, thumbX + 4.0f, track.Bottom + 4.0f), accentBrush);
+            var thumbRadius = IsActive ? 5.5f : IsHovered ? 5.0f : 4.0f;
+            target.FillRectangle(RectFromEdges(thumbX - thumbRadius, track.Top - thumbRadius, thumbX + thumbRadius, track.Bottom + thumbRadius), accentBrush);
         }
 
         private Rect TrackBounds()
@@ -482,6 +504,12 @@ internal sealed class DebugUi
             var left = right - TrackWidth;
             var centerY = (Bounds.Top + Bounds.Bottom) * 0.5f;
             return RectFromEdges(left, centerY - TrackHeight * 0.5f, right, centerY + TrackHeight * 0.5f);
+        }
+
+        private Rect SliderInteractionBounds()
+        {
+            var track = TrackBounds();
+            return RectFromEdges(track.Left - 8.0f, Bounds.Top, track.Right + 8.0f, Bounds.Bottom);
         }
     }
 

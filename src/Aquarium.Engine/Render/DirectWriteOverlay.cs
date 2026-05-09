@@ -21,6 +21,7 @@ internal sealed class DirectWriteOverlay : IDisposable
     private readonly ID2D1SolidColorBrush panelBrush;
     private readonly ID2D1SolidColorBrush rowBrush;
     private readonly ID2D1SolidColorBrush hoverRowBrush;
+    private readonly ID2D1SolidColorBrush activeRowBrush;
     private readonly ID2D1SolidColorBrush outlineBrush;
     private readonly ID2D1SolidColorBrush accentBrush;
     private readonly ID2D1SolidColorBrush dimAccentBrush;
@@ -65,6 +66,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         panelBrush = renderTarget.CreateSolidColorBrush(new Color4(0.018f, 0.022f, 0.032f, 0.96f));
         rowBrush = renderTarget.CreateSolidColorBrush(new Color4(0.085f, 0.084f, 0.12f, 0.96f));
         hoverRowBrush = renderTarget.CreateSolidColorBrush(new Color4(0.13f, 0.13f, 0.18f, 0.98f));
+        activeRowBrush = renderTarget.CreateSolidColorBrush(new Color4(0.19f, 0.18f, 0.24f, 0.99f));
         outlineBrush = renderTarget.CreateSolidColorBrush(new Color4(0.28f, 0.34f, 0.36f, 0.72f));
         accentBrush = renderTarget.CreateSolidColorBrush(new Color4(1.0f, 0.38f, 0.055f, 0.96f));
         dimAccentBrush = renderTarget.CreateSolidColorBrush(new Color4(0.20f, 0.20f, 0.22f, 0.95f));
@@ -108,6 +110,7 @@ internal sealed class DirectWriteOverlay : IDisposable
             panelBrush,
             rowBrush,
             hoverRowBrush,
+            activeRowBrush,
             outlineBrush,
             primaryTextBrush,
             quietTextBrush,
@@ -127,6 +130,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         dimAccentBrush.Dispose();
         accentBrush.Dispose();
         outlineBrush.Dispose();
+        activeRowBrush.Dispose();
         hoverRowBrush.Dispose();
         rowBrush.Dispose();
         panelBrush.Dispose();
