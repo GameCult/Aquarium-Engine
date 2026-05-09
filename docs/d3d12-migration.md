@@ -10,8 +10,8 @@ has feature parity.
 - `--renderer d3d12` creates a D3D12 device, command queue, flip-discard
   swapchain, RTV heap, per-backbuffer command allocators, command list,
   fence-backed present loop, shader-visible CBV/SRV/UAV descriptor arena,
-  per-frame upload buffers, renderer-owned offscreen render target, fullscreen
-  root signature, diagnostic UAV target, and smoke-test PSO.
+  per-frame upload buffers, renderer-owned Grid height target, offscreen smoke
+  target, fullscreen root signature, diagnostic UAV target, and smoke-test PSO.
 - The D3D12 path currently draws a diagnostic fullscreen pass. It exists to
   prove backend lifecycle, shader compilation, root signature creation,
   descriptor-table binding, per-frame upload-ring constants, PSO creation,
@@ -19,6 +19,10 @@ has feature parity.
   render-target-to-swapchain copy, UAV binding from a transient descriptor,
   named objects, command-list events, and draw submission before real scene
   passes migrate.
+- The first real migrated pass is the Grid height pass. D3D12 compiles
+  `GridHeightPS` from `Aquarium.hlsl`, uploads the Aquarium frame constants,
+  renders a 128x128 `R32G32B32A32_Float` Grid height target, and can display it
+  through render debug mode `11`.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a
@@ -32,8 +36,7 @@ has feature parity.
 
 1. Keep D3D11 as the visual reference.
 2. Move shared renderer contracts behind explicit backend-neutral types.
-3. Port the first real read-only pass after preserving D3D11 as the reference
-   output.
+3. Port the Grid height pass after preserving D3D11 as the reference output.
 4. Keep capacity diagnostics loud while the backend is still small enough to
    make mistakes obvious.
 5. Port the existing passes in visible order: grid height, froxel volume, scene,

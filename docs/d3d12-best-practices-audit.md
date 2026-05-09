@@ -5,8 +5,8 @@
 The current D3D12 path is acceptable as a bring-up scaffold. It proves the right
 classes of machinery: per-frame command allocators, fence-protected reuse,
 shader-visible descriptors, persistent mapped constants, explicit render target
-state, an offscreen target path, SRV sampling, UAV binding, and resize-safe
-descriptor arena rebuild.
+state, a migrated Grid height pass, an offscreen target path, SRV sampling, UAV
+binding, and resize-safe descriptor arena rebuild.
 
 It is not yet a production renderer architecture. The next risk is porting real
 passes without keeping D3D11 as the comparison target and without promoting the
@@ -31,6 +31,9 @@ resource graph beyond smoke-pass scaffolding.
   transient descriptor, static descriptor, and RTV usage.
 - Render targets may create SRVs, and the smoke path now samples its offscreen
   target in a second fullscreen pass instead of copying it as an opaque resource.
+- D3D12 compiles the real `GridHeightPS` from `Aquarium.hlsl`, uploads the
+  Aquarium frame constants, renders a fixed 128x128 float Grid height target,
+  and exposes that target through render debug mode `11`.
 - Renderer calls receive current window dimensions, and the D3D12 backend can
   recreate swapchain buffers plus dependent smoke resources on resize.
 - Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds
@@ -55,8 +58,6 @@ resource graph beyond smoke-pass scaffolding.
   free lists only when non-resize churn proves it needs them.
 - Upload ring is per-frame and reset after fence wait. It is not yet a global
   transient allocator with suballocation statistics or overflow diagnostics.
-- Backbuffer state is assumed. Wrap swapchain buffers in state-tracked frame
-  resources before resize and multi-pass presentation.
 - The offscreen smoke target copies to the swapchain. Keep this only if the real
   post-process graph needs it; otherwise present from the final render target
   path with no ornamental copy.
@@ -65,8 +66,8 @@ resource graph beyond smoke-pass scaffolding.
 
 - Upload ring capacity policy and overflow reporting for real frame data.
 - Descriptor-owner diagnostics beyond heap-level capacity summaries.
-- A real pass migration that uses the D3D12 resource helpers without cloning
-  smoke-pass-local policy.
+- Continue pass migration without cloning smoke-pass-local policy into each
+  resource.
 
 ## Rule
 

@@ -75,6 +75,13 @@ Current frame order:
    tonemapping, and raymarching unless a specific diegetic surface asks for the
    trouble.
 
+The D3D12 backend has begun migrating this order with the same Grid height pass:
+it compiles `GridHeightPS` from `Aquarium.hlsl`, uploads the Aquarium frame
+constant buffer through the D3D12 upload ring, renders a 128x128
+`R32G32B32A32_Float` Grid height target, and can display that target with D3D12
+render debug mode `11`. D3D11 remains the visual reference until the full pass
+chain reaches parity.
+
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches
 the circular Grid fade boundary and avoids wasting raymarch work past the

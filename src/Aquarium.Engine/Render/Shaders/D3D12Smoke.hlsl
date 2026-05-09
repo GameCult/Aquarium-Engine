@@ -36,3 +36,13 @@ float4 D3D12CopyPS(VertexOut input) : SV_Target0
 {
     return sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0);
 }
+
+float4 D3D12GridHeightDebugPS(VertexOut input) : SV_Target0
+{
+    float height = sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0).r;
+    float signedShape = saturate(abs(height) * 0.85);
+    float3 negative = float3(0.08, 0.34, 0.52);
+    float3 positive = float3(0.95, 0.62, 0.22);
+    float3 baseColor = height < 0.0 ? negative : positive;
+    return float4(baseColor * signedShape, 1.0);
+}
