@@ -9,16 +9,10 @@ has feature parity.
 - `--renderer d3d11` is the default renderer and owns the live scene.
 - `--renderer d3d12` creates a D3D12 device, command queue, flip-discard
   swapchain, RTV heap, per-backbuffer command allocators, command list,
-  fence-backed present loop, shader-visible CBV/SRV/UAV descriptor arena,
-  per-frame upload buffers, renderer-owned Grid height target, offscreen smoke
-  target, fullscreen root signature, diagnostic UAV target, and smoke-test PSO.
-- The D3D12 path currently draws a diagnostic fullscreen pass. It exists to
-  prove backend lifecycle, shader compilation, root signature creation,
-  descriptor-table binding, per-frame upload-ring constants, PSO creation,
-  render target binding, tracked resource state transitions,
-  render-target-to-swapchain copy, UAV binding from a transient descriptor,
-  named objects, command-list events, and draw submission before real scene
-  passes migrate.
+  fence-backed present loop, static and transient shader-visible descriptor
+  arenas, per-frame upload buffers, renderer-owned Grid height, medium, HDR
+  scene, and bloom render targets, a fullscreen root signature, named objects,
+  command-list events, and explicit tracked resource transitions.
 - The first real migrated pass is the Grid height pass. D3D12 uploads Aquarium
   frame constants plus a fixed body brush table, renders a base Grid field, then
   draws one additive up-facing gravity quad per body into a 128x128
@@ -39,7 +33,14 @@ has feature parity.
 - Transparent Grid contribution is now represented by a transparent-surface
   table plus froxel-binned surface ids. The medium pass discovers it through the
   froxel bin, so future particles and billboard-like surfaces can use the same
-  class of integration instead of gaining special alpha handling.
+  class of integration instead of gaining special alpha handling. The binned
+  Grid surface now carries cartesian gridlines, height isolines, and
+  gradient-angle field lines through that medium path.
+- D3D12 presentation is HDR-linear until the present pass. The scene renders to
+  `R16G16B16A16_Float`, a three-level bloom pyramid performs firefly-safe
+  downsample plus separable blur, and final presentation applies exposure,
+  bloom/veil, and ACES. Debug mode `7` shows bloom and `8` shows exposed
+  luminance.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

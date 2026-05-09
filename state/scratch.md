@@ -305,3 +305,9 @@ can start porting real passes while keeping D3D11 as the visual reference.
   exposure, bloom/veil composite, and ACES presentation. Debug mode 7 shows
   bloom contribution; mode 8 shows exposed luminance; mode 11 still bypasses
   post to inspect the medium density atlas.
+- D3D12 binned Grid linework pass: the transparent surface medium path now
+  evaluates Grid height gradients and contributes cartesian gridlines, height
+  isolines, and gradient-angle field lines from the same froxel-binned
+  transparent surface entry. Keep future particles/billboards in this shared
+  transparent-surface integration class; do not resurrect alpha surfaces for
+  them.

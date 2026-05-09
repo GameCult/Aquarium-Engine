@@ -48,6 +48,8 @@ SamplerState gridSampler : register(s0);
 
 static const int FIELD_INSTANCE_COUNT = 10;
 static const int FIELD_FLAG_CLOUD = 2;
+static const float PI = 3.14159265359;
+static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
 static const int FROXEL_COUNT_Z = 4;
@@ -57,6 +59,7 @@ static const float FROXEL_MAX_Z = 6.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
+static const float TERRAIN_ISOLINE_SPACING = 0.12;
 
 struct VertexOut
 {
@@ -225,10 +228,50 @@ float terrainHeight(float2 p)
     return gridHeightTexture.SampleLevel(gridSampler, uv, 0.0).r;
 }
 
+float2 terrainGradient(float2 p)
+{
+    float2 uv = saturate(gridUv(p));
+    float2 texel = 1.0 / GRID_HEIGHT_TEXEL_COUNT;
+    float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.001);
+
+    float hLeft = gridHeightTexture.SampleLevel(gridSampler, uv - float2(texel.x, 0.0), 0.0).r;
+    float hRight = gridHeightTexture.SampleLevel(gridSampler, uv + float2(texel.x, 0.0), 0.0).r;
+    float hDown = gridHeightTexture.SampleLevel(gridSampler, uv - float2(0.0, texel.y), 0.0).r;
+    float hUp = gridHeightTexture.SampleLevel(gridSampler, uv + float2(0.0, texel.y), 0.0).r;
+
+    return float2(hRight - hLeft, hUp - hDown) / (texelWorld * 2.0);
+}
+
 float lineDistance(float2 p, float cell)
 {
     float2 centered = abs(frac(p / cell + 0.5) - 0.5) * cell;
     return min(centered.x, centered.y);
+}
+
+float lineMaskFromDistance(float distanceValue, float width, float fade)
+{
+    return 1.0 - smoothstep(width, max(width + fade, width + 0.0001), distanceValue);
+}
+
+float isolineMask(float height, float width)
+{
+    float wrapped = abs(frac(height / TERRAIN_ISOLINE_SPACING + 0.5) - 0.5) * TERRAIN_ISOLINE_SPACING;
+    return lineMaskFromDistance(wrapped, width, width * 1.8);
+}
+
+float fieldLineMask(float2 gradient, float width)
+{
+    float slope = length(gradient);
+    if (slope < 0.0001)
+    {
+        return 0.0;
+    }
+
+    float angleDomain = (atan2(gradient.y, gradient.x) / PI + 1.0) * 6.0;
+    float wrapped = abs(frac(angleDomain + 0.5) - 0.5);
+    float angleLine = lineMaskFromDistance(wrapped, width, width * 1.6);
+    float slopeStrength = smoothstep(0.015, 0.16, slope);
+    return angleLine * slopeStrength;
 }
 
 int clampCell(float normalized, int count)
@@ -263,11 +306,18 @@ float transparentSurfaceDensity(float3 p, TransparentSurface surface, out float3
     }
 
     float height = terrainHeight(p.xy);
+    float2 gradient = terrainGradient(p.xy);
     float sheet = 1.0 - smoothstep(0.018, max(surface.kindDensity.w, 0.02), abs(p.z - height));
-    float minor = 1.0 - smoothstep(0.016, max(surface.lineParams.z, 0.016), lineDistance(p.xy, surface.lineParams.x));
-    float major = 1.0 - smoothstep(0.030, max(surface.lineParams.w, 0.030), lineDistance(p.xy, surface.lineParams.y));
-    float density = sheet * radiusMask * saturate(minor * 0.42 + major * 0.92);
-    scattering = surface.colorScatter.rgb * density * surface.colorScatter.w;
+    float minor = lineMaskFromDistance(lineDistance(p.xy, surface.lineParams.x), 0.016, max(surface.lineParams.z, 0.016));
+    float major = lineMaskFromDistance(lineDistance(p.xy, surface.lineParams.y), 0.030, max(surface.lineParams.w, 0.030));
+    float contour = isolineMask(height, 0.012) * smoothstep(0.025, 0.25, length(gradient));
+    float fieldLine = fieldLineMask(gradient, 0.038);
+    float lineSupport = saturate(minor * 0.38 + major * 0.92 + contour * 0.28 + fieldLine * 0.18);
+    float density = sheet * radiusMask * lineSupport;
+    float3 gridColor = surface.colorScatter.rgb * (minor * 0.30 + major * 0.74);
+    gridColor += float3(0.98, 1.0, 0.78) * contour * 0.16;
+    gridColor += float3(0.36, 0.92, 1.0) * fieldLine * 0.12;
+    scattering = gridColor * density * surface.colorScatter.w;
     return density * surface.kindDensity.y;
 }
 
