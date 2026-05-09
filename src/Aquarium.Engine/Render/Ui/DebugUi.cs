@@ -21,10 +21,14 @@ internal sealed class DebugUi
     private const float TrackHeight = 5.0f;
     private const float ValueTrackGap = 12.0f;
     private const float CloseButtonSize = 20.0f;
+    private const float TooltipWidth = 268.0f;
+    private const float TooltipHeight = 34.0f;
 
     private readonly List<DebugUiControl> controls = [];
     private int? activeSliderId;
+    private bool closeButtonHovered;
     private Rect panelBounds;
+    private Vector2 mousePosition;
 
     public DebugUi(string title)
     {
@@ -59,8 +63,13 @@ internal sealed class DebugUi
         }
 
         Layout();
-        var mouse = input.MousePosition;
-        WantsMouse = Contains(panelBounds, mouse);
+        mousePosition = input.MousePosition;
+        WantsMouse = Contains(panelBounds, mousePosition);
+        closeButtonHovered = Contains(CloseButtonBounds(), mousePosition);
+        foreach (var control in controls)
+        {
+            control.IsHovered = control.IsInteractive && control.HitTest(mousePosition);
+        }
 
         if (!input.LeftMouseDown)
         {
@@ -71,7 +80,7 @@ internal sealed class DebugUi
         {
             if (controls.FirstOrDefault(control => control.Id == sliderId) is SliderControl activeSlider)
             {
-                activeSlider.Drag(mouse);
+                activeSlider.Drag(mousePosition);
             }
 
             return;
@@ -82,7 +91,7 @@ internal sealed class DebugUi
             return;
         }
 
-        if (Contains(CloseButtonBounds(), mouse))
+        if (closeButtonHovered)
         {
             IsVisible = false;
             return;
@@ -91,16 +100,16 @@ internal sealed class DebugUi
         for (var index = controls.Count - 1; index >= 0; index--)
         {
             var control = controls[index];
-            if (!control.HitTest(mouse))
+            if (!control.HitTest(mousePosition))
             {
                 continue;
             }
 
-            control.Click(mouse);
+            control.Click(mousePosition);
             if (control is SliderControl slider)
             {
                 activeSliderId = slider.Id;
-                slider.Drag(mouse);
+                slider.Drag(mousePosition);
             }
 
             break;
@@ -113,11 +122,14 @@ internal sealed class DebugUi
         IDWriteTextFormat smallFormat,
         ID2D1SolidColorBrush panelBrush,
         ID2D1SolidColorBrush rowBrush,
+        ID2D1SolidColorBrush hoverRowBrush,
         ID2D1SolidColorBrush outlineBrush,
         ID2D1SolidColorBrush primaryBrush,
         ID2D1SolidColorBrush quietBrush,
         ID2D1SolidColorBrush accentBrush,
-        ID2D1SolidColorBrush dimAccentBrush)
+        ID2D1SolidColorBrush dimAccentBrush,
+        int viewportWidth,
+        int viewportHeight)
     {
         if (!IsVisible)
         {
@@ -142,17 +154,24 @@ internal sealed class DebugUi
             DrawTextOptions.Clip);
 
         var close = CloseButtonBounds();
+        if (closeButtonHovered)
+        {
+            target.FillRectangle(close, hoverRowBrush);
+        }
+
         target.DrawText(
             "x",
             titleFormat,
             close,
-            quietBrush,
+            closeButtonHovered ? accentBrush : quietBrush,
             DrawTextOptions.Clip);
 
         foreach (var control in controls)
         {
-            control.Draw(target, smallFormat, rowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush, dimAccentBrush);
+            control.Draw(target, smallFormat, rowBrush, hoverRowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush, dimAccentBrush);
         }
+
+        DrawTooltip(target, smallFormat, panelBrush, outlineBrush, primaryBrush, accentBrush, viewportWidth, viewportHeight);
     }
 
     private void Layout()
@@ -175,6 +194,51 @@ internal sealed class DebugUi
             panelBounds.Top + 11.0f,
             panelBounds.Right - 10.0f,
             panelBounds.Top + 11.0f + CloseButtonSize);
+    }
+
+    private void DrawTooltip(
+        ID2D1RenderTarget target,
+        IDWriteTextFormat format,
+        ID2D1SolidColorBrush panelBrush,
+        ID2D1SolidColorBrush outlineBrush,
+        ID2D1SolidColorBrush primaryBrush,
+        ID2D1SolidColorBrush accentBrush,
+        int viewportWidth,
+        int viewportHeight)
+    {
+        var tooltip = closeButtonHovered
+            ? "Close panel. Press F2 to show it again."
+            : controls.FirstOrDefault(control => control.IsHovered)?.Tooltip;
+        if (string.IsNullOrWhiteSpace(tooltip))
+        {
+            return;
+        }
+
+        var left = mousePosition.X + 14.0f;
+        var top = mousePosition.Y + 18.0f;
+        if (left + TooltipWidth > viewportWidth - 10.0f)
+        {
+            left = mousePosition.X - TooltipWidth - 14.0f;
+        }
+        if (top + TooltipHeight > viewportHeight - 10.0f)
+        {
+            top = mousePosition.Y - TooltipHeight - 14.0f;
+        }
+
+        var bounds = RectFromEdges(left, top, left + TooltipWidth, top + TooltipHeight);
+        target.FillRectangle(bounds, panelBrush);
+        target.DrawRectangle(bounds, outlineBrush, 1.0f);
+        target.DrawLine(
+            new Vector2(bounds.Left, bounds.Top),
+            new Vector2(bounds.Right, bounds.Top),
+            accentBrush,
+            1.0f);
+        target.DrawText(
+            tooltip,
+            format,
+            RectFromEdges(bounds.Left + 8.0f, bounds.Top, bounds.Right - 8.0f, bounds.Bottom),
+            primaryBrush,
+            DrawTextOptions.Clip);
     }
 
     private static bool Contains(Rect bounds, Vector2 point)
@@ -205,32 +269,32 @@ internal sealed class DebugUi
             return this;
         }
 
-        public DebugUiPanel Button(string label, Action action)
+        public DebugUiPanel Button(string label, Action action, string? tooltip = null)
         {
-            controls.Add(new ButtonControl(label, action));
+            controls.Add(new ButtonControl(label, action, tooltip));
             return this;
         }
 
-        public DebugUiPanel Toggle(string label, Func<bool> read, Action<bool> write)
+        public DebugUiPanel Toggle(string label, Func<bool> read, Action<bool> write, string? tooltip = null)
         {
-            controls.Add(new ToggleControl(label, read, write));
+            controls.Add(new ToggleControl(label, read, write, tooltip));
             return this;
         }
 
-        public DebugUiPanel Slider(string label, Func<float> read, Action<float> write, float min, float max, string format = "0.###")
+        public DebugUiPanel Slider(string label, Func<float> read, Action<float> write, float min, float max, string format = "0.###", string? tooltip = null)
         {
-            controls.Add(new FloatSliderControl(label, read, write, min, max, format));
+            controls.Add(new FloatSliderControl(label, read, write, min, max, format, tooltip));
             return this;
         }
 
-        public DebugUiPanel Slider(string label, Func<int> read, Action<int> write, int min, int max)
+        public DebugUiPanel Slider(string label, Func<int> read, Action<int> write, int min, int max, string? tooltip = null)
         {
-            controls.Add(new IntSliderControl(label, read, write, min, max));
+            controls.Add(new IntSliderControl(label, read, write, min, max, tooltip));
             return this;
         }
     }
 
-    internal abstract class DebugUiControl(string label)
+    internal abstract class DebugUiControl(string label, string? tooltip = null)
     {
         private static int nextId;
 
@@ -238,7 +302,13 @@ internal sealed class DebugUi
 
         protected string Label { get; } = label;
 
+        public string? Tooltip { get; } = tooltip;
+
         public Rect Bounds { get; set; }
+
+        public bool IsHovered { get; set; }
+
+        public virtual bool IsInteractive => true;
 
         public virtual bool HitTest(Vector2 mouse) => Contains(Bounds, mouse);
 
@@ -250,15 +320,20 @@ internal sealed class DebugUi
             ID2D1RenderTarget target,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush);
 
-        protected void DrawRow(ID2D1RenderTarget target, ID2D1SolidColorBrush rowBrush, ID2D1SolidColorBrush outlineBrush)
+        protected void DrawRow(
+            ID2D1RenderTarget target,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush outlineBrush)
         {
-            target.FillRectangle(Bounds, rowBrush);
+            target.FillRectangle(Bounds, IsHovered ? hoverRowBrush : rowBrush);
             target.DrawLine(
                 new Vector2(Bounds.Left, Bounds.Bottom),
                 new Vector2(Bounds.Right, Bounds.Bottom),
@@ -279,12 +354,15 @@ internal sealed class DebugUi
 
     private sealed class SectionControl(string label) : DebugUiControl(label)
     {
+        public override bool IsInteractive => false;
+
         public override bool HitTest(Vector2 mouse) => false;
 
         public override void Draw(
             ID2D1RenderTarget target,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
@@ -300,7 +378,7 @@ internal sealed class DebugUi
         }
     }
 
-    private sealed class ButtonControl(string label, Action action) : DebugUiControl(label)
+    private sealed class ButtonControl(string label, Action action, string? tooltip) : DebugUiControl(label, tooltip)
     {
         public override void Click(Vector2 mouse) => action();
 
@@ -308,19 +386,20 @@ internal sealed class DebugUi
             ID2D1RenderTarget target,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush)
         {
-            DrawRow(target, rowBrush, outlineBrush);
+            DrawRow(target, rowBrush, hoverRowBrush, outlineBrush);
             target.DrawText(Label, format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
             target.DrawText("apply", format, ValueBounds(), primaryBrush, DrawTextOptions.Clip);
         }
     }
 
-    private sealed class ToggleControl(string label, Func<bool> read, Action<bool> write) : DebugUiControl(label)
+    private sealed class ToggleControl(string label, Func<bool> read, Action<bool> write, string? tooltip) : DebugUiControl(label, tooltip)
     {
         public override void Click(Vector2 mouse) => write(!read());
 
@@ -328,13 +407,14 @@ internal sealed class DebugUi
             ID2D1RenderTarget target,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush)
         {
-            DrawRow(target, rowBrush, outlineBrush);
+            DrawRow(target, rowBrush, hoverRowBrush, outlineBrush);
             target.DrawText(Label.ToUpperInvariant(), format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
 
             var box = RectFromEdges(Bounds.Right - 28.0f, Bounds.Top + 8.0f, Bounds.Right - 13.0f, Bounds.Bottom - 8.0f);
@@ -347,7 +427,7 @@ internal sealed class DebugUi
         }
     }
 
-    private abstract class SliderControl(string label) : DebugUiControl(label)
+    private abstract class SliderControl(string label, string? tooltip) : DebugUiControl(label, tooltip)
     {
         public override bool HitTest(Vector2 mouse)
         {
@@ -376,13 +456,14 @@ internal sealed class DebugUi
             ID2D1RenderTarget target,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
             ID2D1SolidColorBrush outlineBrush,
             ID2D1SolidColorBrush primaryBrush,
             ID2D1SolidColorBrush quietBrush,
             ID2D1SolidColorBrush accentBrush,
             ID2D1SolidColorBrush dimAccentBrush)
         {
-            DrawRow(target, rowBrush, outlineBrush);
+            DrawRow(target, rowBrush, hoverRowBrush, outlineBrush);
             target.DrawText(Label.ToUpperInvariant(), format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
             target.DrawText(ReadDisplay(), format, ValueBounds(), primaryBrush, DrawTextOptions.Clip);
 
@@ -410,7 +491,8 @@ internal sealed class DebugUi
         Action<float> write,
         float min,
         float max,
-        string format) : SliderControl(label)
+        string format,
+        string? tooltip) : SliderControl(label, tooltip)
     {
         protected override float ReadNormalized()
         {
@@ -433,7 +515,8 @@ internal sealed class DebugUi
         Func<int> read,
         Action<int> write,
         int min,
-        int max) : SliderControl(label)
+        int max,
+        string? tooltip) : SliderControl(label, tooltip)
     {
         protected override float ReadNormalized()
         {

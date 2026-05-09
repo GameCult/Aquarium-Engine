@@ -334,12 +334,12 @@ public sealed class D3D11Renderer : IDisposable
         return new DebugUi("Aquarium Debug")
             .Panel(panel => panel
                 .Section("View")
-                .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, 0, 8), 0, 8)
-                .Button("Reset View", () => RenderDebugMode = 0)
+                .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, 0, 8), 0, 8, "Selects the active renderer debug view.")
+                .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.")
                 .Section("HDR")
-                .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, 0.02f, 1.2f), 0.02f, 1.2f, "0.###")
-                .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, 0.0f, 0.24f), 0.0f, 0.24f, "0.###")
-                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, 0.0f, 0.08f), 0.0f, 0.08f, "0.###"));
+                .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, 0.02f, 1.2f), 0.02f, 1.2f, "0.###", "Manual scene exposure before display transform.")
+                .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, 0.0f, 0.24f), 0.0f, 0.24f, "0.###", "Strength of pre-tonemap bloom energy.")
+                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, 0.0f, 0.08f), 0.0f, 0.08f, "0.###", "Low-frequency veil from bright HDR energy."));
     }
 
     public void Dispose()
