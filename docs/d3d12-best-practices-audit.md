@@ -39,6 +39,8 @@ resource graph beyond smoke-pass scaffolding.
 - Render targets can create UAV descriptors. The D3D12 smoke pass binds a
   transient per-frame UAV descriptor and writes a diagnostic target from the
   pixel shader, proving CBV and UAV tables can share the active transient heap.
+  UAV-capable resource creation is separate from persistent UAV descriptor
+  ownership, so diagnostic-only transient UAVs do not consume static heap slots.
 - The D3D12 smoke path exercises shader compilation, root signature, PSO,
   descriptor table, RTV/UAV binding, barriers, copy, and present.
 
@@ -62,7 +64,7 @@ resource graph beyond smoke-pass scaffolding.
 ## Required Before Real Pass Migration
 
 - Upload ring capacity policy and overflow reporting for real frame data.
-- Debug names for D3D12 resources, descriptors by owner, and command lists.
+- Descriptor-owner diagnostics beyond heap-level capacity summaries.
 - A real pass migration that uses the D3D12 resource helpers without cloning
   smoke-pass-local policy.
 

@@ -49,10 +49,11 @@ application for shader-visible heaps. The long-term Aquarium shape should be:
 
 Current Aquarium D3D12 status:
 
-- Good: shader-visible descriptor arena exists; per-frame CBV descriptors are
-  not overwritten while in flight.
-- Temporary: arena is fixed and smoke-only. It must become a fence-reclaimed
-  allocator before real pass/material resources arrive.
+- Good: shader-visible descriptors are split into static and per-frame
+  transient arenas. Transient CBV/UAV descriptors reset only after the owning
+  frame fence clears, and static descriptors rebuild on resize after a GPU wait.
+- Temporary: arenas are still simple bump allocators. Keep them until real
+  non-resize churn demands free lists, paging, or a persistent global heap.
 
 ## Upload Doctrine
 
@@ -64,10 +65,11 @@ memory before shader use.
 
 Current Aquarium D3D12 status:
 
-- Good: upload buffer is persistently mapped and 256-byte aligned for constant
-  buffer use.
-- Temporary: helper is still one allocation per buffer. It should become an
-  upload ring with typed allocations and fence reclamation.
+- Good: each frame owns a persistently mapped upload ring, and constant-buffer
+  writes are 256-byte aligned.
+- Temporary: upload policy is still per-frame and constant-only. Structured
+  scene data should move through typed upload allocations and default-heap
+  buffers before real pass migration grows data volume.
 - Guardrail: keep direct shader reads from upload memory limited to small
   constants. Structured/large scene data should move to default memory.
 
@@ -95,9 +97,8 @@ Current Aquarium D3D12 status:
 
 - Good: the offscreen render target tracks its current state and transitions
   only on change.
-- Temporary: backbuffer state is still assumed around present/copy. That is fine
-  in the current single path, but should become tracked or wrapped once resize,
-  multiple passes, or alternate present paths exist.
+- Good: swapchain backbuffers are wrapped as tracked resources and transition
+  explicitly between present and render-target states.
 - Watch item: rendering to an offscreen target then copying to the swapchain is
   useful for proving texture ownership, but final composition should avoid
   unnecessary full-frame copies unless a post-process graph requires them.
@@ -118,9 +119,10 @@ Current Aquarium D3D12 status:
 ## Aquarium Next Steps
 
 1. Add a D3D12 frame graph/resource map for named render targets and buffers.
-2. Replace the fixed descriptor arena with static + transient descriptor
-   allocation, reclaimed by frame fence.
-3. Replace one-off upload buffers with a per-frame or global upload ring.
+2. Promote descriptor allocation from smoke-path arenas into renderer-wide
+   static/transient descriptor policy.
+3. Extend the upload ring from constants into typed uploads for structured
+   buffers and texture staging.
 4. Add D3D12MA or a deliberate placed-resource allocator before the resource
    count becomes serious.
 5. Add debug names and PIX markers while the graph is still small.

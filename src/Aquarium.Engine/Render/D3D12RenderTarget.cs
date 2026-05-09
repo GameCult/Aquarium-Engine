@@ -14,6 +14,7 @@ internal sealed class D3D12RenderTarget : IDisposable
         D3D12DescriptorSlot renderTargetView,
         D3D12DescriptorSlot? shaderResourceView,
         D3D12DescriptorSlot? unorderedAccessView,
+        bool allowUnorderedAccess,
         Color4 clearColor,
         string name)
     {
@@ -24,7 +25,7 @@ internal sealed class D3D12RenderTarget : IDisposable
         ShaderResourceView = shaderResourceView;
         UnorderedAccessView = unorderedAccessView;
         var resourceFlags = ResourceFlags.AllowRenderTarget;
-        if (unorderedAccessView.HasValue)
+        if (allowUnorderedAccess || unorderedAccessView.HasValue)
         {
             resourceFlags |= ResourceFlags.AllowUnorderedAccess;
         }

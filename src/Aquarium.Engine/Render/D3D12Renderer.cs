@@ -254,6 +254,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             renderTargetViewArena.Allocate(),
             staticShaderDescriptorArena.Allocate(),
             null,
+            false,
             new Color4(0.006f, 0.014f, 0.022f, 1.0f),
             "Aquarium D3D12 Smoke Target");
         resourceRegistry.Add("smoke-target", target);
@@ -269,7 +270,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             Format.R8G8B8A8_UNorm,
             renderTargetViewArena.Allocate(),
             null,
-            staticShaderDescriptorArena.Allocate(),
+            null,
+            true,
             new Color4(0.0f, 0.0f, 0.0f, 1.0f),
             "Aquarium D3D12 Diagnostic UAV Target");
         resourceRegistry.Add("diagnostic-uav-target", target);

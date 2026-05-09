@@ -10,8 +10,9 @@ renderer-owned offscreen render target, fullscreen root signature, and
 smoke-test PSO that draws a diagnostic fullscreen triangle into the offscreen
 target before sampling it back to the swapchain. Render targets now support
 SRV/UAV descriptors, the smoke pass writes a diagnostic UAV through a per-frame
-transient descriptor, and resize rebuilds static shader/RTV descriptor arenas
-after a GPU wait instead of consuming fixed bring-up slots. Next renderer work
+transient descriptor without consuming a persistent static UAV slot, and resize
+rebuilds static shader/RTV descriptor arenas after a GPU wait instead of
+consuming fixed bring-up slots. Next renderer work
 can start porting real passes while keeping D3D11 as the visual reference.
 
 ## Hot Context
@@ -262,6 +263,8 @@ can start porting real passes while keeping D3D11 as the visual reference.
   D3D12 smoke pass binds a transient per-frame UAV descriptor and writes a
   diagnostic target from the pixel shader. Pixel shader UAVs share output
   register namespace, so the diagnostic UAV binds at `u1` rather than `u0`.
+  UAV resource capability is now independent from persistent UAV descriptor
+  ownership, so transient diagnostic UAVs do not burn static descriptors.
   D3D12 ignores the D3D11 `--shader-source` override and compiles its own copied
   `D3D12Smoke.hlsl`. Resize now waits for the GPU, releases swapchain-dependent
   resources, rebuilds static shader/RTV descriptor arenas, and recreates
