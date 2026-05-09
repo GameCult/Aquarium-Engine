@@ -329,3 +329,7 @@ can start porting real passes while keeping D3D11 as the visual reference.
   normal validation is skipped, color rejection is relaxed, and continuity is
   driven by coverage plus medium opacity. This lets binned Grid/fog contribution
   accumulate without reintroducing alpha surfaces.
+- D3D12 medium ray debug pass: resolve now binds the field instance buffer and
+  implements direct ray-step registered-medium previews for modes 9 and 10.
+  These are correctness probes independent of the froxel atlas; mode 11 remains
+  the atlas density view.

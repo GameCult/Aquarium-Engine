@@ -33,6 +33,18 @@ Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
 SamplerState sourceSampler : register(s0);
 
+struct FieldInstance
+{
+    float4 centerRadius;
+    float4 radiusAngle;
+    float4 fieldFlags;
+    float4 materialMedium;
+    float4 colorIntensity;
+    float4 mediumTerms;
+};
+
+StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+
 struct VertexOut
 {
     float4 position : SV_Position;
@@ -54,6 +66,9 @@ static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
+static const int FIELD_INSTANCE_COUNT = 10;
+static const int FIELD_FLAG_CLOUD = 2;
+static const int MEDIUM_RAY_PREVIEW_STEPS = 48;
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
@@ -241,6 +256,138 @@ float3 presentColor(float3 scene, float2 uv)
     return aces(exposedScene + bloom * bloomIntensity + luminance(bloom) * bloomVeilIntensity);
 }
 
+float hash31(float3 p)
+{
+    p = frac(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return frac((p.x + p.y) * p.z) * 2.0 - 1.0;
+}
+
+float noised3(float3 x)
+{
+    float3 p = floor(x);
+    float3 w = frac(x);
+    float3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
+
+    float a = hash31(p + float3(0.0, 0.0, 0.0));
+    float b = hash31(p + float3(1.0, 0.0, 0.0));
+    float c = hash31(p + float3(0.0, 1.0, 0.0));
+    float d = hash31(p + float3(1.0, 1.0, 0.0));
+    float e = hash31(p + float3(0.0, 0.0, 1.0));
+    float f = hash31(p + float3(1.0, 0.0, 1.0));
+    float g = hash31(p + float3(0.0, 1.0, 1.0));
+    float h = hash31(p + float3(1.0, 1.0, 1.0));
+
+    float k0 = a;
+    float k1 = b - a;
+    float k2 = c - a;
+    float k3 = e - a;
+    float k4 = a - b - c + d;
+    float k5 = a - c - e + g;
+    float k6 = a - b - e + f;
+    float k7 = -a + b + c - d + e - f - g + h;
+
+    return k0
+        + k1 * u.x
+        + k2 * u.y
+        + k3 * u.z
+        + k4 * u.x * u.y
+        + k5 * u.y * u.z
+        + k6 * u.z * u.x
+        + k7 * u.x * u.y * u.z;
+}
+
+float fbm3(float3 p)
+{
+    float value = 0.0;
+    float amplitude = 0.5;
+
+    [unroll]
+    for (int i = 0; i < 3; i++)
+    {
+        value += noised3(p) * amplitude;
+        p = p.yzx * 2.03 + float3(3.7, 1.9, 5.1);
+        amplitude *= 0.52;
+    }
+
+    return clamp(value, -1.0, 1.0);
+}
+
+float2 rotate2(float2 value, float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+    return float2(value.x * c - value.y * s, value.x * s + value.y * c);
+}
+
+float ellipsoidSdf(float3 p, float3 radius)
+{
+    float3 safeRadius = max(radius, 0.001);
+    float normalizedDistance = length(p / safeRadius) - 1.0;
+    return normalizedDistance * min(safeRadius.x, min(safeRadius.y, safeRadius.z));
+}
+
+float fieldDistance(float3 p, FieldInstance field)
+{
+    float3 local = p - field.centerRadius.xyz;
+    local.xy = rotate2(local.xy, -field.radiusAngle.w);
+    return ellipsoidSdf(local, max(field.radiusAngle.xyz, 0.001));
+}
+
+float registeredMediumDensity(float3 p)
+{
+    float density = 0.0;
+
+    [unroll]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    {
+        FieldInstance field = fieldInstances[i];
+        if (((int)(field.fieldFlags.y + 0.5) & FIELD_FLAG_CLOUD) == 0)
+        {
+            continue;
+        }
+
+        float distanceToField = fieldDistance(p, field);
+        float shell = smoothstep(0.0, 0.42, -distanceToField);
+        if (shell <= 0.0)
+        {
+            continue;
+        }
+
+        float3 local = p - field.centerRadius.xyz;
+        local.xy = rotate2(local.xy, -field.radiusAngle.w);
+        local /= max(field.radiusAngle.xyz, 0.001);
+        float erosion = saturate(0.86 + fbm3(local * 3.4) * 0.14);
+        float core = 1.0 - smoothstep(0.80, 1.05, length(local));
+        density += shell * core * erosion * field.mediumTerms.w;
+    }
+
+    return saturate(density);
+}
+
+void previewRegisteredMediumStep(float3 rayOrigin, float3 rayDirection, float maxTravel, float requestedStep, out float stepDensity, out float transmittance)
+{
+    stepDensity = 0.0;
+    transmittance = 1.0;
+    float stepLength = maxTravel / (float)MEDIUM_RAY_PREVIEW_STEPS;
+    int selectedStep = clamp((int)round(requestedStep), 0, MEDIUM_RAY_PREVIEW_STEPS - 1);
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < MEDIUM_RAY_PREVIEW_STEPS; stepIndex++)
+    {
+        float travel = ((float)stepIndex + 0.5) * stepLength;
+        float3 p = rayOrigin + rayDirection * travel;
+        float density = registeredMediumDensity(p);
+        if (stepIndex == selectedStep)
+        {
+            stepDensity = density;
+            return;
+        }
+
+        transmittance *= exp(-density * 0.16 * stepLength);
+    }
+}
+
 float4 D3D12BloomPrefilterPS(VertexOut input) : SV_Target0
 {
     return float4(sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0).rgb * max(exposure, 0.001), 1.0);
@@ -409,6 +556,22 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     {
         float luma = luminance(currentColor * max(exposure, 0.001));
         finalColor = luma.xxx;
+    }
+    else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
+    {
+        float3 debugRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float stepDensity;
+        float stepTransmittance;
+        previewRegisteredMediumStep(cameraPosition, debugRay, farDistance, mediumDebugStep, stepDensity, stepTransmittance);
+        finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(stepDensity * 3.0));
+    }
+    else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
+    {
+        float3 debugRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float stepDensity;
+        float stepTransmittance;
+        previewRegisteredMediumStep(cameraPosition, debugRay, farDistance, mediumDebugStep, stepDensity, stepTransmittance);
+        finalColor = lerp(float3(0.10, 0.02, 0.01), float3(0.72, 1.0, 0.86), saturate(stepTransmittance));
     }
 
     ResolveOut output;

@@ -102,6 +102,10 @@ overlay/debug UI still need to move. Medium-only pixels already use a
 density-weighted ray centroid and `FIELD_ID_MEDIUM`, so transparent Grid and fog
 contribution can accumulate through the medium history path without inventing a
 single alpha-surface hit.
+D3D12 debug modes `9` and `10` are direct ray-step density/transmittance
+previews from the field instance buffer, matching the D3D11 diagnostic contract
+rather than sampling the froxel atlas. Mode `11` remains the froxel density
+view.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches

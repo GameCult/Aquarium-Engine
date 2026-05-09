@@ -53,6 +53,10 @@ has feature parity.
   opacity and coverage rather than surface normals. Grid/transparent
   contributions therefore get history through the medium path without becoming
   fake alpha surfaces.
+- D3D12 debug modes `9` and `10` are direct ray-step medium previews, not
+  repainted atlas views. The resolve shader samples the field instance buffer
+  for the requested `MediumDebugStep`, so density/transmittance diagnostics can
+  be compared against the froxel atlas in mode `11`.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a
