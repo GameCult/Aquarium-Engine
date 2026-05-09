@@ -11,13 +11,18 @@ has feature parity.
   swapchain, RTV heap, per-backbuffer command allocators, command list,
   fence-backed present loop, shader-visible CBV/SRV/UAV descriptor arena,
   per-frame upload buffers, renderer-owned offscreen render target, fullscreen
-  root signature, and a smoke-test PSO.
+  root signature, diagnostic UAV target, and smoke-test PSO.
 - The D3D12 path currently draws a diagnostic fullscreen pass. It exists to
   prove backend lifecycle, shader compilation, root signature creation,
   descriptor-table binding, per-frame upload-ring constants, PSO creation,
   render target binding, tracked resource state transitions,
-  render-target-to-swapchain copy, named objects, command-list events, and draw
-  submission before real scene passes migrate.
+  render-target-to-swapchain copy, UAV binding from a transient descriptor,
+  named objects, command-list events, and draw submission before real scene
+  passes migrate.
+- Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
+  static shader/RTV descriptor arenas, then recreates backbuffer views and
+  dependent render targets. Descriptor exhaustion on resize is no longer a
+  bring-up policy.
 - `IAquariumRenderer` is the host boundary. The host should not learn backend
   internals as the D3D12 renderer grows teeth.
 - `docs/d3d12-best-practices-audit.md` and `research/d3d12/synthesis.md`
@@ -27,8 +32,8 @@ has feature parity.
 
 1. Keep D3D11 as the visual reference.
 2. Move shared renderer contracts behind explicit backend-neutral types.
-3. Add UAV creation paths and a production descriptor reclamation/rebuild policy
-   for resize/resource churn.
+3. Port the first real read-only pass after preserving D3D11 as the reference
+   output.
 4. Keep capacity diagnostics loud while the backend is still small enough to
    make mistakes obvious.
 5. Port the existing passes in visible order: grid height, froxel volume, scene,

@@ -13,6 +13,7 @@ internal sealed class D3D12RenderTarget : IDisposable
         Format format,
         D3D12DescriptorSlot renderTargetView,
         D3D12DescriptorSlot? shaderResourceView,
+        D3D12DescriptorSlot? unorderedAccessView,
         Color4 clearColor,
         string name)
     {
@@ -21,6 +22,13 @@ internal sealed class D3D12RenderTarget : IDisposable
         Format = format;
         RenderTargetView = renderTargetView;
         ShaderResourceView = shaderResourceView;
+        UnorderedAccessView = unorderedAccessView;
+        var resourceFlags = ResourceFlags.AllowRenderTarget;
+        if (unorderedAccessView.HasValue)
+        {
+            resourceFlags |= ResourceFlags.AllowUnorderedAccess;
+        }
+
         var optimizedClear = new ClearValue(format, in clearColor);
         Resource = device.CreateCommittedResource(
             HeapType.Default,
@@ -32,7 +40,7 @@ internal sealed class D3D12RenderTarget : IDisposable
                 1,
                 1,
                 0,
-                ResourceFlags.AllowRenderTarget),
+                resourceFlags),
             ResourceStates.PixelShaderResource,
             optimizedClear);
         Resource.Name = name;
@@ -50,6 +58,11 @@ internal sealed class D3D12RenderTarget : IDisposable
                 },
                 shaderResourceView.Value.Cpu);
         }
+
+        if (unorderedAccessView.HasValue)
+        {
+            CreateUnorderedAccessView(device, unorderedAccessView.Value);
+        }
     }
 
     public ID3D12Resource Resource { get; }
@@ -64,7 +77,23 @@ internal sealed class D3D12RenderTarget : IDisposable
 
     public D3D12DescriptorSlot? ShaderResourceView { get; }
 
+    public D3D12DescriptorSlot? UnorderedAccessView { get; }
+
     public ResourceStates State { get; private set; } = ResourceStates.PixelShaderResource;
+
+    public void CreateUnorderedAccessView(ID3D12Device device, D3D12DescriptorSlot unorderedAccessView)
+    {
+        device.CreateUnorderedAccessView(
+            Resource,
+            null,
+            new UnorderedAccessViewDescription
+            {
+                Format = Format,
+                ViewDimension = UnorderedAccessViewDimension.Texture2D,
+                Texture2D = new Texture2DUnorderedAccessView(),
+            },
+            unorderedAccessView.Cpu);
+    }
 
     public void Transition(ID3D12GraphicsCommandList commandList, ResourceStates nextState)
     {

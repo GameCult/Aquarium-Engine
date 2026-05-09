@@ -20,8 +20,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12CommandQueue commandQueue;
     private readonly IDXGISwapChain3 swapChain;
     private readonly D3D12ResourceRegistry resourceRegistry = new();
-    private readonly D3D12DescriptorArena renderTargetViewArena;
-    private readonly D3D12DescriptorArena staticShaderDescriptorArena;
+    private D3D12DescriptorArena renderTargetViewArena;
+    private D3D12DescriptorArena staticShaderDescriptorArena;
     private readonly FrameResources[] frames = new FrameResources[BackBufferCount];
     private readonly ID3D12GraphicsCommandList commandList;
     private readonly ID3D12RootSignature fullscreenRootSignature;
@@ -30,6 +30,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12Fence fence;
     private readonly AutoResetEvent fenceEvent = new(false);
     private D3D12RenderTarget smokeRenderTarget;
+    private D3D12RenderTarget diagnosticUavTarget;
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
@@ -74,8 +75,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         swapChain = swapChain1.QueryInterface<IDXGISwapChain3>();
         frameIndex = (int)swapChain.CurrentBackBufferIndex;
 
-        renderTargetViewArena = new D3D12DescriptorArena(device, DescriptorHeapType.RenderTargetView, 32, DescriptorHeapFlags.None, "Aquarium D3D12 RTV Arena");
-        staticShaderDescriptorArena = new D3D12DescriptorArena(device, DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView, 64, DescriptorHeapFlags.ShaderVisible, "Aquarium D3D12 Static Shader Descriptor Arena");
+        renderTargetViewArena = CreateRenderTargetViewArena();
+        staticShaderDescriptorArena = CreateStaticShaderDescriptorArena();
         for (var index = 0; index < frames.Length; index++)
         {
             frames[index] = CreateFrameResources(index);
@@ -83,15 +84,17 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         CreateRenderTargetViews();
         smokeRenderTarget = CreateSmokeRenderTarget();
+        diagnosticUavTarget = CreateDiagnosticUavTarget();
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
         commandList.Close();
         ReportStartupProgress(startupProgress, "Creating D3D12 fullscreen smoke pipeline");
         fullscreenRootSignature = CreateFullscreenRootSignature();
         fullscreenRootSignature.Name = "Aquarium D3D12 Fullscreen Root Signature";
-        smokePipelineState = CreateSmokePipelineState(shaderPath ?? Path.Combine(AppContext.BaseDirectory, SmokeShaderRelativePath));
+        var smokeShaderPath = Path.Combine(AppContext.BaseDirectory, SmokeShaderRelativePath);
+        smokePipelineState = CreateSmokePipelineState(smokeShaderPath);
         smokePipelineState.Name = "Aquarium D3D12 Smoke Pipeline";
-        copyPipelineState = CreateCopyPipelineState(shaderPath ?? Path.Combine(AppContext.BaseDirectory, SmokeShaderRelativePath));
+        copyPipelineState = CreateCopyPipelineState(smokeShaderPath);
         copyPipelineState.Name = "Aquarium D3D12 Copy Pipeline";
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
@@ -151,6 +154,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(smokeConstants.GpuVirtualAddress, smokeConstants.SizeInBytes),
             frameResources.SmokeConstantsDescriptor.Cpu);
+        frameResources.DiagnosticUavDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        diagnosticUavTarget.CreateUnorderedAccessView(device, frameResources.DiagnosticUavDescriptor);
         frameResources.CommandAllocator.Reset();
         commandList.Reset(frameResources.CommandAllocator, null);
 
@@ -175,6 +180,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         copyPipelineState.Dispose();
         smokePipelineState.Dispose();
         fullscreenRootSignature.Dispose();
+        diagnosticUavTarget.Dispose();
         smokeRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
@@ -211,7 +217,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         WaitForGpu();
+        resourceRegistry.RemoveRenderTarget("diagnostic-uav-target");
         resourceRegistry.RemoveRenderTarget("smoke-target");
+        diagnosticUavTarget.Dispose();
         smokeRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
@@ -221,17 +229,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         width = newWidth;
         height = newHeight;
-        if (renderTargetViewArena.Available < BackBufferCount + 1 || staticShaderDescriptorArena.Available < 1)
-        {
-            throw new InvalidOperationException(
-                "D3D12 resize exhausted fixed descriptor bring-up arenas. " +
-                $"{renderTargetViewArena.Describe()}; {staticShaderDescriptorArena.Describe()}");
-        }
+        renderTargetViewArena.Dispose();
+        staticShaderDescriptorArena.Dispose();
+        renderTargetViewArena = CreateRenderTargetViewArena();
+        staticShaderDescriptorArena = CreateStaticShaderDescriptorArena();
 
         swapChain.ResizeBuffers(BackBufferCount, (uint)width, (uint)height, Format.B8G8R8A8_UNorm, SwapChainFlags.None).CheckError();
         frameIndex = (int)swapChain.CurrentBackBufferIndex;
         CreateRenderTargetViews();
         smokeRenderTarget = CreateSmokeRenderTarget();
+        diagnosticUavTarget = CreateDiagnosticUavTarget();
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
         Console.WriteLine($"D3D12 resized: {width}x{height}; {resourceRegistry.Describe()}");
@@ -246,9 +253,26 @@ public sealed class D3D12Renderer : IAquariumRenderer
             Format.B8G8R8A8_UNorm,
             renderTargetViewArena.Allocate(),
             staticShaderDescriptorArena.Allocate(),
+            null,
             new Color4(0.006f, 0.014f, 0.022f, 1.0f),
             "Aquarium D3D12 Smoke Target");
         resourceRegistry.Add("smoke-target", target);
+        return target;
+    }
+
+    private D3D12RenderTarget CreateDiagnosticUavTarget()
+    {
+        var target = new D3D12RenderTarget(
+            device,
+            width,
+            height,
+            Format.R8G8B8A8_UNorm,
+            renderTargetViewArena.Allocate(),
+            null,
+            staticShaderDescriptorArena.Allocate(),
+            new Color4(0.0f, 0.0f, 0.0f, 1.0f),
+            "Aquarium D3D12 Diagnostic UAV Target");
+        resourceRegistry.Add("diagnostic-uav-target", target);
         return target;
     }
 
@@ -265,11 +289,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         try
         {
             smokeRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
+            diagnosticUavTarget.Transition(context.CommandList, ResourceStates.UnorderedAccess);
             context.CommandList.ClearRenderTargetView(smokeRenderTarget.RenderTargetView.Cpu, clearColor);
             context.CommandList.SetDescriptorHeaps(frames[frameIndex].TransientShaderDescriptors.Heap);
             context.CommandList.SetPipelineState(smokePipelineState);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(0, frames[frameIndex].SmokeConstantsDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(2, frames[frameIndex].DiagnosticUavDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(smokeRenderTarget.RenderTargetView.Cpu, null);
@@ -291,7 +317,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetDescriptorHeaps(staticShaderDescriptorArena.Heap);
             context.CommandList.SetPipelineState(copyPipelineState);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            context.CommandList.SetGraphicsRootDescriptorTable(0, sourceDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(1, sourceDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
@@ -352,6 +378,26 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Console.WriteLine(message);
     }
 
+    private D3D12DescriptorArena CreateRenderTargetViewArena()
+    {
+        return new D3D12DescriptorArena(
+            device,
+            DescriptorHeapType.RenderTargetView,
+            32,
+            DescriptorHeapFlags.None,
+            "Aquarium D3D12 RTV Arena");
+    }
+
+    private D3D12DescriptorArena CreateStaticShaderDescriptorArena()
+    {
+        return new D3D12DescriptorArena(
+            device,
+            DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
+            64,
+            DescriptorHeapFlags.ShaderVisible,
+            "Aquarium D3D12 Static Shader Descriptor Arena");
+    }
+
     private ID3D12RootSignature CreateFullscreenRootSignature()
     {
         var constantBufferRange = new DescriptorRange(
@@ -366,10 +412,17 @@ public sealed class D3D12Renderer : IAquariumRenderer
             0,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var diagnosticUavRange = new DescriptorRange(
+            DescriptorRangeType.UnorderedAccessView,
+            1,
+            1,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([sourceTextureRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([diagnosticUavRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -468,6 +521,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorArena TransientShaderDescriptors { get; } = transientShaderDescriptors;
 
         public D3D12DescriptorSlot SmokeConstantsDescriptor { get; set; }
+
+        public D3D12DescriptorSlot DiagnosticUavDescriptor { get; set; }
 
         public D3D12TrackedResource BackBuffer { get; set; } = null!;
 

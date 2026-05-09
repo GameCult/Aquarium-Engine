@@ -15,6 +15,9 @@
     "native_engine": [
       "Aquarium Engine lives at E:\\Projects\\Aquarium-Engine and is the live C# line. Main is the development branch after the 2026-05-08 merge.",
       "The host owns Win32 windowing, D3D11 swapchain creation, shader compilation, input translation, and the live-runtime assembly boundary. Do not outsource the core frame protocol to a hidden framework loop.",
+      "D3D12 is being added beside D3D11, not by mutating the reference renderer in place. Keep descriptor ownership explicit: static descriptors for long-lived SRV/UAV tables, per-frame transient descriptors reset only after fence wait, and whole-arena rebuilds on resize until real non-resize churn demands free lists.",
+      "D3D12 pixel shader UAV registers share the output namespace. If a shader writes SV_Target0, bind the first manual UAV at u1, not u0.",
+      "D3D12 shader routing must not inherit the D3D11 --shader-source override by accident. Backend-specific HLSL should compile from its copied output path unless an explicit backend-specific override exists.",
       "Use Vortice at the graphics API membrane. Keep CultMath as the CPU math grammar. Do not let third-party math opinions leak inward unless the conversion is explicit.",
       "The renderer currently uses a fullscreen HLSL path. Traditional geometry is allowed only as scaffolding; the visible Aquarium world should be shader-owned."
     ],
