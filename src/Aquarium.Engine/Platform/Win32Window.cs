@@ -100,7 +100,7 @@ public sealed class Win32Window : IDisposable
 
     public int ClientHeight { get; private set; }
 
-    public static Win32Window Create(string title, int width, int height, InputState input, string? iconPath = null)
+    public static Win32Window Create(string title, int width, int height, InputState input, string? iconPath = null, bool visible = true)
     {
         var className = $"AquariumEngineWindow-{Guid.NewGuid():N}";
         var instance = GetModuleHandle(null);
@@ -180,11 +180,17 @@ public sealed class Win32Window : IDisposable
                 throw new InvalidOperationException($"RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
             }
 
+            var style = WS_OVERLAPPEDWINDOW;
+            if (visible)
+            {
+                style |= WS_VISIBLE;
+            }
+
             var handle = CreateWindowEx(
                 0,
                 classNamePointer,
                 titlePointer,
-                WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                style,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 width,
@@ -199,7 +205,11 @@ public sealed class Win32Window : IDisposable
                 throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastWin32Error()}");
             }
 
-            ShowWindow(handle, SW_SHOW);
+            if (visible)
+            {
+                ShowWindow(handle, SW_SHOW);
+            }
+
             if (largeIcon != IntPtr.Zero)
             {
                 SendMessage(handle, WM_SETICON, ICON_BIG, largeIcon);
@@ -210,7 +220,11 @@ public sealed class Win32Window : IDisposable
                 SendMessage(handle, WM_SETICON, ICON_SMALL, smallIcon);
             }
 
-            UpdateWindow(handle);
+            if (visible)
+            {
+                UpdateWindow(handle);
+            }
+
             SetWindowText(handle, title);
 
             return new Win32Window(handle, className, windowProcedure, input, width, height, largeIcon, smallIcon, splashIcon);

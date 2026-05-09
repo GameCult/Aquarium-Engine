@@ -170,3 +170,9 @@ prototype integrated along the camera ray before surface composition.
   Aquarium now quarantines unreadable snapshots with a `.corrupt-<timestamp>`
   suffix and boots fresh state; CultLib single-file stores now write through a
   temp file and atomic replace to avoid future zero-byte live snapshots.
+- Headless dev-reload correction: `-Headless` now creates a hidden Win32 window,
+  waits for the two-frame run to exit, kills and fails on timeout, and logs
+  renderer startup checkpoints to stdout. This exposed the real shader compile
+  failure: the medium density-column debug loop must stay rolled because forcing
+  an unroll expands the registered medium density stack beyond D3DCompiler's
+  tolerance.

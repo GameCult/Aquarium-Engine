@@ -1492,7 +1492,7 @@ float mediumDensityColumnDebug(float3 rayDirection)
     float maxDensity = 0.0;
     float meanDensity = 0.0;
 
-    [unroll]
+    [loop]
     for (int sampleIndex = 0; sampleIndex < 16; sampleIndex++)
     {
         float z = lerp(-2.25, 3.5, ((float)sampleIndex + 0.5) / 16.0);

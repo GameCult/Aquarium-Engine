@@ -17,7 +17,7 @@ public static class AquariumHost
         var width = runtime.Options.Headless ? 640 : 1280;
         var height = runtime.Options.Headless ? 360 : 720;
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Aquarium-Engine-Icon.ico");
-        using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath);
+        using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath, visible: !runtime.Options.Headless);
         window.PaintSplash("Aquarium", "Preparing runtime state");
         using var renderer = new D3D11Renderer(
             window.Handle,
@@ -58,6 +58,7 @@ public static class AquariumHost
 
             if (runtime.Options.Headless && ++frames >= 2)
             {
+                Console.WriteLine("Headless Aquarium completed requested frames.");
                 break;
             }
         }

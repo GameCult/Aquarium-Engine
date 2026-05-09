@@ -22,7 +22,7 @@ public sealed class D3D11Renderer : IDisposable
     private const int GridHeightTextureSize = 128;
     private const int DitherTextureSize = 512;
     private const int BloomLevelCount = 3;
-    private const int MediumVolumeDownscale = 2;
+    private const int MediumVolumeDownscale = 4;
     private const int FroxelCountX = 8;
     private const int FroxelCountY = 8;
     private const int FroxelCountZ = 4;
@@ -141,7 +141,7 @@ public sealed class D3D11Renderer : IDisposable
         mediumVolumeHeight = Math.Max(1, height / MediumVolumeDownscale);
         ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
-        startupProgress?.Invoke("Creating D3D11 device and swapchain");
+        ReportStartupProgress(startupProgress, "Creating D3D11 device and swapchain");
 
         var featureLevels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
         var swapChainDescription = new SwapChainDescription
@@ -172,14 +172,14 @@ public sealed class D3D11Renderer : IDisposable
 
         Console.WriteLine("D3D11 device and swapchain created.");
 
-        startupProgress?.Invoke("Creating swapchain render targets");
+        ReportStartupProgress(startupProgress, "Creating swapchain render targets");
         using var backBuffer = swapChain.GetBuffer<ID3D11Texture2D>(0);
         renderTargetView = device.CreateRenderTargetView(backBuffer);
         using var backBufferSurface = swapChain.GetBuffer<IDXGISurface>(0);
         overlay = new DirectWriteOverlay(backBufferSurface, width, height);
         debugUi = CreateDebugUi();
 
-        startupProgress?.Invoke("Compiling aquarium shaders");
+        ReportStartupProgress(startupProgress, "Compiling aquarium shaders");
         var initialShaders = CompileShaderSet(this.shaderPath);
         vertexShader = initialShaders.VertexShader;
         gridHeightPixelShader = initialShaders.GridHeightPixelShader;
@@ -191,11 +191,11 @@ public sealed class D3D11Renderer : IDisposable
         bloomBlurVerticalPixelShader = initialShaders.BloomBlurVerticalPixelShader;
         resolvePixelShader = initialShaders.AquariumResolvePixelShader;
         lastShaderWriteUtc = File.GetLastWriteTimeUtc(this.shaderPath);
-        startupProgress?.Invoke("Creating Grid render targets and buffers");
+        ReportStartupProgress(startupProgress, "Creating Grid render targets and buffers");
         gridHeightTexture = CreateGridHeightTexture();
         gridHeightRenderTargetView = device.CreateRenderTargetView(gridHeightTexture);
         gridHeightShaderResourceView = device.CreateShaderResourceView(gridHeightTexture);
-        startupProgress?.Invoke("Creating temporal render targets");
+        ReportStartupProgress(startupProgress, "Creating temporal render targets");
         sceneTexture = CreateHdrTexture(width, height);
         sceneRenderTargetView = device.CreateRenderTargetView(sceneTexture);
         sceneShaderResourceView = device.CreateShaderResourceView(sceneTexture);
@@ -241,7 +241,7 @@ public sealed class D3D11Renderer : IDisposable
         historyControlTextureB = CreateHdrTexture(width, height);
         historyControlRenderTargetViewB = device.CreateRenderTargetView(historyControlTextureB);
         historyControlShaderResourceViewB = device.CreateShaderResourceView(historyControlTextureB);
-        startupProgress?.Invoke("Loading Aetheria blue-noise dither texture");
+        ReportStartupProgress(startupProgress, "Loading Aetheria blue-noise dither texture");
         ditherTexture = CreateDitherTexture(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
         ditherShaderResourceView = device.CreateShaderResourceView(ditherTexture);
         gridSampler = device.CreateSamplerState(new SamplerDescription
@@ -341,7 +341,14 @@ public sealed class D3D11Renderer : IDisposable
         context.UpdateSubresource(froxelPrimitiveIds, froxelPrimitiveBuffer);
         context.UpdateSubresource(fieldInstances, fieldInstanceBuffer);
         RenderGridHeight();
-        RenderMediumVolume();
+        if (ShouldRenderMediumVolume())
+        {
+            RenderMediumVolume();
+        }
+        else
+        {
+            ClearMediumVolume();
+        }
         RenderScene();
         RenderBloom();
         ResolveTemporal();
@@ -588,6 +595,22 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(12, fieldInstanceShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
+    }
+
+    private bool ShouldRenderMediumVolume()
+    {
+        return MediumCompositeIntensity > 0.001f || (RenderDebugMode >= 9 && RenderDebugMode <= 11);
+    }
+
+    private void ClearMediumVolume()
+    {
+        context.PSUnsetShaderResource(12);
+        context.PSUnsetShaderResource(13);
+        context.PSUnsetShaderResource(14);
+        context.OMSetRenderTargets(new[] { mediumVolumeRenderTargetView, mediumTransportRenderTargetView });
+        context.RSSetViewport(0.0f, 0.0f, mediumVolumeWidth, mediumVolumeHeight, 0.0f, 1.0f);
+        context.ClearRenderTargetView(mediumVolumeRenderTargetView, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
+        context.ClearRenderTargetView(mediumTransportRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
     }
 
     private void RenderScene()
@@ -1022,6 +1045,12 @@ public sealed class D3D11Renderer : IDisposable
 #endif
 
         return Compiler.CompileFromFile(path, entryPoint, profile, shaderFlags, EffectFlags.None);
+    }
+
+    private static void ReportStartupProgress(Action<string>? progress, string message)
+    {
+        Console.WriteLine($"Startup: {message}.");
+        progress?.Invoke(message);
     }
 
     private ShaderSet CompileShaderSet(string path)

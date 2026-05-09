@@ -4,7 +4,8 @@ param(
     [switch]$BuildOnly,
     [switch]$Reopen,
     [int]$RetainSlots = 12,
-    [int]$StartupTimeoutSeconds = 5
+    [int]$StartupTimeoutSeconds = 5,
+    [int]$HeadlessTimeoutSeconds = 15
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +39,10 @@ function Stop-PreviousOwnedProcess {
     }
 
     $state = Import-Clixml -Path $statePath
+    if (-not ($state.PSObject.Properties.Name -contains "pid")) {
+        return
+    }
+
     if (-not $state.pid) {
         return
     }
@@ -131,6 +136,37 @@ function Wait-ForStartedAquarium {
 
         throw "Aquarium process started but did not open a visible window within $StartupTimeoutSeconds seconds.`n$(Get-StderrTail)"
     }
+}
+
+function Wait-ForHeadlessAquarium {
+    param(
+        [System.Diagnostics.Process]$Process
+    )
+
+    $deadline = (Get-Date).AddSeconds([Math]::Max(1, $HeadlessTimeoutSeconds))
+    while ((Get-Date) -lt $deadline) {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            $Process.WaitForExit()
+            $exitCode = [int]$Process.ExitCode
+            if ($exitCode -ne 0) {
+                throw "Headless Aquarium exited with code $exitCode.`n$(Get-StderrTail)"
+            }
+
+            return
+        }
+
+        Start-Sleep -Milliseconds 100
+    }
+
+    try {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    }
+    catch {
+        # Best effort cleanup before surfacing the broken smoke test.
+    }
+
+    throw "Headless Aquarium did not exit within $HeadlessTimeoutSeconds seconds; killed PID $($Process.Id).`n$(Get-StderrTail)"
 }
 
 function Start-AquariumProcess {
@@ -273,7 +309,28 @@ if (-not (Test-Path $liveAssemblyPath)) {
 }
 
 $process = Start-AquariumProcess -SlotPath $slotPath -LiveAssemblyPath $liveAssemblyPath -RunHeadless:$Headless
-Wait-ForStartedAquarium -Process $process -ExpectWindow:(-not $Headless)
+if ($Headless) {
+    Wait-ForHeadlessAquarium -Process $process
+
+    @{
+        slot = $slotPath
+        builtAt = (Get-Date).ToString("o")
+        liveAssembly = $liveAssemblyPath
+        headless = $true
+        stdoutLog = $stdoutLogPath
+        stderrLog = $stderrLogPath
+    } | Export-Clixml -Path $statePath
+
+    Write-Host "Headless Aquarium completed from disposable slot."
+    Write-Host "  Slot: $slotPath"
+    Write-Host "  CultCache: $cultCachePath"
+    Write-Host "  Stdout: $stdoutLogPath"
+    Write-Host "  Stderr: $stderrLogPath"
+    Remove-OldSlots
+    exit 0
+}
+
+Wait-ForStartedAquarium -Process $process -ExpectWindow:$true
 
 @{
     slot = $slotPath
