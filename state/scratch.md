@@ -196,3 +196,8 @@ prototype integrated along the camera ray before surface composition.
   artifact; composite now uses the same direct registered-medium ray integration
   as ray debug, clamped to the visible surface travel. Atlas density remains a
   diagnostic view only.
+- First real froxel volume pass: the failed 4x4 MAD path has been replaced by a
+  packed 160x90x32-at-720p frustum froxel volume stored as an 8x4 D3D11 atlas.
+  The medium pass writes per-froxel density/transmittance/in-scattering, resolve
+  integrates the froxel transport for final composite, and direct ray debug
+  remains the reference for checking shape and continuity.

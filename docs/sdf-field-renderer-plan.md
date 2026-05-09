@@ -100,11 +100,12 @@ except to replace them.
 
 Current status: the renderer now packs a first fixed-size field instance buffer
 for Self, planets, and local cloud/medium ellipsoids. HLSL consumes that buffer
-in a half-resolution 4x4 frustum slice atlas pass that writes density,
-transmittance, and source diagnostics plus transport. Density noise is evaluated
-in field-local/world coordinates, not animated screen space. Final composition
-uses the transport texture behind a persisted intensity gate that defaults to
-zero. This is the contract foothold, not the final volume renderer.
+in a packed froxel medium pass that writes density, transmittance, and
+in-scattering transport. Density noise is evaluated in field-local/world
+coordinates, not animated screen space. Final composition uses the froxel
+transport behind a persisted intensity gate that defaults to zero, while direct
+ray debug modes remain the correctness reference. This is the first real volume
+pass, not the final sparse/cascaded volume renderer.
 
 ### Gate 2: Broad Phase
 

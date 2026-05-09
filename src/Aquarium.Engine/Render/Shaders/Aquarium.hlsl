@@ -68,8 +68,9 @@ static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const int CLOUD_FIELD_COUNT = 4;
 static const int FIELD_INSTANCE_COUNT = 10;
 static const int FIELD_FLAG_CLOUD = 2;
-static const int MEDIUM_SLICE_GRID = 4;
-static const int MEDIUM_SLICE_COUNT = MEDIUM_SLICE_GRID * MEDIUM_SLICE_GRID;
+static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
+static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
+static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
 static const float CLOUD_MIN_STEP = 0.085;
 static const float CLOUD_MAX_STEP = 0.46;
 static const float CLOUD_EMPTY_STEP_SCALE = 0.42;
@@ -511,20 +512,31 @@ float4 sampleMediumTransport(float2 uv)
 
 float2 mediumAtlasUv(float2 uv, int sliceIndex)
 {
-    int tileX = sliceIndex % MEDIUM_SLICE_GRID;
-    int tileY = sliceIndex / MEDIUM_SLICE_GRID;
-    return (float2(tileX, tileY) + uv) / (float)MEDIUM_SLICE_GRID;
+    int tileX = sliceIndex % MEDIUM_FROXEL_ATLAS_COLUMNS;
+    int tileY = sliceIndex / MEDIUM_FROXEL_ATLAS_COLUMNS;
+    return (float2(tileX, tileY) + uv) / float2(MEDIUM_FROXEL_ATLAS_COLUMNS, MEDIUM_FROXEL_ATLAS_ROWS);
 }
 
-void integrateMediumAtlas(float2 uv, out float densityMean, out float transmittance, out float3 inScattering)
+float mediumSliceTravel(int sliceIndex)
+{
+    float t = ((float)sliceIndex + 0.5) / (float)MEDIUM_FROXEL_SLICE_COUNT;
+    return t * farDistance;
+}
+
+void integrateMediumFroxelAtlas(float2 uv, float maxTravel, out float densityMean, out float transmittance, out float3 inScattering)
 {
     densityMean = 0.0;
     transmittance = 1.0;
     inScattering = 0.0;
 
-    [unroll]
-    for (int sliceIndex = 0; sliceIndex < MEDIUM_SLICE_COUNT; sliceIndex++)
+    [loop]
+    for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
     {
+        if (mediumSliceTravel(sliceIndex) > maxTravel)
+        {
+            break;
+        }
+
         float2 atlasUv = mediumAtlasUv(uv, sliceIndex);
         float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
         float4 transport = mediumTransportTexture.SampleLevel(gridSampler, atlasUv, 0.0);
@@ -533,7 +545,7 @@ void integrateMediumAtlas(float2 uv, out float densityMean, out float transmitta
         transmittance *= saturate(transport.a);
     }
 
-    densityMean = saturate(densityMean / (float)MEDIUM_SLICE_COUNT);
+    densityMean = saturate(densityMean / (float)MEDIUM_FROXEL_SLICE_COUNT);
 }
 
 void cloudFieldInfo(int index, out float3 center, out float3 radius, out float3 tint, out float densityScale)
@@ -1526,16 +1538,16 @@ struct MediumVolumeOut
 
 MediumVolumeOut MediumVolumePS(VertexOut input)
 {
-    float2 atlasCoord = saturate(input.uv) * (float)MEDIUM_SLICE_GRID;
-    int2 tile = clamp((int2)floor(atlasCoord), int2(0, 0), int2(MEDIUM_SLICE_GRID - 1, MEDIUM_SLICE_GRID - 1));
-    int sliceIndex = tile.x + tile.y * MEDIUM_SLICE_GRID;
+    float2 atlasCoord = saturate(input.uv) * float2(MEDIUM_FROXEL_ATLAS_COLUMNS, MEDIUM_FROXEL_ATLAS_ROWS);
+    int2 tile = clamp((int2)floor(atlasCoord), int2(0, 0), int2(MEDIUM_FROXEL_ATLAS_COLUMNS - 1, MEDIUM_FROXEL_ATLAS_ROWS - 1));
+    int sliceIndex = tile.x + tile.y * MEDIUM_FROXEL_ATLAS_COLUMNS;
     float2 localUv = frac(atlasCoord);
     float2 screenUv = float2(localUv.x, 1.0 - localUv.y);
     float2 pixel = screenUv * resolution;
     float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
 
-    float sliceLength = farDistance / (float)MEDIUM_SLICE_COUNT;
-    float travel = ((float)sliceIndex + 0.5) * sliceLength;
+    float sliceLength = farDistance / (float)MEDIUM_FROXEL_SLICE_COUNT;
+    float travel = mediumSliceTravel(sliceIndex);
     float3 p = cameraPosition + rayDirection * travel;
     float3 scattering;
     float density = registeredMediumDensity(p, scattering);
@@ -1605,7 +1617,7 @@ SceneOut AquariumScenePS(VertexOut input)
     float mediumDensityMean;
     float mediumTransmittance;
     float3 mediumInScattering;
-    integrateMediumAtlas(input.uv, mediumDensityMean, mediumTransmittance, mediumInScattering);
+    integrateMediumFroxelAtlas(input.uv, farDistance, mediumDensityMean, mediumTransmittance, mediumInScattering);
     outputMediumOpacity = saturate(1.0 - mediumTransmittance);
     outputMediumDensity = mediumDensityMean;
 
@@ -1805,18 +1817,17 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
 
     float mediumBlend = saturate(mediumCompositeIntensity);
-    float directMediumTransmittance = 1.0;
-    float3 directMediumInScattering = 0.0;
+    float froxelMediumDensity = 0.0;
+    float froxelMediumTransmittance = 1.0;
+    float3 froxelMediumInScattering = 0.0;
     if (mediumBlend > 0.0001)
     {
-        float directMediumDensity;
         float mediumTravel = currentTravel <= farDistance ? currentTravel : farDistance;
-        float3 mediumRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-        integrateRegisteredMedium(cameraPosition, mediumRay, mediumTravel, directMediumDensity, directMediumTransmittance, directMediumInScattering);
+        integrateMediumFroxelAtlas(input.uv, mediumTravel, froxelMediumDensity, froxelMediumTransmittance, froxelMediumInScattering);
     }
 
-    float blendedMediumTransmittance = lerp(1.0, directMediumTransmittance, mediumBlend);
-    float3 resolved = currentColor * blendedMediumTransmittance + directMediumInScattering * mediumBlend;
+    float blendedMediumTransmittance = lerp(1.0, froxelMediumTransmittance, mediumBlend);
+    float3 resolved = currentColor * blendedMediumTransmittance + froxelMediumInScattering * mediumBlend;
 
     float3 exposedColor = exposeSceneColor(resolved);
     float3 bloomColor =
@@ -1880,7 +1891,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
         float mediumDensityMean;
         float atlasMediumTransmittance;
         float3 atlasMediumInScattering;
-        integrateMediumAtlas(input.uv, mediumDensityMean, atlasMediumTransmittance, atlasMediumInScattering);
+        integrateMediumFroxelAtlas(input.uv, farDistance, mediumDensityMean, atlasMediumTransmittance, atlasMediumInScattering);
         finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(mediumDensityMean * 6.0));
     }
 

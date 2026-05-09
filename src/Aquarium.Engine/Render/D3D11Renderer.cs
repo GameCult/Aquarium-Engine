@@ -22,7 +22,10 @@ public sealed class D3D11Renderer : IDisposable
     private const int GridHeightTextureSize = 128;
     private const int DitherTextureSize = 512;
     private const int BloomLevelCount = 3;
-    private const int MediumVolumeDownscale = 4;
+    private const int MediumFroxelDownscale = 8;
+    private const int MediumFroxelSliceCount = 32;
+    private const int MediumFroxelAtlasColumns = 8;
+    private const int MediumFroxelAtlasRows = 4;
     private const int FroxelCountX = 8;
     private const int FroxelCountY = 8;
     private const int FroxelCountZ = 4;
@@ -43,7 +46,7 @@ public sealed class D3D11Renderer : IDisposable
         new(8, "Exposed Luminance"),
         new(9, "Medium Ray Density"),
         new(10, "Medium Ray Transmittance"),
-        new(11, "Medium Atlas Density"),
+        new(11, "Froxel Density"),
     ];
 
     private const float SunRadius = 1.12f;
@@ -111,6 +114,8 @@ public sealed class D3D11Renderer : IDisposable
     private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
     private readonly int width;
     private readonly int height;
+    private readonly int mediumFroxelWidth;
+    private readonly int mediumFroxelHeight;
     private readonly int mediumVolumeWidth;
     private readonly int mediumVolumeHeight;
     private readonly string shaderPath;
@@ -137,8 +142,10 @@ public sealed class D3D11Renderer : IDisposable
     {
         this.width = width;
         this.height = height;
-        mediumVolumeWidth = Math.Max(1, width / MediumVolumeDownscale);
-        mediumVolumeHeight = Math.Max(1, height / MediumVolumeDownscale);
+        mediumFroxelWidth = Math.Max(1, width / MediumFroxelDownscale);
+        mediumFroxelHeight = Math.Max(1, height / MediumFroxelDownscale);
+        mediumVolumeWidth = mediumFroxelWidth * MediumFroxelAtlasColumns;
+        mediumVolumeHeight = mediumFroxelHeight * MediumFroxelAtlasRows;
         ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
         ReportStartupProgress(startupProgress, "Creating D3D11 device and swapchain");

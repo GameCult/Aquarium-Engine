@@ -227,15 +227,18 @@ startup mode can still be set with `--render-debug` or
 
 Fog work has started behind diagnostics rather than final-frame haze. The host
 packs stable field instances into a structured buffer shared with HLSL. A
-half-resolution medium pass writes a 4x4 frustum slice atlas into diagnostic and
-transport textures before the scene pass. Each atlas texel reconstructs a world
-position and samples registered medium density there; resolve integrates those
-stored cells front-to-back for transport diagnostics. Mode `9` is a separate
-world-anchored density column over the Grid plane, while modes `10` and `11`
-show transport transmittance and debug-boosted source respectively. Final
-composition uses `surface * transmittance + in-scattering`, gated by the
-persisted Medium Composite control. The default is `0`, so the pass can be
-inspected without changing the presented frame until the medium is tuned.
+packed froxel medium pass writes 32 frustum slices into diagnostic and transport
+textures before the scene pass. At 1280x720 the first volume is 160x90x32,
+packed as an 8x4 D3D11 atlas. Each froxel reconstructs a world position and
+samples registered medium density there; resolve integrates those cells
+front-to-back for composition and diagnostics. Mode `9` previews direct
+registered-medium density at the selected ray step, mode `10` previews direct
+ray transmittance to that step, and mode `11` shows integrated froxel density.
+Direct ray debug remains the correctness reference while the froxel pass earns
+final-frame authority. Final composition uses `surface * transmittance +
+in-scattering`, gated by the persisted Medium Composite control. The default is
+`0`, so the pass can be inspected without changing the presented frame until the
+medium is tuned.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:
