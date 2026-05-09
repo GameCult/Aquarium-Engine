@@ -117,7 +117,12 @@ prototype integrated along the camera ray before surface composition.
   toggled with F2. It uses a CultLib-inspired code-first control API with
   retained bound sliders/toggles/buttons instead of Unity prefabs or ImGui
   chrome. First live controls are render debug mode, exposure, bloom intensity,
-  bloom veil, and panel visibility; the HDR controls feed shader constants.
+  and bloom veil; the HDR controls feed shader constants. Important UI lessons:
+  Vortice `Rect` is x/y/width/height, so use `RectFromEdges` for edge math;
+  rows/buttons/tooltips are flat Direct2D overlay UI; sliders need
+  element-specific base/hover/active states where track/fill and handle brighten
+  independently without geometry changes. To brighten saturated orange, lerp
+  toward white instead of trying to increase HSV value.
 - Dev watcher correction: live runtime reload now waits for the host stdout log
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last
