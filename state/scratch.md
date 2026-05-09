@@ -10,6 +10,15 @@ DirectWrite debug UI through a narrow D3D11On12 overlay bridge. D3D11 remains
 selectable only as temporary reference ballast until visible D3D12 use survives
 the cut.
 
+Current renderer correction: the D3D12 scene shader no longer uses the 32
+medium travel slices to discover Grid/transparent surface candidates. It now
+intersects the ray with the 8x8x4 spatial froxel bounds, DDA-steps crossed
+froxels, tests solid/transparent candidates inside each cell's exact travel
+interval, chooses the nearest solid and nearest transparent event, and only then
+evaluates Grid line/contour filtering for the selected transparent hit. The
+medium atlas remains a view-space range-integrated cache for now; it no longer
+drives surface discovery.
+
 ## Hot Context
 
 - Root: `E:\Projects\Aquarium-Engine`
