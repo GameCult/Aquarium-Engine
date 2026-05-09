@@ -29,6 +29,9 @@ public sealed class AquariumGraphicsSettingsState
     public float MediumCompositeIntensity { get; set; } = GraphicsSettings.Default.MediumCompositeIntensity;
 
     [Key(6)]
+    public int MediumDebugStep { get; set; } = GraphicsSettings.Default.MediumDebugStep;
+
+    [Key(7)]
     public long SaveGeneration { get; set; }
 
     public static AquariumGraphicsSettingsState FromSettings(GraphicsSettings settings)
@@ -40,12 +43,13 @@ public sealed class AquariumGraphicsSettingsState
             SceneExposure = normalized.SceneExposure,
             BloomIntensity = normalized.BloomIntensity,
             BloomVeilIntensity = normalized.BloomVeilIntensity,
-            MediumCompositeIntensity = normalized.MediumCompositeIntensity
+            MediumCompositeIntensity = normalized.MediumCompositeIntensity,
+            MediumDebugStep = normalized.MediumDebugStep
         };
     }
 
     public GraphicsSettings ToSettings()
     {
-        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity).Normalized();
+        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity, MediumDebugStep).Normalized();
     }
 }

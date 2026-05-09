@@ -41,9 +41,9 @@ public sealed class D3D11Renderer : IDisposable
         new(6, "Field Identity"),
         new(7, "Bloom"),
         new(8, "Exposed Luminance"),
-        new(9, "Density Column"),
-        new(10, "Medium Transmittance"),
-        new(11, "Medium Source"),
+        new(9, "Medium Ray Density"),
+        new(10, "Medium Ray Transmittance"),
+        new(11, "Medium Atlas Density"),
     ];
 
     private const float SunRadius = 1.12f;
@@ -333,6 +333,9 @@ public sealed class D3D11Renderer : IDisposable
             BloomIntensity,
             BloomVeilIntensity,
             MediumCompositeIntensity,
+            MediumDebugStep,
+            0.0f,
+            0.0f,
             0.0f);
 
         BuildFroxelPrimitiveTable(frame);
@@ -373,6 +376,8 @@ public sealed class D3D11Renderer : IDisposable
 
     public float MediumCompositeIntensity { get; set; } = GraphicsSettings.Default.MediumCompositeIntensity;
 
+    public int MediumDebugStep { get; set; } = GraphicsSettings.Default.MediumDebugStep;
+
     public bool DebugUiVisible
     {
         get => debugUi.IsVisible;
@@ -391,7 +396,7 @@ public sealed class D3D11Renderer : IDisposable
 
     public GraphicsSettings CaptureGraphicsSettings()
     {
-        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity).Normalized();
+        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity, MediumDebugStep).Normalized();
     }
 
     public void ApplyGraphicsSettings(GraphicsSettings settings)
@@ -402,6 +407,7 @@ public sealed class D3D11Renderer : IDisposable
         BloomIntensity = normalized.BloomIntensity;
         BloomVeilIntensity = normalized.BloomVeilIntensity;
         MediumCompositeIntensity = normalized.MediumCompositeIntensity;
+        MediumDebugStep = normalized.MediumDebugStep;
     }
 
     private DebugUi CreateDebugUi()
@@ -416,7 +422,8 @@ public sealed class D3D11Renderer : IDisposable
                 .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.")
                 .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.")
                 .Section("Medium")
-                .Slider("Composite", () => MediumCompositeIntensity, value => MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene."));
+                .Slider("Composite", () => MediumCompositeIntensity, value => MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene.")
+                .Slider("Ray Step", () => MediumDebugStep, value => MediumDebugStep = Math.Clamp(value, GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep), GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep, "Selects the medium raymarch sample shown by ray debug views.", () => RenderDebugMode is 9 or 10));
     }
 
     public void Dispose()
@@ -1096,7 +1103,10 @@ public sealed class D3D11Renderer : IDisposable
         float BloomIntensity,
         float BloomVeilIntensity,
         float MediumCompositeIntensity,
-        float Padding);
+        float MediumDebugStep,
+        float Padding0,
+        float Padding1,
+        float Padding2);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 

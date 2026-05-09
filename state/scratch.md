@@ -176,3 +176,13 @@ prototype integrated along the camera ray before surface composition.
   failure: the medium density-column debug loop must stay rolled because forcing
   an unroll expands the registered medium density stack beyond D3DCompiler's
   tolerance.
+- Medium debug correction: "Medium Source" was a misleading view. In volume
+  rendering source should mean injected/in-scattered radiance from a real light
+  field, but Aquarium does not have that injection stage yet. Debug modes now
+  separate direct camera-ray density, direct camera-ray transmittance, and the
+  low-resolution atlas density diagnostic.
+- Medium ray preview UI: debug controls can now be conditionally visible.
+  `GraphicsSettings.MediumDebugStep` persists a ray sample index. The Ray Step
+  slider appears only in Medium Ray Density / Medium Ray Transmittance modes;
+  density mode shows density at that selected sample, and transmittance mode
+  shows accumulated survival to that sample.

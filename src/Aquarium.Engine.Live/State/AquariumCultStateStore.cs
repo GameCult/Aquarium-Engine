@@ -91,6 +91,7 @@ public sealed class AquariumCultStateStore : IDisposable
         state.BloomIntensity = normalized.BloomIntensity;
         state.BloomVeilIntensity = normalized.BloomVeilIntensity;
         state.MediumCompositeIntensity = normalized.MediumCompositeIntensity;
+        state.MediumDebugStep = normalized.MediumDebugStep;
         state.SaveGeneration++;
         cache.AddAsync(state, new CultRecordHandle<AquariumGraphicsSettingsState>(GraphicsSettingsKey)).GetAwaiter().GetResult();
         backingStore.PushAll();

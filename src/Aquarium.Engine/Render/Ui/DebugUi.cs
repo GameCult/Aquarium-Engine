@@ -69,7 +69,7 @@ internal sealed class DebugUi
         WantsMouse = Contains(panelBounds, mousePosition);
         closeButtonHovered = Contains(CloseButtonBounds(), mousePosition);
         closeButtonActive = closeButtonHovered && input.LeftMouseDown;
-        foreach (var control in controls)
+        foreach (var control in controls.Where(control => control.IsVisible))
         {
             control.UpdateHover(mousePosition);
             control.IsActive = control.Id == activeControlId && input.LeftMouseDown;
@@ -83,7 +83,7 @@ internal sealed class DebugUi
 
         if (activeSliderId is { } sliderId)
         {
-            if (controls.FirstOrDefault(control => control.Id == sliderId) is SliderControl activeSlider)
+            if (controls.FirstOrDefault(control => control.IsVisible && control.Id == sliderId) is SliderControl activeSlider)
             {
                 activeSlider.IsActive = true;
                 activeSlider.Drag(mousePosition);
@@ -107,6 +107,11 @@ internal sealed class DebugUi
         for (var index = controls.Count - 1; index >= 0; index--)
         {
             var control = controls[index];
+            if (!control.IsVisible)
+            {
+                continue;
+            }
+
             if (!control.HitTest(mousePosition))
             {
                 continue;
@@ -125,7 +130,7 @@ internal sealed class DebugUi
             break;
         }
 
-        foreach (var control in controls)
+        foreach (var control in controls.Where(control => control.IsVisible))
         {
             if (!ReferenceEquals(control, clickedControl))
             {
@@ -194,7 +199,7 @@ internal sealed class DebugUi
             closeBrush,
             closeButtonActive ? 2.0f : 1.25f);
 
-        foreach (var control in controls)
+        foreach (var control in controls.Where(control => control.IsVisible))
         {
             control.Draw(
                 target,
@@ -219,7 +224,7 @@ internal sealed class DebugUi
     private void Layout()
     {
         var y = PanelTop + HeaderHeight + 10.0f;
-        foreach (var control in controls)
+        foreach (var control in controls.Where(control => control.IsVisible))
         {
             var height = control.LayoutHeight;
             control.Bounds = RectFromEdges(PanelLeft + 10.0f, y, PanelLeft + PanelWidth - 10.0f, y + height);
@@ -250,7 +255,7 @@ internal sealed class DebugUi
     {
         var tooltip = closeButtonHovered
             ? "Close panel. Press F2 to show it again."
-            : controls.FirstOrDefault(control => control.IsHovered)?.Tooltip;
+            : controls.FirstOrDefault(control => control.IsVisible && control.IsHovered)?.Tooltip;
         if (string.IsNullOrWhiteSpace(tooltip))
         {
             return;
@@ -305,46 +310,46 @@ internal sealed class DebugUi
             this.controls = controls;
         }
 
-        public DebugUiPanel Section(string title)
+        public DebugUiPanel Section(string title, Func<bool>? isVisible = null)
         {
-            controls.Add(new SectionControl(title));
+            controls.Add(new SectionControl(title, isVisible));
             return this;
         }
 
-        public DebugUiPanel Button(string label, Action action, string? tooltip = null)
+        public DebugUiPanel Button(string label, Action action, string? tooltip = null, Func<bool>? isVisible = null)
         {
-            controls.Add(new ButtonControl(label, action, tooltip));
+            controls.Add(new ButtonControl(label, action, tooltip, isVisible));
             return this;
         }
 
-        public DebugUiPanel Toggle(string label, Func<bool> read, Action<bool> write, string? tooltip = null)
+        public DebugUiPanel Toggle(string label, Func<bool> read, Action<bool> write, string? tooltip = null, Func<bool>? isVisible = null)
         {
-            controls.Add(new ToggleControl(label, read, write, tooltip));
+            controls.Add(new ToggleControl(label, read, write, tooltip, isVisible));
             return this;
         }
 
-        public DebugUiPanel Slider(string label, Func<float> read, Action<float> write, float min, float max, string format = "0.###", string? tooltip = null)
+        public DebugUiPanel Slider(string label, Func<float> read, Action<float> write, float min, float max, string format = "0.###", string? tooltip = null, Func<bool>? isVisible = null)
         {
-            controls.Add(new FloatSliderControl(label, read, write, min, max, format, tooltip));
+            controls.Add(new FloatSliderControl(label, read, write, min, max, format, tooltip, isVisible));
             return this;
         }
 
-        public DebugUiPanel Slider(string label, Func<int> read, Action<int> write, int min, int max, string? tooltip = null)
+        public DebugUiPanel Slider(string label, Func<int> read, Action<int> write, int min, int max, string? tooltip = null, Func<bool>? isVisible = null)
         {
-            controls.Add(new IntSliderControl(label, read, write, min, max, tooltip));
+            controls.Add(new IntSliderControl(label, read, write, min, max, tooltip, isVisible));
             return this;
         }
 
-        public DebugUiPanel Options(string label, Func<int> read, Action<int> write, IReadOnlyList<DebugUiOption> options, string? tooltip = null)
+        public DebugUiPanel Options(string label, Func<int> read, Action<int> write, IReadOnlyList<DebugUiOption> options, string? tooltip = null, Func<bool>? isVisible = null)
         {
-            controls.Add(new OptionControl(label, read, write, options, tooltip));
+            controls.Add(new OptionControl(label, read, write, options, tooltip, isVisible));
             return this;
         }
     }
 
     public readonly record struct DebugUiOption(int Value, string Label);
 
-    internal abstract class DebugUiControl(string label, string? tooltip = null)
+    internal abstract class DebugUiControl(string label, string? tooltip = null, Func<bool>? isVisible = null)
     {
         private static int nextId;
 
@@ -353,6 +358,8 @@ internal sealed class DebugUi
         protected string Label { get; } = label;
 
         public string? Tooltip { get; } = tooltip;
+
+        public bool IsVisible => isVisible?.Invoke() ?? true;
 
         public Rect Bounds { get; set; }
 
@@ -421,7 +428,7 @@ internal sealed class DebugUi
         }
     }
 
-    private sealed class SectionControl(string label) : DebugUiControl(label)
+    private sealed class SectionControl(string label, Func<bool>? isVisible) : DebugUiControl(label, isVisible: isVisible)
     {
         public override bool IsInteractive => false;
 
@@ -452,7 +459,7 @@ internal sealed class DebugUi
         }
     }
 
-    private sealed class ButtonControl(string label, Action action, string? tooltip) : DebugUiControl(label, tooltip)
+    private sealed class ButtonControl(string label, Action action, string? tooltip, Func<bool>? isVisible) : DebugUiControl(label, tooltip, isVisible)
     {
         public override void Click(Vector2 mouse) => action();
 
@@ -478,7 +485,7 @@ internal sealed class DebugUi
         }
     }
 
-    private sealed class ToggleControl(string label, Func<bool> read, Action<bool> write, string? tooltip) : DebugUiControl(label, tooltip)
+    private sealed class ToggleControl(string label, Func<bool> read, Action<bool> write, string? tooltip, Func<bool>? isVisible) : DebugUiControl(label, tooltip, isVisible)
     {
         public override void Click(Vector2 mouse) => write(!read());
 
@@ -516,7 +523,8 @@ internal sealed class DebugUi
         Func<int> read,
         Action<int> write,
         IReadOnlyList<DebugUiOption> options,
-        string? tooltip) : DebugUiControl(label, tooltip)
+        string? tooltip,
+        Func<bool>? isVisible) : DebugUiControl(label, tooltip, isVisible)
     {
         private bool isOpen;
         private int hoveredOptionIndex = -1;
@@ -643,7 +651,7 @@ internal sealed class DebugUi
         }
     }
 
-    private abstract class SliderControl(string label, string? tooltip) : DebugUiControl(label, tooltip)
+    private abstract class SliderControl(string label, string? tooltip, Func<bool>? isVisible) : DebugUiControl(label, tooltip, isVisible)
     {
         private const float ThumbRadius = 4.0f;
         private const float ThumbHitRadius = 8.0f;
@@ -756,7 +764,8 @@ internal sealed class DebugUi
         float min,
         float max,
         string format,
-        string? tooltip) : SliderControl(label, tooltip)
+        string? tooltip,
+        Func<bool>? isVisible) : SliderControl(label, tooltip, isVisible)
     {
         protected override float ReadNormalized()
         {
@@ -780,7 +789,8 @@ internal sealed class DebugUi
         Action<int> write,
         int min,
         int max,
-        string? tooltip) : SliderControl(label, tooltip)
+        string? tooltip,
+        Func<bool>? isVisible) : SliderControl(label, tooltip, isVisible)
     {
         protected override float ReadNormalized()
         {

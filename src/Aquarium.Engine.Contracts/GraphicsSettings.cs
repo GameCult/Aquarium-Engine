@@ -5,7 +5,8 @@ public readonly record struct GraphicsSettings(
     float SceneExposure,
     float BloomIntensity,
     float BloomVeilIntensity,
-    float MediumCompositeIntensity)
+    float MediumCompositeIntensity,
+    int MediumDebugStep)
 {
     public const int MinRenderDebugMode = 0;
     public const int MaxRenderDebugMode = 11;
@@ -17,13 +18,16 @@ public readonly record struct GraphicsSettings(
     public const float MaxBloomVeilIntensity = 0.08f;
     public const float MinMediumCompositeIntensity = 0.0f;
     public const float MaxMediumCompositeIntensity = 1.0f;
+    public const int MinMediumDebugStep = 0;
+    public const int MaxMediumDebugStep = 47;
 
     public static GraphicsSettings Default { get; } = new(
         RenderDebugMode: 0,
         SceneExposure: 0.16f,
         BloomIntensity: 0.072f,
         BloomVeilIntensity: 0.014f,
-        MediumCompositeIntensity: 0.0f);
+        MediumCompositeIntensity: 0.0f,
+        MediumDebugStep: 12);
 
     public GraphicsSettings Normalized()
     {
@@ -32,6 +36,7 @@ public readonly record struct GraphicsSettings(
             Math.Clamp(SceneExposure, MinSceneExposure, MaxSceneExposure),
             Math.Clamp(BloomIntensity, MinBloomIntensity, MaxBloomIntensity),
             Math.Clamp(BloomVeilIntensity, MinBloomVeilIntensity, MaxBloomVeilIntensity),
-            Math.Clamp(MediumCompositeIntensity, MinMediumCompositeIntensity, MaxMediumCompositeIntensity));
+            Math.Clamp(MediumCompositeIntensity, MinMediumCompositeIntensity, MaxMediumCompositeIntensity),
+            Math.Clamp(MediumDebugStep, MinMediumDebugStep, MaxMediumDebugStep));
     }
 }

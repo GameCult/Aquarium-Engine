@@ -18,7 +18,8 @@ cbuffer AquariumFrame : register(b0)
     float bloomIntensity;
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
-    float presentationPadding;
+    float mediumDebugStep;
+    float3 presentationPadding;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -455,6 +456,43 @@ void integrateRegisteredMedium(float3 rayOrigin, float3 rayDirection, float maxT
             densityIntegral += density * stepLength;
             inScattering += transmittance * scattering * (1.0 - segmentTransmittance) / max(extinction, 0.001);
             transmittance *= segmentTransmittance;
+        }
+
+        travel += stepLength;
+    }
+}
+
+void previewRegisteredMediumStep(float3 rayOrigin, float3 rayDirection, float maxTravel, float requestedStep, out float stepDensity, out float transmittance)
+{
+    stepDensity = 0.0;
+    transmittance = 1.0;
+
+    float marchEnd = min(maxTravel, farDistance);
+    float stepLength = max(marchEnd / 40.0, 0.08);
+    int selectedStep = clamp((int)round(requestedStep), 0, 47);
+    float travel = stepLength * 0.5;
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < 48; stepIndex++)
+    {
+        if (travel >= marchEnd || transmittance < 0.02)
+        {
+            break;
+        }
+
+        float3 p = rayOrigin + rayDirection * travel;
+        float3 scattering;
+        float density = registeredMediumDensity(p, scattering);
+        float extinction = density * 0.16;
+        if (stepIndex == selectedStep)
+        {
+            stepDensity = density;
+            return;
+        }
+
+        if (density > 0.001)
+        {
+            transmittance *= exp(-extinction * stepLength);
         }
 
         travel += stepLength;
@@ -1473,39 +1511,6 @@ float3 debugFieldIdColor(float fieldId)
     return float3(1.0, 0.0, 1.0);
 }
 
-float mediumDensityColumnDebug(float3 rayDirection)
-{
-    float denominator = rayDirection.z;
-    if (abs(denominator) < 0.0001)
-    {
-        return 0.0;
-    }
-
-    float travel = (0.0 - cameraPosition.z) / denominator;
-    if (travel <= 0.0 || travel >= farDistance)
-    {
-        return 0.0;
-    }
-
-    float2 xy = (cameraPosition + rayDirection * travel).xy;
-    float gridMask = 1.0 - smoothstep(gridRadius * 0.98, gridRadius * 1.04, length(xy - gridCenter));
-    float maxDensity = 0.0;
-    float meanDensity = 0.0;
-
-    [loop]
-    for (int sampleIndex = 0; sampleIndex < 16; sampleIndex++)
-    {
-        float z = lerp(-2.25, 3.5, ((float)sampleIndex + 0.5) / 16.0);
-        float3 scattering;
-        float density = registeredMediumDensity(float3(xy, z), scattering);
-        maxDensity = max(maxDensity, density);
-        meanDensity += density;
-    }
-
-    meanDensity /= 16.0;
-    return saturate((maxDensity * 0.85 + meanDensity * 1.75) * gridMask);
-}
-
 struct SceneOut
 {
     float4 colorTravel : SV_Target0;
@@ -1850,18 +1855,23 @@ ResolveOut AquariumResolvePS(VertexOut input)
     else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
     {
         float3 debugRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-        float densityColumn = mediumDensityColumnDebug(debugRay);
-        finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), densityColumn);
+        float stepDensity;
+        float stepTransmittance;
+        previewRegisteredMediumStep(cameraPosition, debugRay, farDistance, mediumDebugStep, stepDensity, stepTransmittance);
+        float densityDebug = saturate(stepDensity * 3.0);
+        finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), densityDebug);
     }
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {
-        float transmittance = saturate(1.0 - currentMediumOpacity);
-        finalColor = lerp(float3(0.10, 0.02, 0.01), float3(0.72, 1.0, 0.86), transmittance);
+        float3 debugRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float stepDensity;
+        float stepTransmittance;
+        previewRegisteredMediumStep(cameraPosition, debugRay, farDistance, mediumDebugStep, stepDensity, stepTransmittance);
+        finalColor = lerp(float3(0.10, 0.02, 0.01), float3(0.72, 1.0, 0.86), saturate(stepTransmittance));
     }
     else if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
     {
-        float source = saturate(dot(atlasMediumInScattering, float3(0.2126, 0.7152, 0.0722)) * 18.0);
-        finalColor = lerp(float3(0.015, 0.015, 0.028), float3(0.95, 0.74, 0.36), source);
+        finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(mediumDensityMean * 6.0));
     }
 
     ResolveOut output;
