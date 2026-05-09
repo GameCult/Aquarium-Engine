@@ -249,3 +249,10 @@ the stochastic transparent surface pipe.
   frame fence wait, named resources live in `D3D12ResourceRegistry`, and
   one-second capacity diagnostics report upload ring, transient/static shader
   descriptor, and RTV usage.
+- D3D12 SRV/resize pass: render targets can now own SRV descriptors, the smoke
+  target is sampled by a second fullscreen pass instead of copied as a raw
+  resource, and the renderer interface passes current window dimensions so D3D12
+  can recreate swapchain buffers and dependent smoke resources on resize. Resize
+  still consumes fixed bring-up descriptors and fails loudly before exhaustion;
+  production descriptor reclamation/rebuild policy remains before serious pass
+  migration.

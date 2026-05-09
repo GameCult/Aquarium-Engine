@@ -12,6 +12,7 @@ internal sealed class D3D12RenderTarget : IDisposable
         int height,
         Format format,
         D3D12DescriptorSlot renderTargetView,
+        D3D12DescriptorSlot? shaderResourceView,
         Color4 clearColor,
         string name)
     {
@@ -19,6 +20,7 @@ internal sealed class D3D12RenderTarget : IDisposable
         Height = height;
         Format = format;
         RenderTargetView = renderTargetView;
+        ShaderResourceView = shaderResourceView;
         var optimizedClear = new ClearValue(format, in clearColor);
         Resource = device.CreateCommittedResource(
             HeapType.Default,
@@ -35,6 +37,19 @@ internal sealed class D3D12RenderTarget : IDisposable
             optimizedClear);
         Resource.Name = name;
         device.CreateRenderTargetView(Resource, null, renderTargetView.Cpu);
+        if (shaderResourceView.HasValue)
+        {
+            device.CreateShaderResourceView(
+                Resource,
+                new ShaderResourceViewDescription
+                {
+                    Format = format,
+                    ViewDimension = ShaderResourceViewDimension.Texture2D,
+                    Shader4ComponentMapping = ShaderComponentMapping.Default,
+                    Texture2D = new Texture2DShaderResourceView { MipLevels = 1 },
+                },
+                shaderResourceView.Value.Cpu);
+        }
     }
 
     public ID3D12Resource Resource { get; }
@@ -46,6 +61,8 @@ internal sealed class D3D12RenderTarget : IDisposable
     public Format Format { get; }
 
     public D3D12DescriptorSlot RenderTargetView { get; }
+
+    public D3D12DescriptorSlot? ShaderResourceView { get; }
 
     public ResourceStates State { get; private set; } = ResourceStates.PixelShaderResource;
 

@@ -10,6 +10,9 @@ cbuffer SmokeConstants : register(b0)
     float4 smokeParams;
 };
 
+Texture2D<float4> sourceTexture : register(t0);
+SamplerState sourceSampler : register(s0);
+
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -25,4 +28,9 @@ float4 D3D12SmokePS(VertexOut input) : SV_Target0
     float vignette = smoothstep(0.86, 0.18, length(input.uv - 0.5));
     float pulse = 0.92 + 0.08 * sin(smokeParams.x);
     return float4(baseColor * (0.72 + 0.28 * vignette) * pulse, 1.0);
+}
+
+float4 D3D12CopyPS(VertexOut input) : SV_Target0
+{
+    return sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0);
 }

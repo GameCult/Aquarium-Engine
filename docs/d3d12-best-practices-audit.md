@@ -27,6 +27,10 @@ smoke-pass helpers become permanent resource policy by accident.
   arenas. Transient arenas reset only after the owning frame fence clears.
 - D3D12 resources are registered by name, and capacity diagnostics report upload,
   transient descriptor, static descriptor, and RTV usage.
+- Render targets may create SRVs, and the smoke path now samples its offscreen
+  target in a second fullscreen pass instead of copying it as an opaque resource.
+- Renderer calls receive current window dimensions, and the D3D12 backend can
+  recreate swapchain buffers plus dependent smoke resources on resize.
 - The D3D12 smoke path exercises shader compilation, root signature, PSO,
   descriptor table, RTV binding, barriers, copy, and present.
 
@@ -36,6 +40,9 @@ smoke-pass helpers become permanent resource policy by accident.
   suballocation before the renderer owns many textures/buffers.
 - Descriptor arenas are still simple bump allocators. Add free lists or
   descriptor-table paging only when real resource churn demands it.
+- Resize currently consumes new static/RTV descriptors from fixed bring-up
+  arenas and fails loudly if capacity runs out. Production resize should reclaim
+  or rebuild descriptor arenas deliberately.
 - Upload ring is per-frame and reset after fence wait. It is not yet a global
   transient allocator with suballocation statistics or overflow diagnostics.
 - Backbuffer state is assumed. Wrap swapchain buffers in state-tracked frame
@@ -48,7 +55,8 @@ smoke-pass helpers become permanent resource policy by accident.
 
 - Upload ring capacity policy and overflow reporting for real frame data.
 - Debug names for D3D12 resources, descriptors by owner, and command lists.
-- Backbuffer state tracking and resize-safe recreation.
+- Production descriptor reclamation/rebuild policy for resize and resource
+  churn.
 
 ## Rule
 

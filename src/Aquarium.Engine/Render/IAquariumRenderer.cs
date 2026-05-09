@@ -16,5 +16,5 @@ public interface IAquariumRenderer : IDisposable
 
     void ApplyGraphicsSettings(GraphicsSettings settings);
 
-    void Render(AquariumFrame frame);
+    void Render(AquariumFrame frame, int width, int height);
 }

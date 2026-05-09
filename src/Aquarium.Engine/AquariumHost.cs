@@ -55,7 +55,7 @@ public static class AquariumHost
                 renderer.ApplyGraphicsSettings(settingsRuntime.GraphicsSettings);
             }
 
-            renderer.Render(runtimeLoader.Runtime.Frame);
+            renderer.Render(runtimeLoader.Runtime.Frame, window.ClientWidth, window.ClientHeight);
 
             if (runtime.Options.Headless && ++frames >= 2)
             {

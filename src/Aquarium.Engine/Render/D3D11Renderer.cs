@@ -373,6 +373,13 @@ public sealed class D3D11Renderer : IAquariumRenderer
         frameIndex++;
     }
 
+    public void Render(AquariumFrame frame, int width, int height)
+    {
+        _ = width;
+        _ = height;
+        Render(frame);
+    }
+
     public int RenderDebugMode { get; set; }
 
     public float SceneExposure { get; set; } = GraphicsSettings.Default.SceneExposure;

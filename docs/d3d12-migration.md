@@ -27,9 +27,10 @@ has feature parity.
 
 1. Keep D3D11 as the visual reference.
 2. Move shared renderer contracts behind explicit backend-neutral types.
-3. Add SRV/UAV creation paths and resize-safe resource recreation.
-4. Add resize-safe recreation and capacity diagnostics while the backend is
-   still small enough to make mistakes obvious.
+3. Add UAV creation paths and a production descriptor reclamation/rebuild policy
+   for resize/resource churn.
+4. Keep capacity diagnostics loud while the backend is still small enough to
+   make mistakes obvious.
 5. Port the existing passes in visible order: grid height, froxel volume, scene,
    bloom, resolve, overlay/debug.
 6. Build the transparent stochastic surface pipe in D3D12 once descriptor and

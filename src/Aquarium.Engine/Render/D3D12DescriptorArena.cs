@@ -25,6 +25,8 @@ internal sealed class D3D12DescriptorArena : IDisposable
 
     public int Used => used;
 
+    public int Available => Capacity - used;
+
     public string Name { get; }
 
     public D3D12DescriptorSlot Allocate()
