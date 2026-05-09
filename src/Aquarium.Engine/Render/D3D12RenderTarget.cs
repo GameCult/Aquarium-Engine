@@ -1,0 +1,65 @@
+using Vortice.Direct3D12;
+using Vortice.DXGI;
+using Vortice.Mathematics;
+
+namespace Aquarium.Engine.Render;
+
+internal sealed class D3D12RenderTarget : IDisposable
+{
+    public D3D12RenderTarget(
+        ID3D12Device device,
+        int width,
+        int height,
+        Format format,
+        D3D12DescriptorSlot renderTargetView,
+        Color4 clearColor)
+    {
+        Width = width;
+        Height = height;
+        Format = format;
+        RenderTargetView = renderTargetView;
+        var optimizedClear = new ClearValue(format, in clearColor);
+        Resource = device.CreateCommittedResource(
+            HeapType.Default,
+            ResourceDescription.Texture2D(
+                format,
+                (uint)width,
+                (uint)height,
+                1,
+                1,
+                1,
+                0,
+                ResourceFlags.AllowRenderTarget),
+            ResourceStates.PixelShaderResource,
+            optimizedClear);
+        device.CreateRenderTargetView(Resource, null, renderTargetView.Cpu);
+    }
+
+    public ID3D12Resource Resource { get; }
+
+    public int Width { get; }
+
+    public int Height { get; }
+
+    public Format Format { get; }
+
+    public D3D12DescriptorSlot RenderTargetView { get; }
+
+    public ResourceStates State { get; private set; } = ResourceStates.PixelShaderResource;
+
+    public void Transition(ID3D12GraphicsCommandList commandList, ResourceStates nextState)
+    {
+        if (State == nextState)
+        {
+            return;
+        }
+
+        commandList.ResourceBarrier(ResourceBarrier.BarrierTransition(Resource, State, nextState));
+        State = nextState;
+    }
+
+    public void Dispose()
+    {
+        Resource.Dispose();
+    }
+}
