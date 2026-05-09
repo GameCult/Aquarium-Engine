@@ -396,7 +396,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         commandQueue.ExecuteCommandList(commandList);
         var overlayCpuStart = Stopwatch.GetTimestamp();
-        RenderLoadingOverlay(frameResources);
+        RenderOverlay(frame, frameResources);
         var overlayCpuMilliseconds = ElapsedMilliseconds(overlayCpuStart);
         swapChain.Present(1, PresentFlags.None);
         var frameCpuMilliseconds = ElapsedMilliseconds(frameCpuStart);
@@ -432,27 +432,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private void RenderPipelineLoadingFrame(AquariumFrame frame, FrameResources frameResources, long frameCpuStart)
     {
-        frameResources.CommandAllocator.Reset();
-        commandList.Reset(frameResources.CommandAllocator, null);
-        commandList.BeginEvent("Aquarium D3D12 Pipeline Loading Frame");
-        frameResources.BackBuffer.Transition(commandList, ResourceStates.RenderTarget);
-        commandList.ClearRenderTargetView(frameResources.BackBufferRenderTargetView.Cpu, new Color4(0.002f, 0.006f, 0.008f, 1.0f));
-        commandList.EndEvent();
-        commandList.Close();
-
-        commandQueue.ExecuteCommandList(commandList);
-        var overlayCpuStart = Stopwatch.GetTimestamp();
-        RenderOverlay(frame, frameResources);
-        var overlayCpuMilliseconds = ElapsedMilliseconds(overlayCpuStart);
-        swapChain.Present(1, PresentFlags.None);
-        SignalFrame(frameResources);
-
         var frameCpuMilliseconds = ElapsedMilliseconds(frameCpuStart);
-        accumulatedOverlayCpuMilliseconds += overlayCpuMilliseconds;
         accumulatedFrameCpuMilliseconds += frameCpuMilliseconds;
         accumulatedTimingFrames++;
         ReportCapacityOncePerSecond(frame.TimeSeconds, frameResources);
-        frameIndex = (int)swapChain.CurrentBackBufferIndex;
+        Thread.Sleep(8);
     }
 
     public void Dispose()
@@ -555,16 +539,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var wrappedBackBuffer = overlayWrappedBackBuffers[frameIndex];
         overlayOn12Device.AcquireWrappedResources([wrappedBackBuffer]);
         overlays[frameIndex].Render(frame, RenderDebugMode, debugUi);
-        overlayOn12Device.ReleaseWrappedResources([wrappedBackBuffer]);
-        overlayContext.Flush();
-        frameResources.BackBuffer.MarkState(ResourceStates.Present);
-    }
-
-    private void RenderLoadingOverlay(FrameResources frameResources)
-    {
-        var wrappedBackBuffer = overlayWrappedBackBuffers[frameIndex];
-        overlayOn12Device.AcquireWrappedResources([wrappedBackBuffer]);
-        overlays[frameIndex].RenderSplash("Aquarium", "Compiling renderer pipelines");
         overlayOn12Device.ReleaseWrappedResources([wrappedBackBuffer]);
         overlayContext.Flush();
         frameResources.BackBuffer.MarkState(ResourceStates.Present);

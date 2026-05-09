@@ -30,8 +30,6 @@ internal sealed class DirectWriteOverlay : IDisposable
     private readonly ID2D1SolidColorBrush trackHoverBrush;
     private readonly ID2D1SolidColorBrush trackActiveBrush;
     private readonly IDWriteTextFormat titleFormat;
-    private readonly IDWriteTextFormat splashTitleFormat;
-    private readonly IDWriteTextFormat splashBodyFormat;
     private readonly IDWriteTextFormat smallFormat;
     private readonly int width;
     private readonly int height;
@@ -81,8 +79,6 @@ internal sealed class DirectWriteOverlay : IDisposable
         trackHoverBrush = renderTarget.CreateSolidColorBrush(new Color4(0.32f, 0.29f, 0.29f, 0.98f));
         trackActiveBrush = renderTarget.CreateSolidColorBrush(new Color4(0.45f, 0.38f, 0.34f, 1.0f));
         titleFormat = CreateTextFormat("Montserrat", 18.0f, FontWeight.Thin);
-        splashTitleFormat = CreateTextFormat("Montserrat", 28.0f, FontWeight.Thin);
-        splashBodyFormat = CreateTextFormat("Ubuntu Sans", 12.0f, FontWeight.Regular);
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
     }
 
@@ -137,34 +133,9 @@ internal sealed class DirectWriteOverlay : IDisposable
         renderTarget.EndDraw();
     }
 
-    public void RenderSplash(string header, string body)
-    {
-        var centerY = height * 0.50f;
-        renderTarget.BeginDraw();
-        DrawHeader(
-            header,
-            splashTitleFormat,
-            RectFromEdges(0, centerY - 46.0f, width, centerY - 4.0f),
-            primaryTextBrush);
-        renderTarget.DrawLine(
-            new System.Numerics.Vector2(width * 0.35f, centerY + 6.0f),
-            new System.Numerics.Vector2(width * 0.65f, centerY + 6.0f),
-            outlineBrush,
-            1.0f);
-        renderTarget.DrawText(
-            body,
-            splashBodyFormat,
-            RectFromEdges(0, centerY + 18.0f, width, centerY + 44.0f),
-            quietTextBrush,
-            DrawTextOptions.Clip);
-        renderTarget.EndDraw();
-    }
-
     public void Dispose()
     {
         smallFormat.Dispose();
-        splashBodyFormat.Dispose();
-        splashTitleFormat.Dispose();
         titleFormat.Dispose();
         smallCapsTypography.Dispose();
         fontCollection.Dispose();
