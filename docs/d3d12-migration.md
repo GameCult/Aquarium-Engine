@@ -32,6 +32,10 @@ has feature parity.
   and transport render targets from the field instance buffer. Render debug mode
   `11` now displays D3D12 froxel density, matching the future renderer path
   rather than the temporary Grid-height bring-up view.
+- The D3D12 scene pass now renders Self, planets, and medium transport through
+  the D3D12 frame graph. Grid line transparency is injected as a thin medium
+  contribution in the froxel atlas instead of being drawn as an alpha surface or
+  used as a scene-depth terminator.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

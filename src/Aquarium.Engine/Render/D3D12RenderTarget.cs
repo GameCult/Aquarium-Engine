@@ -48,16 +48,7 @@ internal sealed class D3D12RenderTarget : IDisposable
         device.CreateRenderTargetView(Resource, null, renderTargetView.Cpu);
         if (shaderResourceView.HasValue)
         {
-            device.CreateShaderResourceView(
-                Resource,
-                new ShaderResourceViewDescription
-                {
-                    Format = format,
-                    ViewDimension = ShaderResourceViewDimension.Texture2D,
-                    Shader4ComponentMapping = ShaderComponentMapping.Default,
-                    Texture2D = new Texture2DShaderResourceView { MipLevels = 1 },
-                },
-                shaderResourceView.Value.Cpu);
+            CreateShaderResourceView(device, shaderResourceView.Value);
         }
 
         if (unorderedAccessView.HasValue)
@@ -94,6 +85,20 @@ internal sealed class D3D12RenderTarget : IDisposable
                 Texture2D = new Texture2DUnorderedAccessView(),
             },
             unorderedAccessView.Cpu);
+    }
+
+    public void CreateShaderResourceView(ID3D12Device device, D3D12DescriptorSlot shaderResourceView)
+    {
+        device.CreateShaderResourceView(
+            Resource,
+            new ShaderResourceViewDescription
+            {
+                Format = Format,
+                ViewDimension = ShaderResourceViewDimension.Texture2D,
+                Shader4ComponentMapping = ShaderComponentMapping.Default,
+                Texture2D = new Texture2DShaderResourceView { MipLevels = 1 },
+            },
+            shaderResourceView.Cpu);
     }
 
     public void Transition(ID3D12GraphicsCommandList commandList, ResourceStates nextState)

@@ -86,7 +86,11 @@ D3D12 also uploads the current froxel primitive id table and field instance
 table into default-heap structured buffers every frame. The D3D12 medium pass
 renders a packed frustum froxel atlas into diagnostic and transport render
 targets from those field instances, and mode `11` displays the froxel density
-target. The scene and resolve passes have not been migrated yet.
+target. D3D12 final mode now renders a first scene pass for Self, planets, and
+medium transport. Grid line transparency contributes to the froxel medium as a
+thin participating layer, not as an alpha-blended surface or scene-depth
+terminator. The full temporal resolve, bloom pyramid, and full Grid line shader
+still need to move.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches

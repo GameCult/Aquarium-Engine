@@ -44,6 +44,11 @@ resource graph beyond smoke-pass scaffolding.
   into diagnostic and transport render targets. Mode `11` exposes froxel
   density, so the debug path now follows the renderer being built rather than a
   Grid-height bring-up convenience.
+- D3D12 final mode now draws a real scene pass instead of the smoke diagnostic:
+  Self, planets, and medium transport flow through D3D12. Transparent Grid line
+  contribution is sampled into the medium atlas as a thin participating layer,
+  so it is integrated with volumetrics rather than alpha-blended or used to
+  occlude the ray.
 - Renderer calls receive current window dimensions, and the D3D12 backend can
   recreate swapchain buffers plus dependent smoke resources on resize.
 - Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds
@@ -71,6 +76,10 @@ resource graph beyond smoke-pass scaffolding.
 - The offscreen smoke target copies to the swapchain. Keep this only if the real
   post-process graph needs it; otherwise present from the final render target
   path with no ornamental copy.
+- The D3D12 scene pass is still a first parity slice: no full temporal resolve,
+  bloom pyramid, full terrain line shader, or transparent-surface bin table yet.
+  The transparency contract is correct; the implementation still needs the
+  general binned transparent surface representation.
 - D3D11 and D3D12 field table builders are temporarily duplicated by design.
   D3D11 is reference-only and will be removed after migration; do not pay DRY
   tax merely to preserve it.

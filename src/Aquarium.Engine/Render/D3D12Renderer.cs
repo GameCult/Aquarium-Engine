@@ -34,6 +34,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";
     private const string MediumShaderRelativePath = "Render/Shaders/D3D12Medium.hlsl";
+    private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
 
     private readonly IDXGIFactory4 factory;
     private readonly ID3D12Device device;
@@ -47,6 +48,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12RootSignature fullscreenRootSignature;
     private readonly ID3D12PipelineState gridHeightBasePipelineState;
     private readonly ID3D12PipelineState gridHeightBrushPipelineState;
+    private readonly ID3D12PipelineState scenePipelineState;
     private readonly ID3D12PipelineState smokePipelineState;
     private readonly ID3D12PipelineState mediumVolumePipelineState;
     private readonly ID3D12PipelineState copyPipelineState;
@@ -143,10 +145,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var gridShaderPath = Path.Combine(AppContext.BaseDirectory, GridShaderRelativePath);
         var smokeShaderPath = Path.Combine(AppContext.BaseDirectory, SmokeShaderRelativePath);
         var mediumShaderPath = Path.Combine(AppContext.BaseDirectory, MediumShaderRelativePath);
+        var sceneShaderPath = Path.Combine(AppContext.BaseDirectory, SceneShaderRelativePath);
         gridHeightBasePipelineState = CreateGridHeightBasePipelineState(gridShaderPath);
         gridHeightBasePipelineState.Name = "Aquarium D3D12 Grid Height Base Pipeline";
         gridHeightBrushPipelineState = CreateGridHeightBrushPipelineState(gridShaderPath);
         gridHeightBrushPipelineState.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
+        scenePipelineState = CreateScenePipelineState(sceneShaderPath);
+        scenePipelineState.Name = "Aquarium D3D12 Scene Pipeline";
         mediumVolumePipelineState = CreateMediumVolumePipelineState(mediumShaderPath);
         mediumVolumePipelineState.Name = "Aquarium D3D12 Medium Volume Pipeline";
         smokePipelineState = CreateSmokePipelineState(smokeShaderPath);
@@ -263,6 +268,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         froxelPrimitiveBuffer.CreateShaderResourceView(device, frameResources.FroxelPrimitiveDescriptor);
         frameResources.FieldInstanceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         fieldInstanceBuffer.CreateShaderResourceView(device, frameResources.FieldInstanceDescriptor);
+        frameResources.GridHeightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        gridHeightRenderTarget.CreateShaderResourceView(device, frameResources.GridHeightDescriptor);
+        frameResources.MediumTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumTargetsDescriptor);
+        frameResources.MediumTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumTransportDescriptor);
         frameResources.CommandAllocator.Reset();
         commandList.Reset(frameResources.CommandAllocator, null);
 
@@ -304,6 +315,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         copyPipelineState.Dispose();
         smokePipelineState.Dispose();
         mediumVolumePipelineState.Dispose();
+        scenePipelineState.Dispose();
         gridHeightBrushPipelineState.Dispose();
         gridHeightBasePipelineState.Dispose();
         fullscreenRootSignature.Dispose();
@@ -471,19 +483,22 @@ public sealed class D3D12Renderer : IAquariumRenderer
             0.022f + settings.BloomVeilIntensity * 0.8f,
             1.0f);
 
-        context.CommandList.BeginEvent("Smoke Diagnostic Pass");
+        context.CommandList.BeginEvent("Scene Pass");
         try
         {
+            gridHeightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            mediumTransportRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             smokeRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
-            diagnosticUavTarget.Transition(context.CommandList, ResourceStates.UnorderedAccess);
             context.CommandList.ClearRenderTargetView(smokeRenderTarget.RenderTargetView.Cpu, clearColor);
             context.CommandList.SetDescriptorHeaps(frames[frameIndex].TransientShaderDescriptors.Heap);
-            context.CommandList.SetPipelineState(smokePipelineState);
+            context.CommandList.SetPipelineState(scenePipelineState);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            context.CommandList.SetGraphicsRootDescriptorTable(0, frames[frameIndex].SmokeConstantsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(2, frames[frameIndex].DiagnosticUavDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(0, frames[frameIndex].FrameConstantsDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(1, frames[frameIndex].GridHeightDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(4, frames[frameIndex].FroxelPrimitiveDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(5, frames[frameIndex].FieldInstanceDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(6, frames[frameIndex].MediumTargetsDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(smokeRenderTarget.RenderTargetView.Cpu, null);
@@ -574,6 +589,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         activeCommandList.BeginEvent("Medium Volume Pass");
         try
         {
+            gridHeightRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
@@ -582,6 +598,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.SetPipelineState(mediumVolumePipelineState);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(1, frameResources.GridHeightDescriptor.Gpu);
             activeCommandList.SetGraphicsRootDescriptorTable(5, frameResources.FieldInstanceDescriptor.Gpu);
             activeCommandList.RSSetViewports(mediumViewport);
             activeCommandList.RSSetScissorRects(mediumScissorRect);
@@ -932,6 +949,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             12,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var mediumTargetRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            2,
+            13,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -940,6 +963,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([gridBrushRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([froxelPrimitiveRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([fieldInstanceRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([mediumTargetRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -970,6 +994,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState CreateSmokePipelineState(string path)
     {
         return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12SmokePS", Format.B8G8R8A8_UNorm);
+    }
+
+    private ID3D12PipelineState CreateScenePipelineState(string path)
+    {
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12ScenePS", Format.B8G8R8A8_UNorm);
     }
 
     private ID3D12PipelineState CreateMediumVolumePipelineState(string path)
@@ -1271,6 +1300,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot FroxelPrimitiveDescriptor { get; set; }
 
         public D3D12DescriptorSlot FieldInstanceDescriptor { get; set; }
+
+        public D3D12DescriptorSlot GridHeightDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumTargetsDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumTransportDescriptor { get; set; }
 
         public D3D12TrackedResource BackBuffer { get; set; } = null!;
 

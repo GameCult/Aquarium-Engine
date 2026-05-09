@@ -33,12 +33,16 @@ struct FieldInstance
 };
 
 StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+Texture2D<float4> gridHeightTexture : register(t0);
+SamplerState gridSampler : register(s0);
 
 static const int FIELD_INSTANCE_COUNT = 10;
 static const int FIELD_FLAG_CLOUD = 2;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
+static const float GRID_LINE_WORLD_CELL = 2.0;
+static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
 
 struct VertexOut
 {
@@ -191,6 +195,46 @@ float registeredMediumDensity(float3 p, out float3 scattering)
     return saturate(density);
 }
 
+float2 gridLocal(float2 p)
+{
+    return (p - gridCenter) / max(gridRadius, 0.001);
+}
+
+float2 gridUv(float2 p)
+{
+    return gridLocal(p) * 0.5 + 0.5;
+}
+
+float terrainHeight(float2 p)
+{
+    float2 uv = saturate(gridUv(p));
+    return gridHeightTexture.SampleLevel(gridSampler, uv, 0.0).r;
+}
+
+float lineDistance(float2 p, float cell)
+{
+    float2 centered = abs(frac(p / cell + 0.5) - 0.5) * cell;
+    return min(centered.x, centered.y);
+}
+
+float transparentGridDensity(float3 p, out float3 scattering)
+{
+    scattering = 0.0;
+    float radiusMask = 1.0 - smoothstep(0.92, 1.0, length(gridLocal(p.xy)));
+    if (radiusMask <= 0.0)
+    {
+        return 0.0;
+    }
+
+    float height = terrainHeight(p.xy);
+    float sheet = 1.0 - smoothstep(0.018, 0.075, abs(p.z - height));
+    float minor = 1.0 - smoothstep(0.016, 0.055, lineDistance(p.xy, GRID_LINE_WORLD_CELL));
+    float major = 1.0 - smoothstep(0.030, 0.090, lineDistance(p.xy, GRID_MAJOR_LINE_WORLD_CELL));
+    float density = sheet * radiusMask * saturate(minor * 0.42 + major * 0.92);
+    scattering = float3(0.30, 0.90, 0.82) * density * 0.24;
+    return density * 0.42;
+}
+
 float mediumSliceTravel(int sliceIndex)
 {
     float t = ((float)sliceIndex + 0.5) / (float)MEDIUM_FROXEL_SLICE_COUNT;
@@ -212,6 +256,10 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     float3 p = cameraPosition + rayDirection * travel;
     float3 scattering;
     float density = registeredMediumDensity(p, scattering);
+    float3 gridScattering;
+    float gridDensity = transparentGridDensity(p, gridScattering);
+    density = saturate(density + gridDensity);
+    scattering += gridScattering;
     float extinction = density * 0.16;
     float transmittance = exp(-extinction * sliceLength);
     float3 inScattering = density > 0.001

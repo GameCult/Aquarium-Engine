@@ -290,3 +290,9 @@ can start porting real passes while keeping D3D11 as the visual reference.
   atlases from the D3D12 field instance buffer. Render debug mode `11` displays
   D3D12 froxel density; the temporary Grid-height debug view was cut rather
   than left as stale bring-up scaffolding.
+- D3D12 first scene pass: final mode now renders a D3D12 scene instead of smoke.
+  Self, planets, and medium transport are visible through the D3D12 frame graph.
+  Grid line transparency is injected into the medium froxel atlas as a thin
+  participating layer and is not traced as a surface terminator. This honors the
+  transparency lesson, though the general transparent-surface bin table is still
+  future work.
