@@ -65,6 +65,7 @@ struct SceneOut
     float4 colorTravel : SV_Target0;
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
+    float4 mediumPacket : SV_Target3;
 };
 
 struct SolidHit
@@ -85,6 +86,7 @@ struct RayMarchResult
     float coverage;
     float mediumOpacity;
     float densityMean;
+    float mediumTravel;
 };
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -508,6 +510,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     result.coverage = 0.0;
     result.mediumOpacity = 0.0;
     result.densityMean = 0.0;
+    result.mediumTravel = farDistance + 1.0;
 
     float transmittance = 1.0;
     float3 inScattering = 0.0;
@@ -554,6 +557,9 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     }
 
     integrateMediumRange(uv, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
+    float mediumOpacity = saturate(1.0 - transmittance);
+    float mediumDensityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+    float mediumTravel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, stopTravel) : farDistance + 1.0;
 
     bool drawGrid = gridHit && stochasticTransparency(screenUv, gridAlpha) > 0.0;
 
@@ -566,20 +572,22 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         result.fieldId = nearestSolid.fieldId;
         result.normal = nearestSolid.normal;
         result.coverage = 1.0;
-        result.mediumOpacity = saturate(1.0 - transmittance);
-        result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+        result.mediumOpacity = mediumOpacity;
+        result.densityMean = mediumDensityMean;
+        result.mediumTravel = mediumTravel;
     }
     else
     {
         result.color = result.color * transmittance + inScattering;
-        result.mediumOpacity = saturate(1.0 - transmittance);
-        result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+        result.mediumOpacity = mediumOpacity;
+        result.densityMean = mediumDensityMean;
+        result.mediumTravel = mediumTravel;
         if (result.mediumOpacity > 0.015)
         {
             result.fieldId = FIELD_ID_MEDIUM;
             result.normal = -direction;
             result.coverage = saturate(max(result.mediumOpacity, result.densityMean * 4.0));
-            result.travel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, farDistance) : farDistance;
+            result.travel = mediumTravel;
         }
     }
 
@@ -623,5 +631,6 @@ SceneOut D3D12ScenePS(VertexOut input)
     output.colorTravel = float4(result.color, min(result.travel, farDistance + 1.0));
     output.metadata = float4(result.fieldId, result.normal);
     output.control = float4(0.0, result.coverage, result.mediumOpacity, result.densityMean);
+    output.mediumPacket = float4(FIELD_ID_MEDIUM, result.mediumTravel, result.mediumOpacity, result.densityMean);
     return output;
 }

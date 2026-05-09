@@ -31,6 +31,8 @@ Texture2D<float4> historyControlTexture : register(t8);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
+Texture2D<float4> currentMediumPacketTexture : register(t16);
+Texture2D<float4> historyMediumPacketTexture : register(t17);
 SamplerState sourceSampler : register(s0);
 
 struct FieldInstance
@@ -57,6 +59,7 @@ struct ResolveOut
     float4 historyColor : SV_Target1;
     float4 historyMetadata : SV_Target2;
     float4 historyControl : SV_Target3;
+    float4 historyMediumPacket : SV_Target4;
 };
 
 static const float SUN_RADIUS = 1.12;
@@ -219,6 +222,16 @@ float4 loadHistoryMetadata(float2 uv)
 float4 loadHistoryControl(float2 uv)
 {
     return historyControlTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadCurrentMediumPacket(float2 uv)
+{
+    return currentMediumPacketTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadHistoryMediumPacket(float2 uv)
+{
+    return historyMediumPacketTexture.Load(int3(pixelFromUv(uv), 0));
 }
 
 void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
@@ -461,12 +474,18 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
     float currentMediumOpacity = saturate(currentControl.z);
+    float4 currentMediumPacket = loadCurrentMediumPacket(input.uv);
+    float currentMediumTravel = currentMediumPacket.y;
+    float currentMediumLaneOpacity = saturate(currentMediumPacket.z);
+    float currentMediumDensity = saturate(currentMediumPacket.w);
     bool currentIsMedium = abs(currentFieldId - FIELD_ID_MEDIUM) < 0.25;
     bool currentIsDistributed = currentIsMedium;
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
     float3 historyColor = currentColor;
+    float mediumHistoryWeight = 0.0;
+    float mediumHistoryAge = 0.0;
     if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
     {
         float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
@@ -521,7 +540,36 @@ ResolveOut D3D12ResolvePS(VertexOut input)
         }
     }
 
-    float3 resolved = lerp(currentColor, historyColor, historyWeight);
+    if (frameIndex > 0.5 && currentMediumLaneOpacity > 0.015 && currentMediumTravel <= farDistance)
+    {
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 mediumWorldPosition = cameraPosition + currentRay * currentMediumTravel;
+        float2 previousMediumUv = projectWorldToPreviousHistoryUv(mediumWorldPosition);
+        if (all(previousMediumUv >= 0.0) && all(previousMediumUv <= 1.0))
+        {
+            float4 previousMediumPacket = loadHistoryMediumPacket(previousMediumUv);
+            float previousMediumTravel = previousMediumPacket.y;
+            float previousMediumOpacity = saturate(previousMediumPacket.z);
+            float previousMediumDensity = saturate(previousMediumPacket.w);
+            float previousMediumAge = max(previousMediumPacket.x, 0.0);
+            float expectedPreviousMediumTravel = distance(previousCameraPosition, mediumWorldPosition);
+            float travelDelta = abs(previousMediumTravel - expectedPreviousMediumTravel);
+            float travelTolerance = max(0.08, expectedPreviousMediumTravel * 0.035);
+            float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 5.0, travelDelta);
+            float opacityWeight = 1.0 - smoothstep(0.06, 0.42, abs(previousMediumOpacity - currentMediumLaneOpacity));
+            float densityWeight = 1.0 - smoothstep(0.06, 0.42, abs(previousMediumDensity - currentMediumDensity));
+            float mediumConfidence = smoothstep(0.0, 6.0, previousMediumAge);
+            float validationWeight = travelWeight * opacityWeight * densityWeight;
+            mediumHistoryWeight = 0.88 * lerp(0.48, 1.0, mediumConfidence) * validationWeight * smoothstep(0.015, 0.35, currentMediumLaneOpacity);
+            mediumHistoryAge = validationWeight > 0.01 ? min(previousMediumAge + 1.0, MAX_HISTORY_AGE) : 0.0;
+            float4 previous = historyTexture.SampleLevel(sourceSampler, previousMediumUv, 0.0);
+            historyColor = lerp(historyColor, previous.rgb, saturate(mediumHistoryWeight / max(max(historyWeight, mediumHistoryWeight), 0.0001)));
+        }
+    }
+
+    float combinedHistoryWeight = max(historyWeight, mediumHistoryWeight);
+    float combinedHistoryAge = max(historyAge, mediumHistoryAge);
+    float3 resolved = lerp(currentColor, historyColor, combinedHistoryWeight);
     float3 finalColor = presentColor(resolved, input.uv);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
@@ -533,19 +581,19 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 2.5 && renderDebugMode < 3.5)
     {
-        finalColor = (historyAge / MAX_HISTORY_AGE).xxx;
+        finalColor = (combinedHistoryAge / MAX_HISTORY_AGE).xxx;
     }
     else if (renderDebugMode >= 3.5 && renderDebugMode < 4.5)
     {
-        finalColor = historyWeight.xxx;
+        finalColor = combinedHistoryWeight.xxx;
     }
     else if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
     {
-        finalColor = saturate(currentControl.xyz);
+        finalColor = saturate(float3(currentReactive, max(currentCoverage, currentMediumLaneOpacity), currentMediumOpacity));
     }
     else if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
     {
-        finalColor = debugFieldIdColor(currentFieldId);
+        finalColor = currentMediumLaneOpacity > 0.015 ? debugFieldIdColor(FIELD_ID_MEDIUM) : debugFieldIdColor(currentFieldId);
     }
     else if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
     {
@@ -578,6 +626,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     output.finalColor = float4(finalColor, 1.0);
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
-    output.historyControl = float4(currentControl.xyz, historyAge);
+    output.historyControl = float4(currentControl.xyz, combinedHistoryAge);
+    output.historyMediumPacket = float4(mediumHistoryAge, currentMediumTravel, currentMediumLaneOpacity, currentMediumDensity);
     return output;
 }

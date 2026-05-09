@@ -37,6 +37,13 @@ This was later superseded because using Grid as the visible scene packet broke
 volumetric ordering. The Grid is currently a direct color overlay only; future
 work should add a separate transparent-overlay temporal lane rather than
 reusing field identity/travel/control.
+- Medium temporal split: D3D12 now emits a separate `sceneMediumPacket` MRT and
+  ping-pongs `historyMediumPacket` alongside surface color/metadata/control.
+  The medium packet stores medium identity, density-weighted travel, opacity,
+  and density even when a solid surface is behind it. Debug field identity can
+  show medium where opacity exists instead of pretending the planet behind it
+  is the whole truth. This is the pattern Grid/particles need next: a separate
+  stochastic-event packet, not reuse of the surface packet.
 
 ## Hot Context
 
