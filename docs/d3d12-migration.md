@@ -48,7 +48,11 @@ has feature parity.
   metadata, and control targets, with previous-camera reprojection and
   field/travel/normal/color/coverage/medium validation for opaque current scene
   hits. Debug mode `3` shows history age and mode `4` shows history weight.
-  Grid/transparent-specific temporal reconstruction is still pending.
+  Medium-only pixels use a density-weighted ray centroid as their temporal
+  anchor and a `FIELD_ID_MEDIUM` identity, with continuity weighted by medium
+  opacity and coverage rather than surface normals. Grid/transparent
+  contributions therefore get history through the medium path without becoming
+  fake alpha surfaces.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

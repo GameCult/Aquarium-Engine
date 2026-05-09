@@ -51,6 +51,7 @@ static const float SUN_RADIUS = 1.12;
 static const int PLANET_COUNT = 5;
 static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
+static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
 
@@ -93,6 +94,11 @@ float3 debugFieldIdColor(float fieldId)
     if (abs(fieldId - 2.0) < 0.25)
     {
         return float3(1.0, 0.92, 0.25);
+    }
+
+    if (abs(fieldId - FIELD_ID_MEDIUM) < 0.25)
+    {
+        return float3(0.28, 0.72, 1.0);
     }
 
     if (fieldId >= 10.0)
@@ -309,6 +315,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
     float currentMediumOpacity = saturate(currentControl.z);
+    bool currentIsMedium = abs(currentFieldId - FIELD_ID_MEDIUM) < 0.25;
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
@@ -337,7 +344,11 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
             float fieldWeight = abs(previousFieldId - currentFieldId) < 0.001 ? 1.0 : 0.0;
             float normalWeight = 0.0;
-            if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
+            if (currentIsMedium)
+            {
+                normalWeight = 1.0;
+            }
+            else if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
             {
                 normalWeight = smoothstep(0.68, 0.96, dot(normalize(previousNormal), normalize(currentNormal)));
             }
@@ -345,9 +356,9 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float3 neighborhoodMin;
             float3 neighborhoodMax;
             currentNeighborhood(input.uv, neighborhoodMin, neighborhoodMax);
-            float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
+            float3 clampedHistory = currentIsMedium ? previous.rgb : clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
             float colorDelta = length(clampedHistory - currentColor);
-            float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
+            float colorWeight = currentIsMedium ? 1.0 - smoothstep(0.35, 1.6, colorDelta) : 1.0 - smoothstep(0.18, 1.2, colorDelta);
             float reactiveWeight = 1.0 - currentReactive;
             float coverageWeight = smoothstep(0.02, 0.55, currentCoverage);
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
@@ -356,7 +367,9 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
 
             historyColor = clampedHistory;
-            historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
+            float maxHistoryWeight = currentIsMedium ? 0.88 : 0.82;
+            float freshHistoryScale = currentIsMedium ? 0.48 : 0.35;
+            historyWeight = maxHistoryWeight * lerp(freshHistoryScale, 1.0, historyConfidence) * validationWeight;
             historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
         }
     }

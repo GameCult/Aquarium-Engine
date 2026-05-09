@@ -323,3 +323,9 @@ can start porting real passes while keeping D3D11 as the visual reference.
   neighborhood color, coverage, and medium opacity. Debug mode 3 shows history
   age and mode 4 shows history weight. Grid/transparent-specific temporal
   reconstruction remains pending.
+- D3D12 medium temporal identity pass: medium-only pixels now store
+  `FIELD_ID_MEDIUM`, coverage from medium opacity/density, and travel from a
+  density-weighted ray centroid. Resolve treats this as volumetric history:
+  normal validation is skipped, color rejection is relaxed, and continuity is
+  driven by coverage plus medium opacity. This lets binned Grid/fog contribution
+  accumulate without reintroducing alpha surfaces.

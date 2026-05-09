@@ -31,6 +31,7 @@ static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
+static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
@@ -176,16 +177,20 @@ float mediumSliceTravel(int sliceIndex)
     return t * farDistance;
 }
 
-void integrateMedium(float2 uv, float maxTravel, out float densityMean, out float transmittance, out float3 inScattering)
+void integrateMedium(float2 uv, float maxTravel, out float densityMean, out float transmittance, out float3 inScattering, out float representativeTravel)
 {
     densityMean = 0.0;
     transmittance = 1.0;
     inScattering = 0.0;
+    representativeTravel = maxTravel;
+    float densityTravelSum = 0.0;
+    float densitySum = 0.0;
 
     [loop]
     for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
     {
-        if (mediumSliceTravel(sliceIndex) > maxTravel)
+        float sliceTravel = mediumSliceTravel(sliceIndex);
+        if (sliceTravel > maxTravel)
         {
             break;
         }
@@ -194,11 +199,17 @@ void integrateMedium(float2 uv, float maxTravel, out float densityMean, out floa
         float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
         float4 transport = mediumTransportTexture.SampleLevel(gridSampler, atlasUv, 0.0);
         densityMean += diagnostic.x;
+        densityTravelSum += diagnostic.x * sliceTravel;
+        densitySum += diagnostic.x;
         inScattering += transmittance * transport.rgb;
         transmittance *= saturate(transport.a);
     }
 
     densityMean = saturate(densityMean / (float)MEDIUM_FROXEL_SLICE_COUNT);
+    if (densitySum > 0.0001)
+    {
+        representativeTravel = densityTravelSum / densitySum;
+    }
 }
 
 float3 shadeBody(float3 p, float3 normal, int primitiveId)
@@ -257,9 +268,18 @@ SceneOut D3D12ScenePS(VertexOut input)
     float densityMean;
     float transmittance;
     float3 inScattering;
+    float mediumRepresentativeTravel;
     float mediumTravel = travel <= farDistance ? travel : farDistance;
-    integrateMedium(input.uv, mediumTravel, densityMean, transmittance, inScattering);
+    integrateMedium(input.uv, mediumTravel, densityMean, transmittance, inScattering, mediumRepresentativeTravel);
     color = color * transmittance + inScattering;
+    float mediumOpacity = saturate(1.0 - transmittance);
+    if (outputFieldId < 0.5 && mediumOpacity > 0.015)
+    {
+        outputFieldId = FIELD_ID_MEDIUM;
+        outputNormal = -rayDirection;
+        outputCoverage = saturate(max(mediumOpacity, densityMean * 4.0));
+        travel = min(mediumRepresentativeTravel, farDistance);
+    }
 
     if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
     {
@@ -269,6 +289,6 @@ SceneOut D3D12ScenePS(VertexOut input)
     SceneOut output;
     output.colorTravel = float4(color, min(travel, farDistance + 1.0));
     output.metadata = float4(outputFieldId, outputNormal);
-    output.control = float4(0.0, outputCoverage, saturate(1.0 - transmittance), densityMean);
+    output.control = float4(0.0, outputCoverage, mediumOpacity, densityMean);
     return output;
 }

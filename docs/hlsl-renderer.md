@@ -98,7 +98,10 @@ now writes ping-pong history color, metadata, and control targets and validates
 opaque history with previous-camera reprojection plus field, travel, normal,
 neighborhood color, coverage, and medium-continuity checks. Debug modes `3` and
 `4` show history age and weight. Grid/transparent-specific reconstruction and
-overlay/debug UI still need to move.
+overlay/debug UI still need to move. Medium-only pixels already use a
+density-weighted ray centroid and `FIELD_ID_MEDIUM`, so transparent Grid and fog
+contribution can accumulate through the medium history path without inventing a
+single alpha-surface hit.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches
