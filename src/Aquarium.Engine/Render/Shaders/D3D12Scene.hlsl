@@ -50,12 +50,6 @@ static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_DOWNSCALE = 8;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
-static const int FROXEL_COUNT_X = 8;
-static const int FROXEL_COUNT_Y = 8;
-static const int FROXEL_COUNT_Z = 4;
-static const int FROXEL_SLOT_COUNT = 2;
-static const float FROXEL_MIN_Z = -2.0;
-static const float FROXEL_MAX_Z = 6.0;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
@@ -267,184 +261,6 @@ float primitiveFieldId(int primitiveId)
     return primitiveId == 0 ? FIELD_ID_SELF : FIELD_ID_PLANET_BASE + (float)(primitiveId - 1);
 }
 
-int clampCell(float normalized, int count)
-{
-    return clamp((int)floor(normalized * (float)count), 0, count - 1);
-}
-
-int froxelIndexForPosition(float3 p)
-{
-    float2 local = gridLocal(p.xy);
-    float localZ = (p.z - FROXEL_MIN_Z) / (FROXEL_MAX_Z - FROXEL_MIN_Z);
-    if (abs(local.x) > 1.0 || abs(local.y) > 1.0 || localZ < 0.0 || localZ > 1.0)
-    {
-        return -1;
-    }
-
-    int x = clampCell(local.x * 0.5 + 0.5, FROXEL_COUNT_X);
-    int y = clampCell(local.y * 0.5 + 0.5, FROXEL_COUNT_Y);
-    int z = clampCell(localZ, FROXEL_COUNT_Z);
-    return x + y * FROXEL_COUNT_X + z * FROXEL_COUNT_X * FROXEL_COUNT_Y;
-}
-
-int froxelIndexForCell(int3 cell)
-{
-    return cell.x + cell.y * FROXEL_COUNT_X + cell.z * FROXEL_COUNT_X * FROXEL_COUNT_Y;
-}
-
-float3 froxelWorldMin()
-{
-    return float3(gridCenter - gridRadius.xx, FROXEL_MIN_Z);
-}
-
-float3 froxelWorldMax()
-{
-    return float3(gridCenter + gridRadius.xx, FROXEL_MAX_Z);
-}
-
-float3 froxelCellSize()
-{
-    float3 boundsMin = froxelWorldMin();
-    float3 boundsMax = froxelWorldMax();
-    return (boundsMax - boundsMin) / float3(FROXEL_COUNT_X, FROXEL_COUNT_Y, FROXEL_COUNT_Z);
-}
-
-bool traceFroxelBounds(float3 origin, float3 direction, out float enterTravel, out float exitTravel)
-{
-    float3 boundsMin = froxelWorldMin();
-    float3 boundsMax = froxelWorldMax();
-    enterTravel = 0.0;
-    exitTravel = farDistance;
-    bool hit = true;
-
-    if (abs(direction.x) < 0.000001)
-    {
-        if (origin.x < boundsMin.x || origin.x > boundsMax.x)
-        {
-            hit = false;
-        }
-    }
-    else
-    {
-        float t0 = (boundsMin.x - origin.x) / direction.x;
-        float t1 = (boundsMax.x - origin.x) / direction.x;
-        enterTravel = max(enterTravel, min(t0, t1));
-        exitTravel = min(exitTravel, max(t0, t1));
-    }
-
-    if (abs(direction.y) < 0.000001)
-    {
-        if (origin.y < boundsMin.y || origin.y > boundsMax.y)
-        {
-            hit = false;
-        }
-    }
-    else
-    {
-        float t0 = (boundsMin.y - origin.y) / direction.y;
-        float t1 = (boundsMax.y - origin.y) / direction.y;
-        enterTravel = max(enterTravel, min(t0, t1));
-        exitTravel = min(exitTravel, max(t0, t1));
-    }
-
-    if (abs(direction.z) < 0.000001)
-    {
-        if (origin.z < boundsMin.z || origin.z > boundsMax.z)
-        {
-            hit = false;
-        }
-    }
-    else
-    {
-        float t0 = (boundsMin.z - origin.z) / direction.z;
-        float t1 = (boundsMax.z - origin.z) / direction.z;
-        enterTravel = max(enterTravel, min(t0, t1));
-        exitTravel = min(exitTravel, max(t0, t1));
-    }
-
-    enterTravel = max(enterTravel, 0.0);
-    exitTravel = min(exitTravel, farDistance);
-    return hit && exitTravel > enterTravel;
-}
-
-struct FroxelDda
-{
-    int3 cell;
-    int3 stepCell;
-    float3 nextBoundaryTravel;
-    float3 deltaTravel;
-    float exitTravel;
-    int active;
-};
-
-FroxelDda beginFroxelDda(float3 origin, float3 direction, float enterTravel, float exitTravel)
-{
-    FroxelDda dda;
-    float3 boundsMin = froxelWorldMin();
-    float3 cellSize = froxelCellSize();
-    float3 p = origin + direction * (enterTravel + 0.0001);
-    float3 local = (p - boundsMin) / cellSize;
-    dda.cell = clamp((int3)floor(local), int3(0, 0, 0), int3(FROXEL_COUNT_X - 1, FROXEL_COUNT_Y - 1, FROXEL_COUNT_Z - 1));
-    dda.stepCell = int3(direction.x >= 0.0 ? 1 : -1, direction.y >= 0.0 ? 1 : -1, direction.z >= 0.0 ? 1 : -1);
-
-    float3 nextBoundary = boundsMin + (float3)dda.cell * cellSize;
-    nextBoundary += float3(
-        direction.x >= 0.0 ? cellSize.x : 0.0,
-        direction.y >= 0.0 ? cellSize.y : 0.0,
-        direction.z >= 0.0 ? cellSize.z : 0.0);
-
-    float3 absDirection = max(abs(direction), 0.000001);
-    dda.nextBoundaryTravel = (nextBoundary - origin) / direction;
-    dda.nextBoundaryTravel = float3(
-        abs(direction.x) < 0.000001 ? farDistance + 1.0 : dda.nextBoundaryTravel.x,
-        abs(direction.y) < 0.000001 ? farDistance + 1.0 : dda.nextBoundaryTravel.y,
-        abs(direction.z) < 0.000001 ? farDistance + 1.0 : dda.nextBoundaryTravel.z);
-    dda.deltaTravel = cellSize / absDirection;
-    dda.deltaTravel = float3(
-        abs(direction.x) < 0.000001 ? farDistance + 1.0 : dda.deltaTravel.x,
-        abs(direction.y) < 0.000001 ? farDistance + 1.0 : dda.deltaTravel.y,
-        abs(direction.z) < 0.000001 ? farDistance + 1.0 : dda.deltaTravel.z);
-    dda.exitTravel = exitTravel;
-    dda.active = 1;
-    return dda;
-}
-
-float froxelDdaCellExit(FroxelDda dda)
-{
-    return min(min(dda.nextBoundaryTravel.x, dda.nextBoundaryTravel.y), min(dda.nextBoundaryTravel.z, dda.exitTravel));
-}
-
-void advanceFroxelDda(inout FroxelDda dda)
-{
-    float axisTravel = min(dda.nextBoundaryTravel.x, min(dda.nextBoundaryTravel.y, dda.nextBoundaryTravel.z));
-    if (axisTravel >= dda.exitTravel)
-    {
-        dda.active = 0;
-        return;
-    }
-
-    if (dda.nextBoundaryTravel.x <= axisTravel + 0.00001)
-    {
-        dda.cell.x += dda.stepCell.x;
-        dda.nextBoundaryTravel.x += dda.deltaTravel.x;
-    }
-    if (dda.nextBoundaryTravel.y <= axisTravel + 0.00001)
-    {
-        dda.cell.y += dda.stepCell.y;
-        dda.nextBoundaryTravel.y += dda.deltaTravel.y;
-    }
-    if (dda.nextBoundaryTravel.z <= axisTravel + 0.00001)
-    {
-        dda.cell.z += dda.stepCell.z;
-        dda.nextBoundaryTravel.z += dda.deltaTravel.z;
-    }
-
-    dda.active =
-        dda.cell.x >= 0 && dda.cell.x < FROXEL_COUNT_X &&
-        dda.cell.y >= 0 && dda.cell.y < FROXEL_COUNT_Y &&
-        dda.cell.z >= 0 && dda.cell.z < FROXEL_COUNT_Z ? 1 : 0;
-}
-
 void considerPrimitiveHit(float3 origin, float3 direction, int primitiveId, float intervalStart, float intervalEnd, inout SolidHit nearest)
 {
     if (primitiveId < 0)
@@ -473,15 +289,11 @@ void considerFroxelPrimitiveHits(float3 origin, float3 direction, int froxelInde
         return;
     }
 
-    [unroll]
-    for (int slotGroup = 0; slotGroup < FROXEL_SLOT_COUNT; slotGroup++)
-    {
-        int4 ids = froxelPrimitiveIds[froxelIndex * FROXEL_SLOT_COUNT + slotGroup];
-        considerPrimitiveHit(origin, direction, ids.x, intervalStart, intervalEnd, nearest);
-        considerPrimitiveHit(origin, direction, ids.y, intervalStart, intervalEnd, nearest);
-        considerPrimitiveHit(origin, direction, ids.z, intervalStart, intervalEnd, nearest);
-        considerPrimitiveHit(origin, direction, ids.w, intervalStart, intervalEnd, nearest);
-    }
+    int4 ids = froxelPrimitiveIds[froxelIndex];
+    considerPrimitiveHit(origin, direction, ids.x, intervalStart, intervalEnd, nearest);
+    considerPrimitiveHit(origin, direction, ids.y, intervalStart, intervalEnd, nearest);
+    considerPrimitiveHit(origin, direction, ids.z, intervalStart, intervalEnd, nearest);
+    considerPrimitiveHit(origin, direction, ids.w, intervalStart, intervalEnd, nearest);
 }
 
 float gridSurfaceDistanceAt(float3 origin, float3 direction, float travel)
@@ -627,40 +439,11 @@ void considerFroxelTransparentEvents(float3 origin, float3 direction, int froxel
         return;
     }
 
-    [unroll]
-    for (int slotGroup = 0; slotGroup < FROXEL_SLOT_COUNT; slotGroup++)
-    {
-        int4 ids = transparentSurfaceIds[froxelIndex * FROXEL_SLOT_COUNT + slotGroup];
-        considerTransparentSurfaceEvent(origin, direction, ids.x, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-        considerTransparentSurfaceEvent(origin, direction, ids.y, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-        considerTransparentSurfaceEvent(origin, direction, ids.z, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-        considerTransparentSurfaceEvent(origin, direction, ids.w, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    }
-}
-
-SolidHit nearestFroxelSolidHit(float3 origin, float3 direction, int froxelIndex, float intervalStart, float intervalEnd)
-{
-    SolidHit nearest;
-    nearest.hit = false;
-    nearest.travel = intervalEnd;
-    nearest.normal = 0.0;
-    nearest.fieldId = 0.0;
-    nearest.primitiveId = -1;
-    considerFroxelPrimitiveHits(origin, direction, froxelIndex, intervalStart, intervalEnd, nearest);
-    return nearest;
-}
-
-TransparentEvent nearestFroxelTransparentEvent(float3 origin, float3 direction, int froxelIndex, uint consumedSurfaceMask, float intervalStart, float intervalEnd)
-{
-    TransparentEvent nearest;
-    nearest.hit = false;
-    nearest.travel = intervalEnd;
-    nearest.color = 0.0;
-    nearest.alpha = 0.0;
-    nearest.coverage = 0.0;
-    nearest.surfaceId = -1;
-    considerFroxelTransparentEvents(origin, direction, froxelIndex, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    return nearest;
+    int4 ids = transparentSurfaceIds[froxelIndex];
+    considerTransparentSurfaceEvent(origin, direction, ids.x, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    considerTransparentSurfaceEvent(origin, direction, ids.y, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    considerTransparentSurfaceEvent(origin, direction, ids.z, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    considerTransparentSurfaceEvent(origin, direction, ids.w, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
 }
 
 float2 mediumAtlasUv(float2 uv, int sliceIndex)
@@ -711,6 +494,20 @@ TransparentEvent nearestViewFroxelTransparentEvent(float2 uv, float3 origin, flo
     considerTransparentSurfaceEvent(origin, direction, ids.y, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
     considerTransparentSurfaceEvent(origin, direction, ids.z, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
     considerTransparentSurfaceEvent(origin, direction, ids.w, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    return nearest;
+}
+
+SolidHit nearestViewFroxelSolidHit(float2 uv, float3 origin, float3 direction, int sliceIndex)
+{
+    float intervalStart = mediumSliceStartTravel(sliceIndex);
+    float intervalEnd = min(mediumSliceEndTravel(sliceIndex), farDistance);
+    SolidHit nearest;
+    nearest.hit = false;
+    nearest.travel = intervalEnd;
+    nearest.normal = 0.0;
+    nearest.fieldId = 0.0;
+    nearest.primitiveId = -1;
+    considerFroxelPrimitiveHits(origin, direction, viewFroxelIndexForUvSlice(uv, sliceIndex), intervalStart, intervalEnd, nearest);
     return nearest;
 }
 
@@ -802,43 +599,12 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
     float eventSupportSum = 0.0;
     float densityAccumulation = 0.0;
 
-    float froxelEnter;
-    float froxelExit;
-    bool hasFroxelTube = traceFroxelBounds(origin, direction, froxelEnter, froxelExit);
     SolidHit nearestSolid;
     nearestSolid.hit = false;
     nearestSolid.travel = farDistance;
     nearestSolid.normal = 0.0;
     nearestSolid.fieldId = 0.0;
     nearestSolid.primitiveId = -1;
-
-    if (hasFroxelTube)
-    {
-        FroxelDda dda = beginFroxelDda(origin, direction, froxelEnter, froxelExit);
-        float cellStart = froxelEnter;
-        [loop]
-        for (int ddaStep = 0; ddaStep < 64 && dda.active != 0; ddaStep++)
-        {
-            float cellEnd = froxelDdaCellExit(dda);
-            if (cellEnd <= cellStart + 0.00001)
-            {
-                advanceFroxelDda(dda);
-                cellStart = cellEnd;
-                continue;
-            }
-
-            int froxelIndex = froxelIndexForCell(dda.cell);
-            SolidHit cellSolid = nearestFroxelSolidHit(origin, direction, froxelIndex, cellStart, min(cellEnd, nearestSolid.travel));
-            if (cellSolid.hit && cellSolid.travel < nearestSolid.travel)
-            {
-                nearestSolid = cellSolid;
-            }
-
-            cellStart = cellEnd;
-            advanceFroxelDda(dda);
-        }
-    }
-
     TransparentEvent nearestTransparent;
     nearestTransparent.hit = false;
     nearestTransparent.travel = farDistance;
@@ -849,6 +615,12 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
     [loop]
     for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
     {
+        SolidHit cellSolid = nearestViewFroxelSolidHit(uv, origin, direction, sliceIndex);
+        if (cellSolid.hit && cellSolid.travel < nearestSolid.travel)
+        {
+            nearestSolid = cellSolid;
+        }
+
         TransparentEvent cellTransparent = nearestViewFroxelTransparentEvent(uv, origin, direction, sliceIndex, 0u);
         if (cellTransparent.hit && cellTransparent.travel < nearestTransparent.travel)
         {

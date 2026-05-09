@@ -10,14 +10,13 @@ DirectWrite debug UI through a narrow D3D11On12 overlay bridge. D3D11 remains
 selectable only as temporary reference ballast until visible D3D12 use survives
 the cut.
 
-Current renderer correction: transparent Grid candidates now live in the
-view-froxel volume, not the coarse 8x8x4 world broadphase. CPU bootstrap code
-intersects each low-res 8x8 pixel tube with the Grid height slab, marks the
-overlapping 160x90x32-at-720p depth slices, and the scene shader looks up
-transparent candidate ids by `(lowX, lowY, slice)` before doing exact Grid
-height-sheet intersection for that slice interval. Solids still use the old
-world broadphase. Next steel-plate step is replacing the CPU-filled transparent
-candidate buffer with a GPU/raster binning pass.
+Current renderer correction: D3D12 scene candidates now live in the view-froxel
+volume. CPU bootstrap code intersects each low-res 8x8 pixel tube with solid
+sphere bounds and the Grid height slab, marks the overlapping
+160x90x32-at-720p depth slices, and the scene shader looks up solid and
+transparent candidate ids by `(lowX, lowY, slice)` before doing exact
+intersection for that slice interval. Next steel-plate step is replacing the
+CPU-filled candidate buffers with GPU/raster binning passes.
 
 ## Hot Context
 
