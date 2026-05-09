@@ -805,43 +805,38 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
     float froxelEnter;
     float froxelExit;
     bool hasFroxelTube = traceFroxelBounds(origin, direction, froxelEnter, froxelExit);
-    if (!hasFroxelTube)
-    {
-        integrateMediumRange(uv, 0.0, farDistance, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
-        result.color = result.color * transmittance + inScattering;
-        result.mediumOpacity = saturate(1.0 - transmittance);
-        result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
-        return result;
-    }
-
     SolidHit nearestSolid;
     nearestSolid.hit = false;
     nearestSolid.travel = farDistance;
     nearestSolid.normal = 0.0;
     nearestSolid.fieldId = 0.0;
     nearestSolid.primitiveId = -1;
-    FroxelDda dda = beginFroxelDda(origin, direction, froxelEnter, froxelExit);
-    float cellStart = froxelEnter;
-    [loop]
-    for (int ddaStep = 0; ddaStep < 64 && dda.active != 0; ddaStep++)
+
+    if (hasFroxelTube)
     {
-        float cellEnd = froxelDdaCellExit(dda);
-        if (cellEnd <= cellStart + 0.00001)
+        FroxelDda dda = beginFroxelDda(origin, direction, froxelEnter, froxelExit);
+        float cellStart = froxelEnter;
+        [loop]
+        for (int ddaStep = 0; ddaStep < 64 && dda.active != 0; ddaStep++)
         {
-            advanceFroxelDda(dda);
+            float cellEnd = froxelDdaCellExit(dda);
+            if (cellEnd <= cellStart + 0.00001)
+            {
+                advanceFroxelDda(dda);
+                cellStart = cellEnd;
+                continue;
+            }
+
+            int froxelIndex = froxelIndexForCell(dda.cell);
+            SolidHit cellSolid = nearestFroxelSolidHit(origin, direction, froxelIndex, cellStart, min(cellEnd, nearestSolid.travel));
+            if (cellSolid.hit && cellSolid.travel < nearestSolid.travel)
+            {
+                nearestSolid = cellSolid;
+            }
+
             cellStart = cellEnd;
-            continue;
+            advanceFroxelDda(dda);
         }
-
-        int froxelIndex = froxelIndexForCell(dda.cell);
-        SolidHit cellSolid = nearestFroxelSolidHit(origin, direction, froxelIndex, cellStart, min(cellEnd, nearestSolid.travel));
-        if (cellSolid.hit && cellSolid.travel < nearestSolid.travel)
-        {
-            nearestSolid = cellSolid;
-        }
-
-        cellStart = cellEnd;
-        advanceFroxelDda(dda);
     }
 
     TransparentEvent nearestTransparent;
