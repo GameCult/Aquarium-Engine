@@ -8,6 +8,8 @@ public interface IAquariumRenderer : IDisposable
 
     bool DebugUiVisible { get; set; }
 
+    bool HasPresentedReadyFrame { get; }
+
     void UpdateDebugUi(InputState input);
 
     void CycleRenderDebugMode();

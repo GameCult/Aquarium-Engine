@@ -398,6 +398,8 @@ public sealed class D3D11Renderer : IAquariumRenderer
         set => debugUi.IsVisible = value;
     }
 
+    public bool HasPresentedReadyFrame => true;
+
     public void UpdateDebugUi(InputState input)
     {
         debugUi.Update(input);

@@ -21,13 +21,15 @@ $headlessStatePath = Join-Path $devRoot "headless-state.clixml"
 $statePath = if ($Headless) { $headlessStatePath } else { $visibleStatePath }
 $buildStatePath = Join-Path $devRoot "last-build.clixml"
 $liveReloadPointerPath = Join-Path $devRoot "live-current.txt"
-$cultCachePath = Join-Path $devRoot "cultcache\aquarium-client.msgpack"
+$cultCacheDirectory = if ($Headless) { "headless-cultcache" } else { "cultcache" }
+$cultCachePath = Join-Path $devRoot "$cultCacheDirectory\aquarium-client.msgpack"
 $shaderSourcePath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
 $logName = if ($Headless) { "headless" } else { "latest" }
 $stdoutLogPath = Join-Path $devRoot "$logName.out.log"
 $stderrLogPath = Join-Path $devRoot "$logName.err.log"
 
 New-Item -ItemType Directory -Force -Path $slotRoot | Out-Null
+New-Item -ItemType Directory -Force -Path (Split-Path $cultCachePath) | Out-Null
 
 if ($Reopen -and $Headless) {
     throw "-Reopen is for the visible dev window; do not combine it with -Headless."

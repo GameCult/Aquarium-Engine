@@ -32,6 +32,8 @@ public static class AquariumHost
         var frameClock = Stopwatch.StartNew();
         var lastFrame = frameClock.Elapsed;
         var frames = 0;
+        var readyFrames = 0;
+        var requiredReadyFrames = ParseHeadlessReadyFrames();
 
         while (true)
         {
@@ -57,7 +59,13 @@ public static class AquariumHost
 
             renderer.Render(runtimeLoader.Runtime.Frame, window.ClientWidth, window.ClientHeight);
 
-            if (runtime.Options.Headless && ++frames >= 2)
+            frames++;
+            if (renderer.HasPresentedReadyFrame)
+            {
+                readyFrames++;
+            }
+
+            if (runtime.Options.Headless && frames >= 2 && readyFrames >= requiredReadyFrames)
             {
                 Console.WriteLine("Headless Aquarium completed requested frames.");
                 break;
@@ -70,6 +78,13 @@ public static class AquariumHost
     private static bool ParseHeadless(IEnumerable<string> args)
     {
         return args.Any(arg => string.Equals(arg, "--headless", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int ParseHeadlessReadyFrames()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("AQUARIUM_HEADLESS_READY_FRAMES"), out var value)
+            ? Math.Max(1, value)
+            : 1;
     }
 
     private static string? ParseCachePath(IReadOnlyCollection<string> args)

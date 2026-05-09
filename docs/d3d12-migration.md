@@ -84,6 +84,14 @@ temporary visual reference until the old backend is deleted.
   command-list recording, and the DirectWrite overlay bridge. These are CPU
   timings, not GPU timestamp queries, but they keep the bridge from hiding in
   folklore while the frame graph is still small.
+- D3D12 shader and PSO creation runs off the main thread. Startup creates the
+  device, swapchain, resources, and root signature, starts a background pipeline
+  build from the editable shader source directory, and presents a lightweight
+  loading frame until the first pipeline set is ready. Runtime shader edits to
+  `D3D12Grid.hlsl`, `D3D12Medium.hlsl`, `D3D12Scene.hlsl`, `D3D12Post.hlsl`,
+  or `D3D12Smoke.hlsl` trigger a background rebuild; successful builds swap in
+  on the render thread after a GPU wait, and failures keep the previous
+  pipeline set.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

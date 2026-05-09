@@ -352,6 +352,14 @@ the cut.
   once-per-second CPU timing averages for whole frame, command-list recording,
   and DirectWrite overlay bridge cost. These are CPU timings, not GPU timestamp
   query timings.
+- D3D12 async shader pipeline pass: initial D3D12 shader/PSO construction is no
+  longer on the startup/main-thread path. The renderer starts a background
+  pipeline build from the editable shader source directory and presents a cheap
+  loading clear while it compiles. D3D12 shader files are polled directly for
+  hot reload; replacements compile on a background task, swap on the render
+  thread after a GPU wait, and failures preserve the previous pipeline set.
+  Headless smoke now waits for a ready rendered frame and uses a separate
+  headless CultCache so it cannot fight the visible dev window's state file.
 - D3D12 unified traversal foothold: `D3D12Scene.hlsl` now uses one bounded ray
   interval traversal for solid candidates, medium transport, and transparent
   events. Each interval samples transport, checks conservative start/mid/end
