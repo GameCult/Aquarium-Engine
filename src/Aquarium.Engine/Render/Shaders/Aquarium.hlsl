@@ -1444,48 +1444,6 @@ float gridTemporalSupport(float3 position)
     return saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16) * mask;
 }
 
-void integrateTransparentGridOverlay(float3 rayOrigin, float3 rayDirection, float maxTravel, out float3 overlayColor, out float overlayAlpha)
-{
-    overlayColor = 0.0;
-    overlayAlpha = 0.0;
-
-    float marchEnd = min(maxTravel, farDistance);
-    float stepLength = max(marchEnd / 72.0, 0.05);
-    float travel = stepLength * 0.5;
-    float transmittance = 1.0;
-
-    [loop]
-    for (int stepIndex = 0; stepIndex < 96; stepIndex++)
-    {
-        if (travel >= marchEnd || transmittance < 0.04)
-        {
-            break;
-        }
-
-        float3 p = rayOrigin + rayDirection * travel;
-        float surfaceZ = terrainHeight(p.xy);
-        float3 surfacePosition = float3(p.xy, surfaceZ);
-        float mask = terrainMask(p.xy);
-        float2 gradient = terrainGradient(p.xy);
-        float normalRate = max(abs(rayDirection.z - dot(gradient, rayDirection.xy)), 0.18);
-        float bandWidth = max(0.028, travel * 0.00045);
-        float band = (1.0 - smoothstep(bandWidth, bandWidth * 2.8, abs(p.z - surfaceZ))) * mask;
-
-        if (band > 0.0001)
-        {
-            float4 overlay = shadeGridOverlay(surfacePosition);
-            float alpha = saturate(overlay.a * band * stepLength / normalRate * 0.42);
-            overlayColor += transmittance * overlay.rgb * alpha;
-            overlayAlpha += transmittance * alpha;
-            transmittance *= 1.0 - alpha;
-        }
-
-        travel += stepLength;
-    }
-
-    overlayAlpha = saturate(overlayAlpha);
-}
-
 float3 aces(float3 color)
 {
     const float a = 2.51;
@@ -1638,6 +1596,24 @@ SceneOut AquariumScenePS(VertexOut input)
         outputCoverage = 1.0;
     }
 
+    float3 gridHitPosition;
+    float gridTravel;
+    if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel) && gridTravel < nearestSolidTravel)
+    {
+        float4 gridOverlay = shadeGridOverlay(gridHitPosition);
+        float gridCoverage = saturate(gridOverlay.a);
+        float gridSupport = gridTemporalSupport(gridHitPosition);
+        outputTravel = gridTravel;
+        outputMaterialId = FIELD_ID_GRID;
+        outputNormal = terrainNormal(gridHitPosition);
+        outputCoverage = gridSupport;
+        outputReactive = 0.0;
+        if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
+        {
+            color = gridOverlay.rgb;
+        }
+    }
+
     float mediumDensityMean;
     float mediumTransmittance;
     float3 mediumInScattering;
@@ -1775,6 +1751,14 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentMediumDensity = saturate(currentControl.w);
     bool currentIsGrid = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
 
+    if (currentIsGrid && currentTravel <= farDistance)
+    {
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 worldPosition = cameraPosition + currentRay * currentTravel;
+        float4 gridOverlay = shadeGridOverlay(worldPosition);
+        currentColor = gridOverlay.rgb * saturate(gridOverlay.a) + float3(0.001, 0.003, 0.004);
+    }
+
     float historyWeight = 0.0;
     float historyAge = 0.0;
     float3 historyColor = currentColor;
@@ -1845,14 +1829,6 @@ ResolveOut AquariumResolvePS(VertexOut input)
 
     float blendedMediumTransmittance = lerp(1.0, froxelMediumTransmittance, mediumBlend);
     float3 resolved = currentColor * blendedMediumTransmittance + froxelMediumInScattering * mediumBlend;
-    float gridOverlayTravel = currentTravel <= farDistance && currentFieldId > 0.5 && !currentIsGrid
-        ? currentTravel
-        : farDistance;
-    float3 gridOverlayColor;
-    float gridOverlayAlpha;
-    float3 gridOverlayRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-    integrateTransparentGridOverlay(cameraPosition, gridOverlayRay, gridOverlayTravel, gridOverlayColor, gridOverlayAlpha);
-    resolved = resolved * (1.0 - gridOverlayAlpha) + gridOverlayColor;
 
     float3 exposedColor = exposeSceneColor(resolved);
     float3 bloomColor =
