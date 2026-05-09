@@ -316,3 +316,10 @@ can start porting real passes while keeping D3D11 as the visual reference.
   mode 5 shows current control and mode 6 shows field identity. History
   ping-pong/reprojection is still pending; do not claim TAA parity until those
   buffers are written and validated.
+- D3D12 temporal history pass: resolve now writes ping-pong color, metadata,
+  and control history targets and presents through the resolve shader. Opaque
+  current scene hits reproject through previous camera/Grid state, remap planet
+  hits to previous centers, and validate history by field id, travel, normal,
+  neighborhood color, coverage, and medium opacity. Debug mode 3 shows history
+  age and mode 4 shows history weight. Grid/transparent-specific temporal
+  reconstruction remains pending.

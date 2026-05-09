@@ -93,8 +93,12 @@ terminator. That binned Grid layer now carries cartesian gridlines, height
 isolines, and gradient-angle field lines. D3D12 also owns an HDR scene target
 and bloom/present pass. Its scene pass now writes color/travel,
 field-id/normal metadata, and temporal-control targets, with debug modes `5`
-and `6` inspecting the current control and identity buffers. The full temporal
-history ping-pong/reprojection and overlay/debug UI still need to move.
+and `6` inspecting the current control and identity buffers. Its resolve pass
+now writes ping-pong history color, metadata, and control targets and validates
+opaque history with previous-camera reprojection plus field, travel, normal,
+neighborhood color, coverage, and medium-continuity checks. Debug modes `3` and
+`4` show history age and weight. Grid/transparent-specific reconstruction and
+overlay/debug UI still need to move.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches

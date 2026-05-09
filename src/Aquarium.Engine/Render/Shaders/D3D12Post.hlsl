@@ -23,8 +23,11 @@ cbuffer AquariumFrame : register(b0)
 };
 
 Texture2D<float4> sourceTexture : register(t0);
+Texture2D<float4> historyTexture : register(t4);
 Texture2D<float4> currentSceneMetadataTexture : register(t5);
+Texture2D<float4> historyMetadataTexture : register(t6);
 Texture2D<float4> currentSceneControlTexture : register(t7);
+Texture2D<float4> historyControlTexture : register(t8);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
@@ -35,6 +38,21 @@ struct VertexOut
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
 };
+
+struct ResolveOut
+{
+    float4 finalColor : SV_Target0;
+    float4 historyColor : SV_Target1;
+    float4 historyMetadata : SV_Target2;
+    float4 historyControl : SV_Target3;
+};
+
+static const float SUN_RADIUS = 1.12;
+static const int PLANET_COUNT = 5;
+static const float FIELD_ID_GRID = 1.0;
+static const float FIELD_ID_SELF = 2.0;
+static const float FIELD_ID_PLANET_BASE = 10.0;
+static const float MAX_HISTORY_AGE = 32.0;
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
@@ -87,6 +105,134 @@ float3 debugFieldIdColor(float fieldId)
     }
 
     return float3(1.0, 0.0, 1.0);
+}
+
+float hash21(float2 p)
+{
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
+
+float planetRadius(int index)
+{
+    return lerp(0.34, 0.62, hash21(float2(index, 19.7)));
+}
+
+float3 planetCenterAt(int index, float sampleTime)
+{
+    float f = (float)index;
+    float angle = f * 0.8975979 + sampleTime * (0.08 + 0.011 * f);
+    float radius = 4.1 + f * 0.77;
+    float2 xy = float2(cos(angle), sin(angle)) * radius;
+    return float3(xy, 1.15 + planetRadius(index) * 0.72);
+}
+
+void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
+{
+    float3 target = float3(center, 0.0);
+    forward = normalize(target - camera);
+    right = normalize(cross(forward, float3(0.0, 0.0, 1.0)));
+    up = cross(right, forward);
+}
+
+float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 center)
+{
+    float2 ndc = ((pixel + jitter) * 2.0 - resolution) / resolution.y;
+    float3 forward;
+    float3 right;
+    float3 up;
+    cameraBasis(camera, center, forward, right, up);
+    return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
+}
+
+float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
+{
+    if (fieldId >= FIELD_ID_PLANET_BASE)
+    {
+        int planetIndex = clamp((int)round(fieldId - FIELD_ID_PLANET_BASE), 0, PLANET_COUNT - 1);
+        float3 currentCenter = planetCenterAt(planetIndex, timeSeconds);
+        float3 previousCenter = planetCenterAt(planetIndex, previousTimeSeconds);
+        return previousCenter + (worldPosition - currentCenter);
+    }
+
+    return worldPosition;
+}
+
+float2 projectWorldToPreviousHistoryUv(float3 worldPosition)
+{
+    float3 forward;
+    float3 right;
+    float3 up;
+    cameraBasis(previousCameraPosition, previousGridCenter, forward, right, up);
+    float3 delta = worldPosition - previousCameraPosition;
+    float z = max(dot(delta, forward), 0.0001);
+    float2 ndc = float2(dot(delta, right), dot(delta, up)) / z * 1.6;
+    float2 pixel = (ndc * resolution.y + resolution) * 0.5 - previousJitterPixels;
+    return float2(pixel.x / resolution.x, 1.0 - pixel.y / resolution.y);
+}
+
+int2 pixelFromUv(float2 uv)
+{
+    return clamp((int2)floor(uv * resolution), int2(0, 0), (int2)resolution - int2(1, 1));
+}
+
+float4 loadCurrentMetadata(float2 uv)
+{
+    return currentSceneMetadataTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadCurrentControl(float2 uv)
+{
+    return currentSceneControlTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadHistoryColor(float2 uv)
+{
+    return historyTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadHistoryMetadata(float2 uv)
+{
+    return historyMetadataTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadHistoryControl(float2 uv)
+{
+    return historyControlTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
+{
+    float2 texel = 1.0 / resolution;
+    neighborhoodMin = 100000.0;
+    neighborhoodMax = -100000.0;
+
+    [unroll]
+    for (int y = -1; y <= 1; y++)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; x++)
+        {
+            float3 sampleColor = sourceTexture.SampleLevel(sourceSampler, uv + float2(x, y) * texel, 0.0).rgb;
+            neighborhoodMin = min(neighborhoodMin, sampleColor);
+            neighborhoodMax = max(neighborhoodMax, sampleColor);
+        }
+    }
+}
+
+float3 bloomColorAt(float2 uv)
+{
+    return bloomTexture0.SampleLevel(sourceSampler, uv, 0.0).rgb * 0.42 +
+        bloomTexture1.SampleLevel(sourceSampler, uv, 0.0).rgb * 0.34 +
+        bloomTexture2.SampleLevel(sourceSampler, uv, 0.0).rgb * 0.24;
+}
+
+float3 presentColor(float3 scene, float2 uv)
+{
+    float3 bloom = bloomColorAt(uv);
+    float3 exposedScene = scene * max(exposure, 0.001);
+    return aces(exposedScene + bloom * bloomIntensity + luminance(bloom) * bloomVeilIntensity);
 }
 
 float4 D3D12BloomPrefilterPS(VertexOut input) : SV_Target0
@@ -149,41 +295,113 @@ float4 D3D12BloomBlurVerticalPS(VertexOut input) : SV_Target0
     return float4(color, 1.0);
 }
 
-float4 D3D12PresentPS(VertexOut input) : SV_Target0
+ResolveOut D3D12ResolvePS(VertexOut input)
 {
-    float3 scene = sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0).rgb * max(exposure, 0.001);
-    float3 bloom =
-        bloomTexture0.SampleLevel(sourceSampler, input.uv, 0.0).rgb * 0.42 +
-        bloomTexture1.SampleLevel(sourceSampler, input.uv, 0.0).rgb * 0.34 +
-        bloomTexture2.SampleLevel(sourceSampler, input.uv, 0.0).rgb * 0.24;
+    float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
+    float2 pixel = screenUv * resolution;
+    float4 current = sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0);
+    float currentTravel = current.a;
+    float3 currentColor = current.rgb;
+    float4 currentMetadata = loadCurrentMetadata(input.uv);
+    float4 currentControl = loadCurrentControl(input.uv);
+    float currentFieldId = currentMetadata.x;
+    float3 currentNormal = currentMetadata.yzw;
+    float currentReactive = saturate(currentControl.x);
+    float currentCoverage = saturate(currentControl.y);
+    float currentMediumOpacity = saturate(currentControl.z);
+
+    float historyWeight = 0.0;
+    float historyAge = 0.0;
+    float3 historyColor = currentColor;
+    if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
+    {
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 worldPosition = cameraPosition + currentRay * currentTravel;
+        float3 previousWorldPosition = temporalPreviousWorldPosition(worldPosition, currentFieldId);
+        float2 previousUv = projectWorldToPreviousHistoryUv(previousWorldPosition);
+
+        if (all(previousUv >= 0.0) && all(previousUv <= 1.0))
+        {
+            float4 previousMetadata = loadHistoryMetadata(previousUv);
+            float4 previousControl = loadHistoryControl(previousUv);
+            float4 previous = historyTexture.SampleLevel(sourceSampler, previousUv, 0.0);
+            float previousFieldId = previousMetadata.x;
+            float previousTravel = previous.a;
+            float3 previousNormal = previousMetadata.yzw;
+            float previousCoverage = saturate(previousControl.y);
+            float previousMediumOpacity = saturate(previousControl.z);
+            float previousHistoryAge = max(previousControl.w, 0.0);
+            float expectedPreviousTravel = distance(previousCameraPosition, previousWorldPosition);
+            float travelDelta = abs(previousTravel - expectedPreviousTravel);
+            float travelTolerance = max(0.045, expectedPreviousTravel * 0.018);
+            float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.0, travelDelta);
+            float fieldWeight = abs(previousFieldId - currentFieldId) < 0.001 ? 1.0 : 0.0;
+            float normalWeight = 0.0;
+            if (dot(previousNormal, previousNormal) > 0.01 && dot(currentNormal, currentNormal) > 0.01)
+            {
+                normalWeight = smoothstep(0.68, 0.96, dot(normalize(previousNormal), normalize(currentNormal)));
+            }
+
+            float3 neighborhoodMin;
+            float3 neighborhoodMax;
+            currentNeighborhood(input.uv, neighborhoodMin, neighborhoodMax);
+            float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
+            float colorDelta = length(clampedHistory - currentColor);
+            float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
+            float reactiveWeight = 1.0 - currentReactive;
+            float coverageWeight = smoothstep(0.02, 0.55, currentCoverage);
+            float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
+            float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
+            float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
+
+            historyColor = clampedHistory;
+            historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
+            historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
+        }
+    }
+
+    float3 resolved = lerp(currentColor, historyColor, historyWeight);
+    float3 finalColor = presentColor(resolved, input.uv);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
-        return float4(aces(scene), 1.0);
+        finalColor = aces(currentColor * max(exposure, 0.001));
     }
-
-    if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
+    else if (renderDebugMode >= 1.5 && renderDebugMode < 2.5)
     {
-        float4 control = currentSceneControlTexture.SampleLevel(sourceSampler, input.uv, 0.0);
-        return float4(saturate(control.xyz), 1.0);
+        finalColor = aces(historyColor * max(exposure, 0.001));
     }
-
-    if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
+    else if (renderDebugMode >= 2.5 && renderDebugMode < 3.5)
     {
-        float fieldId = currentSceneMetadataTexture.SampleLevel(sourceSampler, input.uv, 0.0).x;
-        return float4(debugFieldIdColor(fieldId), 1.0);
+        finalColor = (historyAge / MAX_HISTORY_AGE).xxx;
     }
-
-    if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
+    else if (renderDebugMode >= 3.5 && renderDebugMode < 4.5)
     {
-        return float4(aces(bloom * bloomIntensity), 1.0);
+        finalColor = historyWeight.xxx;
     }
-
-    if (renderDebugMode >= 7.5 && renderDebugMode < 8.5)
+    else if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
     {
-        float luma = luminance(scene);
-        return float4(luma.xxx, 1.0);
+        finalColor = saturate(currentControl.xyz);
+    }
+    else if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
+    {
+        finalColor = debugFieldIdColor(currentFieldId);
+    }
+    else if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
+    {
+        float3 bloom = bloomColorAt(input.uv);
+        finalColor = aces(bloom * bloomIntensity + luminance(bloom) * bloomVeilIntensity);
+    }
+    else if (renderDebugMode >= 7.5 && renderDebugMode < 8.5)
+    {
+        float luma = luminance(currentColor * max(exposure, 0.001));
+        finalColor = luma.xxx;
     }
 
-    float3 presented = scene + bloom * bloomIntensity + luminance(bloom) * bloomVeilIntensity;
-    return float4(aces(presented), 1.0);
+    ResolveOut output;
+    output.finalColor = float4(finalColor, 1.0);
+    output.historyColor = float4(resolved, currentTravel);
+    output.historyMetadata = currentMetadata;
+    output.historyControl = float4(currentControl.xyz, historyAge);
+    return output;
 }

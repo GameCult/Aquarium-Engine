@@ -60,7 +60,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12PipelineState bloomDownsamplePipelineState;
     private readonly ID3D12PipelineState bloomBlurHorizontalPipelineState;
     private readonly ID3D12PipelineState bloomBlurVerticalPipelineState;
-    private readonly ID3D12PipelineState presentPipelineState;
+    private readonly ID3D12PipelineState resolvePipelineState;
     private readonly ID3D12Fence fence;
     private readonly AutoResetEvent fenceEvent = new(false);
     private D3D12RenderTarget gridHeightRenderTarget;
@@ -69,6 +69,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget sceneRenderTarget;
     private D3D12RenderTarget sceneMetadataRenderTarget;
     private D3D12RenderTarget sceneControlRenderTarget;
+    private readonly D3D12RenderTarget[] historyRenderTargets = new D3D12RenderTarget[2];
+    private readonly D3D12RenderTarget[] historyMetadataRenderTargets = new D3D12RenderTarget[2];
+    private readonly D3D12RenderTarget[] historyControlRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] bloomRenderTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12StructuredBuffer froxelPrimitiveBuffer;
@@ -148,6 +151,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
+        CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
         froxelPrimitiveBuffer = new D3D12StructuredBuffer(device, FroxelBufferElementCount, Marshal.SizeOf<Int4>(), "Aquarium D3D12 Froxel Primitive Buffer");
         fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
@@ -186,8 +190,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         bloomBlurHorizontalPipelineState.Name = "Aquarium D3D12 Bloom Blur Horizontal Pipeline";
         bloomBlurVerticalPipelineState = CreateBloomBlurVerticalPipelineState(postShaderPath);
         bloomBlurVerticalPipelineState.Name = "Aquarium D3D12 Bloom Blur Vertical Pipeline";
-        presentPipelineState = CreatePresentPipelineState(postShaderPath);
-        presentPipelineState.Name = "Aquarium D3D12 Present Pipeline";
+        resolvePipelineState = CreateResolvePipelineState(postShaderPath);
+        resolvePipelineState.Name = "Aquarium D3D12 Resolve Pipeline";
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
         fence = device.CreateFence(0);
@@ -300,6 +304,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneMetadataRenderTarget.CreateShaderResourceView(device, frameResources.SceneMetadataDescriptor);
         frameResources.SceneControlDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneControlRenderTarget.CreateShaderResourceView(device, frameResources.SceneControlDescriptor);
+        var historyReadIndex = temporalFrameIndex & 1;
+        frameResources.HistoryDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        historyRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryDescriptor);
+        frameResources.HistoryMetadataDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        historyMetadataRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryMetadataDescriptor);
+        frameResources.HistoryControlDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        historyControlRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryControlDescriptor);
         for (var level = 0; level < BloomLevelCount; level++)
         {
             frameResources.BloomDescriptors[level] = frameResources.TransientShaderDescriptors.Allocate();
@@ -353,7 +364,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fenceEvent.Dispose();
         fence.Dispose();
         commandList.Dispose();
-        presentPipelineState.Dispose();
+        resolvePipelineState.Dispose();
         bloomBlurVerticalPipelineState.Dispose();
         bloomBlurHorizontalPipelineState.Dispose();
         bloomDownsamplePipelineState.Dispose();
@@ -369,6 +380,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         transparentSurfaceBuffer.Dispose();
         transparentSurfaceIndexBuffer.Dispose();
         DisposeBloomRenderTargets();
+        DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
@@ -419,6 +431,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         WaitForGpu();
         RemoveBloomRenderTargets();
+        RemoveHistoryRenderTargets();
         resourceRegistry.RemoveRenderTarget("scene-hdr-target");
         resourceRegistry.RemoveRenderTarget("scene-metadata-target");
         resourceRegistry.RemoveRenderTarget("scene-control-target");
@@ -426,6 +439,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("medium-volume-target");
         resourceRegistry.RemoveRenderTarget("grid-height-target");
         DisposeBloomRenderTargets();
+        DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
@@ -455,6 +469,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
+        CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
@@ -501,6 +516,36 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             bloomRenderTargets[level] = CreateBloomRenderTarget(level, false);
             bloomScratchTargets[level] = CreateBloomRenderTarget(level, true);
+        }
+    }
+
+    private void CreateHistoryRenderTargets()
+    {
+        for (var index = 0; index < 2; index++)
+        {
+            historyRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-{index}", $"Aquarium D3D12 History {index}");
+            historyMetadataRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-metadata-{index}", $"Aquarium D3D12 History Metadata {index}");
+            historyControlRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-control-{index}", $"Aquarium D3D12 History Control {index}");
+        }
+    }
+
+    private void RemoveHistoryRenderTargets()
+    {
+        for (var index = 0; index < 2; index++)
+        {
+            resourceRegistry.RemoveRenderTarget($"history-{index}");
+            resourceRegistry.RemoveRenderTarget($"history-metadata-{index}");
+            resourceRegistry.RemoveRenderTarget($"history-control-{index}");
+        }
+    }
+
+    private void DisposeHistoryRenderTargets()
+    {
+        for (var index = 0; index < 2; index++)
+        {
+            historyRenderTargets[index]?.Dispose();
+            historyMetadataRenderTargets[index]?.Dispose();
+            historyControlRenderTargets[index]?.Dispose();
         }
     }
 
@@ -690,33 +735,62 @@ public sealed class D3D12Renderer : IAquariumRenderer
         try
         {
             var showMediumDensity = RenderDebugMode == 11;
-            var sourceTarget = showMediumDensity ? mediumVolumeRenderTarget : sceneRenderTarget;
-            var sourceDescriptor = showMediumDensity ? frameResources.MediumTargetsDescriptor : frameResources.SceneDescriptor;
-            var pipelineState = showMediumDensity ? mediumDensityDebugPipelineState : presentPipelineState;
+            var historyReadIndex = temporalFrameIndex & 1;
+            var historyWriteIndex = 1 - historyReadIndex;
 
-            sourceTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            if (!showMediumDensity)
+            if (showMediumDensity)
             {
-                sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-                sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+                mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+                context.BackBuffer.Transition(context.CommandList, ResourceStates.RenderTarget);
+                context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
+                context.CommandList.SetPipelineState(mediumDensityDebugPipelineState);
+                context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
+                context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.MediumTargetsDescriptor.Gpu);
+                context.CommandList.RSSetViewports(viewport);
+                context.CommandList.RSSetScissorRects(scissorRect);
+                context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
+                context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+                context.CommandList.DrawInstanced(3, 1, 0, 0);
+                context.BackBuffer.Transition(context.CommandList, ResourceStates.Present);
+                return;
             }
+
+            sceneRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            historyRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            historyMetadataRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            historyControlRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            historyRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
+            historyMetadataRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
+            historyControlRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
+            context.CommandList.ClearRenderTargetView(historyRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
+            context.CommandList.ClearRenderTargetView(historyMetadataRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
+            context.CommandList.ClearRenderTargetView(historyControlRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
 
             context.BackBuffer.Transition(context.CommandList, ResourceStates.RenderTarget);
             context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
-            context.CommandList.SetPipelineState(pipelineState);
+            context.CommandList.SetPipelineState(resolvePipelineState);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(1, sourceDescriptor.Gpu);
-            if (!showMediumDensity)
-            {
-                context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.BloomPresentationDescriptor.Gpu);
-                context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.SceneMetadataDescriptor.Gpu);
-                context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.SceneControlDescriptor.Gpu);
-            }
+            context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.SceneDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.BloomPresentationDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.SceneMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.SceneControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(10, frameResources.HistoryDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(11, frameResources.HistoryMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(12, frameResources.HistoryControlDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
-            context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
+            context.CommandList.OMSetRenderTargets(
+            [
+                context.RenderTargetView,
+                historyRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
+                historyMetadataRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
+                historyControlRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
+            ],
+            null);
             context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.CommandList.DrawInstanced(3, 1, 0, 0);
             context.BackBuffer.Transition(context.CommandList, ResourceStates.Present);
@@ -1238,6 +1312,24 @@ public sealed class D3D12Renderer : IAquariumRenderer
             7,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var historyRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            4,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var historyMetadataRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            6,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var historyControlRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            8,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -1250,6 +1342,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([bloomRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneControlRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([historyRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([historyMetadataRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([historyControlRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -1316,9 +1411,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12BloomBlurVerticalPS", SceneHdrFormat);
     }
 
-    private ID3D12PipelineState CreatePresentPipelineState(string path)
+    private ID3D12PipelineState CreateResolvePipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12PresentPS", Format.B8G8R8A8_UNorm);
+        return CreateFullscreenPipelineState(
+            path,
+            "FullscreenTriangleVS",
+            "D3D12ResolvePS",
+            [Format.B8G8R8A8_UNorm, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
     }
 
     private ID3D12PipelineState CreateGridHeightBasePipelineState(string path)
@@ -1617,6 +1716,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot SceneMetadataDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneControlDescriptor { get; set; }
+
+        public D3D12DescriptorSlot HistoryDescriptor { get; set; }
+
+        public D3D12DescriptorSlot HistoryMetadataDescriptor { get; set; }
+
+        public D3D12DescriptorSlot HistoryControlDescriptor { get; set; }
 
         public D3D12DescriptorSlot[] BloomDescriptors { get; } = new D3D12DescriptorSlot[BloomLevelCount];
 
