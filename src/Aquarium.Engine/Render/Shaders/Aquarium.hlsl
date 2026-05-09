@@ -1328,12 +1328,11 @@ bool raymarchBodies(float3 rayOrigin, float3 rayDirection, out float3 hitPositio
     return bodyHit > 0.5 && travel <= farDistance;
 }
 
-bool traceGridSurfaceSegment(float3 rayOrigin, float3 rayDirection, float startTravel, float maxTravel, out float3 hitPosition, out float travel)
+bool traceGridSurface(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out float travel)
 {
-    travel = max(startTravel, 0.0);
-    float previousTravel = travel;
-    float3 previousPosition = rayOrigin + rayDirection * previousTravel;
-    float previousTerrainGap = previousPosition.z - terrainHeight(previousPosition.xy);
+    travel = 0.0;
+    float previousTravel = 0.0;
+    float previousTerrainGap = rayOrigin.z - terrainHeight(rayOrigin.xy);
 
     [loop]
     for (int stepIndex = 0; stepIndex < 96; stepIndex++)
@@ -1366,18 +1365,13 @@ bool traceGridSurfaceSegment(float3 rayOrigin, float3 rayDirection, float startT
         previousTerrainGap = terrainGap;
 
         travel += max(terrainStep, 0.026);
-        if (travel > maxTravel || travel > farDistance)
+        if (travel > farDistance)
         {
             return false;
         }
     }
 
     return false;
-}
-
-bool traceGridSurface(float3 rayOrigin, float3 rayDirection, out float3 hitPosition, out float travel)
-{
-    return traceGridSurfaceSegment(rayOrigin, rayDirection, 0.0, farDistance, hitPosition, travel);
 }
 
 float3 shade(float3 position, float3 normal, int materialId, float3 rayDirection)
@@ -1448,48 +1442,6 @@ float gridTemporalSupport(float3 position)
     float contour = terrainIsolines(height);
     float fieldLine = terrainFieldLines(gradient);
     return saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16) * mask;
-}
-
-void integrateGridEventStream(float3 rayOrigin, float3 rayDirection, float maxTravel, out float3 eventColor, out float eventAlpha, out float eventSupport)
-{
-    eventColor = 0.0;
-    eventAlpha = 0.0;
-    eventSupport = 0.0;
-
-    float transmittance = 1.0;
-    float startTravel = 0.0;
-    int eventCount = 0;
-
-    [loop]
-    for (int eventIndex = 0; eventIndex < 8; eventIndex++)
-    {
-        if (transmittance < 0.05 || startTravel >= maxTravel)
-        {
-            break;
-        }
-
-        float3 hitPosition;
-        float hitTravel;
-        if (!traceGridSurfaceSegment(rayOrigin, rayDirection, startTravel, maxTravel, hitPosition, hitTravel))
-        {
-            break;
-        }
-
-        float4 overlay = shadeGridOverlay(hitPosition);
-        float support = gridTemporalSupport(hitPosition);
-        float alpha = saturate(overlay.a * 0.58);
-        eventColor += transmittance * overlay.rgb * alpha;
-        eventAlpha += transmittance * alpha;
-        eventSupport = max(eventSupport, support);
-        transmittance *= 1.0 - alpha;
-        eventCount++;
-
-        float2 slope = terrainGradient(hitPosition.xy);
-        float normalRate = max(abs(rayDirection.z - dot(slope, rayDirection.xy)), 0.18);
-        startTravel = hitTravel + max(0.035, 0.014 / normalRate);
-    }
-
-    eventAlpha = saturate(eventAlpha);
 }
 
 float3 aces(float3 color)
@@ -1644,6 +1596,24 @@ SceneOut AquariumScenePS(VertexOut input)
         outputCoverage = 1.0;
     }
 
+    float3 gridHitPosition;
+    float gridTravel;
+    if (traceGridSurface(cameraPosition, rayDirection, gridHitPosition, gridTravel) && gridTravel < nearestSolidTravel)
+    {
+        float4 gridOverlay = shadeGridOverlay(gridHitPosition);
+        float gridCoverage = saturate(gridOverlay.a);
+        float gridSupport = gridTemporalSupport(gridHitPosition);
+        outputTravel = gridTravel;
+        outputMaterialId = FIELD_ID_GRID;
+        outputNormal = terrainNormal(gridHitPosition);
+        outputCoverage = gridSupport;
+        outputReactive = 0.0;
+        if (stochasticTransparency(screenUv, gridOverlay.a) > 0.0)
+        {
+            color = gridOverlay.rgb;
+        }
+    }
+
     float mediumDensityMean;
     float mediumTransmittance;
     float3 mediumInScattering;
@@ -1781,6 +1751,14 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentMediumDensity = saturate(currentControl.w);
     bool currentIsGrid = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
 
+    if (currentIsGrid && currentTravel <= farDistance)
+    {
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 worldPosition = cameraPosition + currentRay * currentTravel;
+        float4 gridOverlay = shadeGridOverlay(worldPosition);
+        currentColor = gridOverlay.rgb * saturate(gridOverlay.a) + float3(0.001, 0.003, 0.004);
+    }
+
     float historyWeight = 0.0;
     float historyAge = 0.0;
     float3 historyColor = currentColor;
@@ -1851,15 +1829,6 @@ ResolveOut AquariumResolvePS(VertexOut input)
 
     float blendedMediumTransmittance = lerp(1.0, froxelMediumTransmittance, mediumBlend);
     float3 resolved = currentColor * blendedMediumTransmittance + froxelMediumInScattering * mediumBlend;
-    float gridEventMaxTravel = currentTravel <= farDistance && currentFieldId > 0.5 && !currentIsGrid
-        ? currentTravel
-        : farDistance;
-    float3 gridEventColor;
-    float gridEventAlpha;
-    float gridEventSupport;
-    float3 gridEventRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-    integrateGridEventStream(cameraPosition, gridEventRay, gridEventMaxTravel, gridEventColor, gridEventAlpha, gridEventSupport);
-    resolved = resolved * (1.0 - gridEventAlpha) + gridEventColor;
 
     float3 exposedColor = exposeSceneColor(resolved);
     float3 bloomColor =
