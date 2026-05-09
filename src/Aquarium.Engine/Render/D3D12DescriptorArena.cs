@@ -11,6 +11,7 @@ internal sealed class D3D12DescriptorArena : IDisposable
     {
         Type = type;
         Capacity = capacity;
+        Name = name;
         Heap = device.CreateDescriptorHeap(new DescriptorHeapDescription(type, (uint)capacity, flags));
         Heap.Name = name;
         descriptorSize = (int)device.GetDescriptorHandleIncrementSize(type);
@@ -22,17 +23,31 @@ internal sealed class D3D12DescriptorArena : IDisposable
 
     public int Capacity { get; }
 
+    public int Used => used;
+
+    public string Name { get; }
+
     public D3D12DescriptorSlot Allocate()
     {
         if (used >= Capacity)
         {
-            throw new InvalidOperationException($"D3D12 {Type} descriptor arena exhausted ({Capacity} descriptors).");
+            throw new InvalidOperationException($"D3D12 descriptor arena '{Name}' exhausted ({Capacity} {Type} descriptors).");
         }
 
         var index = used++;
         return new D3D12DescriptorSlot(
             Heap.GetCPUDescriptorHandleForHeapStart() + (index * descriptorSize),
             Heap.GetGPUDescriptorHandleForHeapStart() + (index * descriptorSize));
+    }
+
+    public void Reset()
+    {
+        used = 0;
+    }
+
+    public string Describe()
+    {
+        return $"{Name}: {used}/{Capacity} {Type} descriptors";
     }
 
     public void Dispose()

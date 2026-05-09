@@ -9,9 +9,8 @@ plus a shader-visible descriptor arena, per-frame upload constant buffers,
 renderer-owned offscreen render target, fullscreen root signature, and
 smoke-test PSO that draws a diagnostic fullscreen triangle into the offscreen
 target before copying to the swapchain. Next renderer work should generalize
-this into a named resource registry, static/transient descriptor allocators,
-SRV/UAV creation, resize-safe resource recreation, and capacity diagnostics
-before building the stochastic transparent surface pipe.
+this into SRV/UAV creation and resize-safe resource recreation before building
+the stochastic transparent surface pipe.
 
 ## Hot Context
 
@@ -245,3 +244,8 @@ before building the stochastic transparent surface pipe.
   and smoke/copy passes emit command-list events for PIX-style inspection,
   swapchain backbuffers are state-tracked resources, and per-frame constants are
   allocated from a persistent mapped upload ring after the frame fence wait.
+- D3D12 descriptor/registry pass: shader-visible descriptors are split into
+  static and per-frame transient arenas. Transient descriptors reset after the
+  frame fence wait, named resources live in `D3D12ResourceRegistry`, and
+  one-second capacity diagnostics report upload ring, transient/static shader
+  descriptor, and RTV usage.

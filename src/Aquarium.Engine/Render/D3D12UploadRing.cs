@@ -12,6 +12,7 @@ internal sealed unsafe class D3D12UploadRing : IDisposable
     public D3D12UploadRing(ID3D12Device device, int capacityBytes, string name)
     {
         CapacityBytes = Align256(capacityBytes);
+        Name = name;
         resource = device.CreateCommittedResource(
             HeapType.Upload,
             ResourceDescription.Buffer((ulong)CapacityBytes),
@@ -22,6 +23,10 @@ internal sealed unsafe class D3D12UploadRing : IDisposable
     }
 
     public int CapacityBytes { get; }
+
+    public int UsedBytes => cursor;
+
+    public string Name { get; }
 
     public ulong GpuVirtualAddress => resource.GPUVirtualAddress;
 
@@ -36,13 +41,18 @@ internal sealed unsafe class D3D12UploadRing : IDisposable
         var size = Align256(Unsafe.SizeOf<T>());
         if (cursor + size > CapacityBytes)
         {
-            throw new InvalidOperationException($"D3D12 upload ring exhausted ({CapacityBytes} bytes).");
+            throw new InvalidOperationException($"D3D12 upload ring '{Name}' exhausted ({cursor}/{CapacityBytes} bytes used, requested {size} bytes).");
         }
 
         var offset = cursor;
         Unsafe.Write(mapped + offset, value);
         cursor += size;
         return new D3D12UploadAllocation(GpuVirtualAddress + (ulong)offset, (uint)size);
+    }
+
+    public string Describe()
+    {
+        return $"{Name}: {cursor}/{CapacityBytes} bytes";
     }
 
     public void Dispose()

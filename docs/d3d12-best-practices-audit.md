@@ -23,6 +23,10 @@ smoke-pass helpers become permanent resource policy by accident.
   of raw assumed barriers.
 - D3D12 objects are named, and command-list events mark the frame, smoke pass,
   and copy pass for PIX/graphics diagnostics.
+- Shader-visible descriptors are split into static and per-frame transient
+  arenas. Transient arenas reset only after the owning frame fence clears.
+- D3D12 resources are registered by name, and capacity diagnostics report upload,
+  transient descriptor, static descriptor, and RTV usage.
 - The D3D12 smoke path exercises shader compilation, root signature, PSO,
   descriptor table, RTV binding, barriers, copy, and present.
 
@@ -30,8 +34,8 @@ smoke-pass helpers become permanent resource policy by accident.
 
 - Committed resources are used directly. Replace with D3D12MA or placed-resource
   suballocation before the renderer owns many textures/buffers.
-- Descriptor arena is fixed-size and not fence-reclaimed. It should split into
-  static descriptors and transient per-frame ranges.
+- Descriptor arenas are still simple bump allocators. Add free lists or
+  descriptor-table paging only when real resource churn demands it.
 - Upload ring is per-frame and reset after fence wait. It is not yet a global
   transient allocator with suballocation statistics or overflow diagnostics.
 - Backbuffer state is assumed. Wrap swapchain buffers in state-tracked frame
@@ -42,8 +46,6 @@ smoke-pass helpers become permanent resource policy by accident.
 
 ## Required Before Real Pass Migration
 
-- A named D3D12 resource registry for render targets and buffers.
-- Static and transient descriptor allocation APIs.
 - Upload ring capacity policy and overflow reporting for real frame data.
 - Debug names for D3D12 resources, descriptors by owner, and command lists.
 - Backbuffer state tracking and resize-safe recreation.
