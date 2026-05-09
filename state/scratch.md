@@ -299,3 +299,9 @@ can start porting real passes while keeping D3D11 as the visual reference.
   medium shader discovers the Grid layer through the froxel bin, not through a
   hardcoded alpha/composite side path. This is the first implementation of the
   particle/billboard transparency contract.
+- D3D12 HDR presentation pass: final D3D12 scene output is now scene-linear
+  `R16G16B16A16_Float`. A three-level half/quarter/eighth bloom pyramid uses
+  firefly-safe downsample plus separable horizontal/vertical blur before final
+  exposure, bloom/veil composite, and ACES presentation. Debug mode 7 shows
+  bloom contribution; mode 8 shows exposed luminance; mode 11 still bypasses
+  post to inspect the medium density atlas.

@@ -192,16 +192,6 @@ void integrateMedium(float2 uv, float maxTravel, out float densityMean, out floa
     densityMean = saturate(densityMean / (float)MEDIUM_FROXEL_SLICE_COUNT);
 }
 
-float3 aces(float3 color)
-{
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
-}
-
 float3 shadeBody(float3 p, float3 normal, int primitiveId)
 {
     float3 self = float3(0.0, 0.0, 2.2);
@@ -258,5 +248,5 @@ float4 D3D12ScenePS(VertexOut input) : SV_Target0
         color = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(densityMean * 6.0));
     }
 
-    return float4(aces(color * max(exposure, 0.001)), 1.0);
+    return float4(color, 1.0);
 }
