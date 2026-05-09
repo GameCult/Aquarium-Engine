@@ -50,6 +50,7 @@ static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_DOWNSCALE = 8;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
+static const int VIEW_FROXEL_PRIMITIVE_SLOT_COUNT = 2;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
@@ -289,11 +290,15 @@ void considerFroxelPrimitiveHits(float3 origin, float3 direction, int froxelInde
         return;
     }
 
-    int4 ids = froxelPrimitiveIds[froxelIndex];
-    considerPrimitiveHit(origin, direction, ids.x, intervalStart, intervalEnd, nearest);
-    considerPrimitiveHit(origin, direction, ids.y, intervalStart, intervalEnd, nearest);
-    considerPrimitiveHit(origin, direction, ids.z, intervalStart, intervalEnd, nearest);
-    considerPrimitiveHit(origin, direction, ids.w, intervalStart, intervalEnd, nearest);
+    [unroll]
+    for (int slot = 0; slot < VIEW_FROXEL_PRIMITIVE_SLOT_COUNT; slot++)
+    {
+        int4 ids = froxelPrimitiveIds[froxelIndex * VIEW_FROXEL_PRIMITIVE_SLOT_COUNT + slot];
+        considerPrimitiveHit(origin, direction, ids.x, intervalStart, intervalEnd, nearest);
+        considerPrimitiveHit(origin, direction, ids.y, intervalStart, intervalEnd, nearest);
+        considerPrimitiveHit(origin, direction, ids.z, intervalStart, intervalEnd, nearest);
+        considerPrimitiveHit(origin, direction, ids.w, intervalStart, intervalEnd, nearest);
+    }
 }
 
 float gridSurfaceDistanceAt(float3 origin, float3 direction, float travel)

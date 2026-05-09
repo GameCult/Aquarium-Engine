@@ -11,12 +11,13 @@ selectable only as temporary reference ballast until visible D3D12 use survives
 the cut.
 
 Current renderer correction: D3D12 scene candidates now live in the view-froxel
-volume. CPU bootstrap code intersects each low-res 8x8 pixel tube with solid
-sphere bounds and the Grid height slab, marks the overlapping
-160x90x32-at-720p depth slices, and the scene shader looks up solid and
+volume. CPU bootstrap code currently bins all solid primitives and the Grid into
+all 160x90x32-at-720p cells, and the scene shader looks up solid and
 transparent candidate ids by `(lowX, lowY, slice)` before doing exact
-intersection for that slice interval. Next steel-plate step is replacing the
-CPU-filled candidate buffers with GPU/raster binning passes.
+intersection for that slice interval. This intentionally over-conservative
+bootstrap replaced the corner/center sampled tube binning because that missed
+sub-cell silhouettes and chopped the frame. Next steel-plate step is replacing
+the CPU-filled candidate buffers with GPU/raster binning passes.
 
 ## Hot Context
 

@@ -27,6 +27,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MediumFroxelAtlasColumns = 8;
     private const int MediumFroxelAtlasRows = 4;
     private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
+    private const int ViewFroxelPrimitiveSlotCount = 2;
     private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
@@ -593,10 +594,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private D3D12StructuredBuffer CreateViewFroxelPrimitiveBuffer()
     {
-        froxelPrimitiveIds = new Int4[ViewFroxelCount];
+        froxelPrimitiveIds = new Int4[ViewFroxelCount * ViewFroxelPrimitiveSlotCount];
         return new D3D12StructuredBuffer(
             device,
-            ViewFroxelCount,
+            froxelPrimitiveIds.Length,
             Marshal.SizeOf<Int4>(),
             "Aquarium D3D12 View-Froxel Primitive Buffer");
     }
@@ -1202,77 +1203,18 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private void AddPrimitiveToFroxels(AquariumFrame frame, int primitiveId, Vector3 center, float boundRadius)
     {
-        var gridOrigin = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
-        var farDistance = Vector3.Distance(frame.CameraPosition, gridOrigin) + MathF.Max(frame.Grid.Radius, 0.001f);
-        for (var y = 0; y < mediumFroxelHeight; y++)
+        _ = frame;
+        _ = center;
+        _ = boundRadius;
+        for (var viewFroxelIndex = 0; viewFroxelIndex < ViewFroxelCount; viewFroxelIndex++)
         {
-            for (var x = 0; x < mediumFroxelWidth; x++)
-            {
-                if (!TraceViewFroxelSphere(
-                    frame.CameraPosition,
-                    frame.Grid.Center,
-                    x,
-                    y,
-                    center,
-                    boundRadius,
-                    out var enterTravel,
-                    out var exitTravel))
-                {
-                    continue;
-                }
-
-                enterTravel = Math.Clamp(enterTravel, 0.0f, farDistance);
-                exitTravel = Math.Clamp(exitTravel, 0.0f, farDistance);
-                if (exitTravel <= enterTravel)
-                {
-                    continue;
-                }
-
-                var firstSlice = ClampCell(enterTravel / farDistance, MediumFroxelSliceCount);
-                var lastSlice = ClampCell(exitTravel / farDistance, MediumFroxelSliceCount);
-                for (var slice = firstSlice; slice <= lastSlice; slice++)
-                {
-                    AddPrimitiveToViewFroxel(ViewFroxelIndex(x, y, slice), primitiveId);
-                }
-            }
+            AddPrimitiveToViewFroxel(viewFroxelIndex, primitiveId);
         }
     }
 
     private void AddPrimitiveToViewFroxel(int viewFroxelIndex, int primitiveId)
     {
-        var element = froxelPrimitiveIds[viewFroxelIndex];
-        if (element.X == primitiveId || element.Y == primitiveId || element.Z == primitiveId || element.W == primitiveId)
-        {
-            return;
-        }
-
-        if (element.X == -1)
-        {
-            froxelPrimitiveIds[viewFroxelIndex] = element with { X = primitiveId };
-            return;
-        }
-
-        if (element.Y == -1)
-        {
-            froxelPrimitiveIds[viewFroxelIndex] = element with { Y = primitiveId };
-            return;
-        }
-
-        if (element.Z == -1)
-        {
-            froxelPrimitiveIds[viewFroxelIndex] = element with { Z = primitiveId };
-            return;
-        }
-
-        if (element.W == -1)
-        {
-            froxelPrimitiveIds[viewFroxelIndex] = element with { W = primitiveId };
-        }
-    }
-
-    private static int ClampCell(float normalized, int count)
-    {
-        return Math.Clamp((int)MathF.Floor(normalized * count), 0, count - 1);
+        AddIdToInt4Slots(froxelPrimitiveIds, viewFroxelIndex * ViewFroxelPrimitiveSlotCount, ViewFroxelPrimitiveSlotCount, primitiveId);
     }
 
     private void BuildFieldInstanceTable(AquariumFrame frame)
@@ -1352,225 +1294,51 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new Vector4(2.0f, 10.0f, 0.055f, 0.090f),
             new Vector4(0.30f, 0.90f, 0.82f, 0.24f));
 
-        var min = new Vector3(
-            frame.Grid.Center.X - frame.Grid.Radius,
-            frame.Grid.Center.Y - frame.Grid.Radius,
-            GridTransparentMinZ);
-        var max = new Vector3(
-            frame.Grid.Center.X + frame.Grid.Radius,
-            frame.Grid.Center.Y + frame.Grid.Radius,
-            GridTransparentMaxZ);
-        var gridOrigin = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
-        var farDistance = Vector3.Distance(frame.CameraPosition, gridOrigin) + MathF.Max(frame.Grid.Radius, 0.001f);
-        for (var y = 0; y < mediumFroxelHeight; y++)
+        for (var viewFroxelIndex = 0; viewFroxelIndex < ViewFroxelCount; viewFroxelIndex++)
         {
-            for (var x = 0; x < mediumFroxelWidth; x++)
-            {
-                if (!TraceViewFroxelSlab(
-                    frame.CameraPosition,
-                    frame.Grid.Center,
-                    x,
-                    y,
-                    min,
-                    max,
-                    out var enterTravel,
-                    out var exitTravel))
-                {
-                    continue;
-                }
-
-                enterTravel = Math.Clamp(enterTravel, 0.0f, farDistance);
-                exitTravel = Math.Clamp(exitTravel, 0.0f, farDistance);
-                if (exitTravel <= enterTravel)
-                {
-                    continue;
-                }
-
-                var firstSlice = ClampCell(enterTravel / farDistance, MediumFroxelSliceCount);
-                var lastSlice = ClampCell(exitTravel / farDistance, MediumFroxelSliceCount);
-                for (var slice = firstSlice; slice <= lastSlice; slice++)
-                {
-                    AddTransparentSurfaceToViewFroxel(ViewFroxelIndex(x, y, slice), 0);
-                }
-            }
+            AddTransparentSurfaceToViewFroxel(viewFroxelIndex, 0);
         }
-    }
-
-    private bool TraceViewFroxelSlab(
-        Vector3 cameraPosition,
-        Vector2 gridCenter,
-        int x,
-        int y,
-        Vector3 min,
-        Vector3 max,
-        out float enterTravel,
-        out float exitTravel)
-    {
-        enterTravel = float.PositiveInfinity;
-        exitTravel = 0.0f;
-        Span<Vector2> samples =
-        [
-            new Vector2(x * MediumFroxelDownscale, y * MediumFroxelDownscale),
-            new Vector2((x + 1) * MediumFroxelDownscale, y * MediumFroxelDownscale),
-            new Vector2(x * MediumFroxelDownscale, (y + 1) * MediumFroxelDownscale),
-            new Vector2((x + 1) * MediumFroxelDownscale, (y + 1) * MediumFroxelDownscale),
-            new Vector2((x + 0.5f) * MediumFroxelDownscale, (y + 0.5f) * MediumFroxelDownscale),
-        ];
-
-        var hit = false;
-        foreach (var pixel in samples)
-        {
-            var clampedPixel = new Vector2(
-                Math.Clamp(pixel.X, 0.0f, MathF.Max(width - 1.0f, 0.0f)),
-                Math.Clamp(pixel.Y, 0.0f, MathF.Max(height - 1.0f, 0.0f)));
-            var direction = RayDirectionForPixel(clampedPixel, cameraPosition, gridCenter);
-            if (!TraceAabb(cameraPosition, direction, min, max, out var sampleEnter, out var sampleExit))
-            {
-                continue;
-            }
-
-            enterTravel = MathF.Min(enterTravel, sampleEnter);
-            exitTravel = MathF.Max(exitTravel, sampleExit);
-            hit = true;
-        }
-
-        return hit;
-    }
-
-    private bool TraceViewFroxelSphere(
-        Vector3 cameraPosition,
-        Vector2 gridCenter,
-        int x,
-        int y,
-        Vector3 center,
-        float radius,
-        out float enterTravel,
-        out float exitTravel)
-    {
-        enterTravel = float.PositiveInfinity;
-        exitTravel = 0.0f;
-        Span<Vector2> samples =
-        [
-            new Vector2(x * MediumFroxelDownscale, y * MediumFroxelDownscale),
-            new Vector2((x + 1) * MediumFroxelDownscale, y * MediumFroxelDownscale),
-            new Vector2(x * MediumFroxelDownscale, (y + 1) * MediumFroxelDownscale),
-            new Vector2((x + 1) * MediumFroxelDownscale, (y + 1) * MediumFroxelDownscale),
-            new Vector2((x + 0.5f) * MediumFroxelDownscale, (y + 0.5f) * MediumFroxelDownscale),
-        ];
-
-        var hit = false;
-        foreach (var pixel in samples)
-        {
-            var clampedPixel = new Vector2(
-                Math.Clamp(pixel.X, 0.0f, MathF.Max(width - 1.0f, 0.0f)),
-                Math.Clamp(pixel.Y, 0.0f, MathF.Max(height - 1.0f, 0.0f)));
-            var direction = RayDirectionForPixel(clampedPixel, cameraPosition, gridCenter);
-            if (!TraceSphere(cameraPosition, direction, center, radius, out var sampleEnter, out var sampleExit))
-            {
-                continue;
-            }
-
-            enterTravel = MathF.Min(enterTravel, sampleEnter);
-            exitTravel = MathF.Max(exitTravel, sampleExit);
-            hit = true;
-        }
-
-        return hit;
-    }
-
-    private Vector3 RayDirectionForPixel(Vector2 pixel, Vector3 cameraPosition, Vector2 gridCenter)
-    {
-        var ndc = ((pixel * 2.0f) - new Vector2(width, height)) / MathF.Max(height, 1.0f);
-        var target = new Vector3(gridCenter.X, gridCenter.Y, 0.0f);
-        var forward = Vector3.Normalize(target - cameraPosition);
-        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
-        var up = Vector3.Cross(right, forward);
-        return Vector3.Normalize((forward * 1.6f) + (right * ndc.X) + (up * ndc.Y));
-    }
-
-    private static bool TraceAabb(Vector3 origin, Vector3 direction, Vector3 min, Vector3 max, out float enterTravel, out float exitTravel)
-    {
-        enterTravel = 0.0f;
-        exitTravel = float.PositiveInfinity;
-        return ClipAabbAxis(origin.X, direction.X, min.X, max.X, ref enterTravel, ref exitTravel)
-            && ClipAabbAxis(origin.Y, direction.Y, min.Y, max.Y, ref enterTravel, ref exitTravel)
-            && ClipAabbAxis(origin.Z, direction.Z, min.Z, max.Z, ref enterTravel, ref exitTravel)
-            && exitTravel > enterTravel;
-    }
-
-    private static bool ClipAabbAxis(float origin, float direction, float min, float max, ref float enterTravel, ref float exitTravel)
-    {
-        if (MathF.Abs(direction) < 0.000001f)
-        {
-            return origin >= min && origin <= max;
-        }
-
-        var t0 = (min - origin) / direction;
-        var t1 = (max - origin) / direction;
-        enterTravel = MathF.Max(enterTravel, MathF.Min(t0, t1));
-        exitTravel = MathF.Min(exitTravel, MathF.Max(t0, t1));
-        return exitTravel >= enterTravel;
-    }
-
-    private static bool TraceSphere(Vector3 origin, Vector3 direction, Vector3 center, float radius, out float enterTravel, out float exitTravel)
-    {
-        var oc = origin - center;
-        var b = Vector3.Dot(oc, direction);
-        var c = Vector3.Dot(oc, oc) - radius * radius;
-        var h = b * b - c;
-        if (h < 0.0f)
-        {
-            enterTravel = 0.0f;
-            exitTravel = 0.0f;
-            return false;
-        }
-
-        h = MathF.Sqrt(h);
-        enterTravel = -b - h;
-        exitTravel = -b + h;
-        if (exitTravel <= 0.0f)
-        {
-            return false;
-        }
-
-        enterTravel = MathF.Max(enterTravel, 0.0f);
-        return exitTravel > enterTravel;
-    }
-
-    private int ViewFroxelIndex(int x, int y, int slice)
-    {
-        return x + y * mediumFroxelWidth + slice * mediumFroxelWidth * mediumFroxelHeight;
     }
 
     private void AddTransparentSurfaceToViewFroxel(int viewFroxelIndex, int surfaceId)
     {
-        var element = transparentSurfaceIds[viewFroxelIndex];
-        if (element.X == surfaceId || element.Y == surfaceId || element.Z == surfaceId || element.W == surfaceId)
-        {
-            return;
-        }
+        AddIdToInt4Slots(transparentSurfaceIds, viewFroxelIndex, 1, surfaceId);
+    }
 
-        if (element.X == -1)
+    private static void AddIdToInt4Slots(Int4[] ids, int baseElement, int slotCount, int id)
+    {
+        for (var slot = 0; slot < slotCount; slot++)
         {
-            transparentSurfaceIds[viewFroxelIndex] = element with { X = surfaceId };
-            return;
-        }
+            var elementIndex = baseElement + slot;
+            var element = ids[elementIndex];
+            if (element.X == id || element.Y == id || element.Z == id || element.W == id)
+            {
+                return;
+            }
 
-        if (element.Y == -1)
-        {
-            transparentSurfaceIds[viewFroxelIndex] = element with { Y = surfaceId };
-            return;
-        }
+            if (element.X == -1)
+            {
+                ids[elementIndex] = element with { X = id };
+                return;
+            }
 
-        if (element.Z == -1)
-        {
-            transparentSurfaceIds[viewFroxelIndex] = element with { Z = surfaceId };
-            return;
-        }
+            if (element.Y == -1)
+            {
+                ids[elementIndex] = element with { Y = id };
+                return;
+            }
 
-        if (element.W == -1)
-        {
-            transparentSurfaceIds[viewFroxelIndex] = element with { W = surfaceId };
+            if (element.Z == -1)
+            {
+                ids[elementIndex] = element with { Z = id };
+                return;
+            }
+
+            if (element.W == -1)
+            {
+                ids[elementIndex] = element with { W = id };
+                return;
+            }
         }
     }
 
@@ -1971,7 +1739,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         var commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
         commandAllocator.Name = $"Aquarium D3D12 Frame {index} Command Allocator";
-        var uploadRing = new D3D12UploadRing(device, 16 * 1024 * 1024, $"Aquarium D3D12 Frame {index} Upload Ring");
+        var uploadRing = new D3D12UploadRing(device, 64 * 1024 * 1024, $"Aquarium D3D12 Frame {index} Upload Ring");
         var transientDescriptors = new D3D12DescriptorArena(
             device,
             DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
