@@ -273,8 +273,9 @@ can start porting real passes while keeping D3D11 as the visual reference.
   fullscreen per-texel body loop. That was the wrong architecture. The D3D12
   Grid height pass now behaves like Aetheria's gravity layer: a base Grid field
   draw, then one additive up-facing quad per body, driven by a small uploaded
-  brush table. The target is `R16G16B16A16_Float` because additive blending is
-  not the right bet on `R32G32B32A32_Float`. Render debug mode `11` displays the
-  height target. Temporal previous camera/Grid/time state is renderer-level
+  brush table. The target is scalar `R16_Float`: height is one value, and
+  additive blending works on that format where `R32G32B32A32_Float` was the
+  wrong bet. Render debug mode `11` displays the height target. Temporal
+  previous camera/Grid/time state is renderer-level
   state, not swapchain-frame-resource state; swapchain image index is not frame
   history. Next D3D12 migration step is the froxel/field resource upload path.

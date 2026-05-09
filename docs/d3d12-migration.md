@@ -22,7 +22,7 @@ has feature parity.
 - The first real migrated pass is the Grid height pass. D3D12 uploads Aquarium
   frame constants plus a fixed body brush table, renders a base Grid field, then
   draws one additive up-facing gravity quad per body into a 128x128
-  `R16G16B16A16_Float` Grid height target. Render debug mode `11` displays that
+  scalar `R16_Float` Grid height target. Render debug mode `11` displays that
   target.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and

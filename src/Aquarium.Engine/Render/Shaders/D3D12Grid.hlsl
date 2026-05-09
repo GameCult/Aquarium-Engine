@@ -76,12 +76,12 @@ VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
     return output;
 }
 
-float4 D3D12GridHeightBasePS(VertexOut input) : SV_Target
+float D3D12GridHeightBasePS(VertexOut input) : SV_Target
 {
     float2 world = gridWorld(saturate(input.uv));
     float slow = sin((world.x * 0.08 + world.y * 0.06) + timeSeconds * 0.27)
         * sin((world.x * -0.04 + world.y * 0.07) - timeSeconds * 0.19) * 0.035;
-    return float4(slow, 0.0, 0.0, 1.0);
+    return slow;
 }
 
 BrushVertexOut D3D12GridHeightBrushVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
@@ -110,12 +110,12 @@ BrushVertexOut D3D12GridHeightBrushVS(uint vertexId : SV_VertexID, uint instance
     return output;
 }
 
-float4 D3D12GridHeightBrushPS(BrushVertexOut input) : SV_Target
+float D3D12GridHeightBrushPS(BrushVertexOut input) : SV_Target
 {
     float2 world = gridWorld(saturate(input.uv));
     float distanceValue = length(world - input.centerRadius.xy);
     float well = powerPulse(distanceValue, input.centerRadius.z, input.shape.x);
     float ripple = sin(distanceValue * input.wave.y - timeSeconds * input.wave.z);
     float signedHeight = input.shape.y * well + ripple * well * input.wave.x;
-    return float4(signedHeight, 0.0, 0.0, 0.0);
+    return signedHeight;
 }

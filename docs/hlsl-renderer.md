@@ -79,7 +79,7 @@ The D3D12 backend has begun migrating this order with a proper brush-based Grid
 height pass. It uploads the Aquarium frame constant buffer plus a fixed body
 brush table through the D3D12 upload ring, renders the base Grid field, then
 draws one additive up-facing gravity quad per body into a 128x128
-`R16G16B16A16_Float` Grid height target. D3D12 render debug mode `11` displays
+scalar `R16_Float` Grid height target. D3D12 render debug mode `11` displays
 that target. D3D11 remains the visual reference until the full pass chain
 reaches parity.
 

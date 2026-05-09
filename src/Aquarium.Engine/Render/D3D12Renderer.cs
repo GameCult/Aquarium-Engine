@@ -15,6 +15,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 {
     private const int BackBufferCount = 2;
     private const int GridHeightTextureSize = 128;
+    private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
     private const int GridHeightBrushCount = PlanetCount + 1;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
@@ -345,7 +346,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             device,
             GridHeightTextureSize,
             GridHeightTextureSize,
-            Format.R16G16B16A16_Float,
+            GridHeightFormat,
             renderTargetViewArena.Allocate(),
             staticShaderDescriptorArena.Allocate(),
             null,
@@ -648,7 +649,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private ID3D12PipelineState CreateGridHeightBasePipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12GridHeightBasePS", Format.R16G16B16A16_Float);
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12GridHeightBasePS", GridHeightFormat);
     }
 
     private ID3D12PipelineState CreateGridHeightBrushPipelineState(string path)
@@ -657,7 +658,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             path,
             "D3D12GridHeightBrushVS",
             "D3D12GridHeightBrushPS",
-            Format.R16G16B16A16_Float,
+            GridHeightFormat,
             new BlendDescription(Blend.One, Blend.One, Blend.One, Blend.One));
     }
 
