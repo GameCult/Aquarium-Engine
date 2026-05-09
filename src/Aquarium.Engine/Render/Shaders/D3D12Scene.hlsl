@@ -26,7 +26,9 @@ Texture2D<float4> gridHeightTexture : register(t0);
 StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumTransportTexture : register(t14);
+Texture2D<float> ditherTexture : register(t15);
 SamplerState gridSampler : register(s0);
+SamplerState ditherSampler : register(s1);
 
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
@@ -51,6 +53,7 @@ static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.24;
+static const float DITHER_TEXTURE_SIZE = 512.0;
 
 struct VertexOut
 {
@@ -94,16 +97,10 @@ VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
     return output;
 }
 
-float hash21(float2 p)
-{
-    p = frac(p * float2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return frac(p.x * p.y);
-}
-
 float stochasticTransparency(float2 screenUv, float alpha)
 {
-    float dither = hash21(floor(screenUv * resolution));
+    float2 ditherUv = screenUv * (resolution / DITHER_TEXTURE_SIZE);
+    float dither = ditherTexture.SampleLevel(ditherSampler, ditherUv, 0.0).r;
     return alpha - dither - 0.001 * (1.0 - ceil(alpha));
 }
 
@@ -123,6 +120,13 @@ float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 c
     float3 up;
     cameraBasis(camera, center, forward, right, up);
     return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
+}
+
+float hash21(float2 p)
+{
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
 }
 
 float planetRadius(int index)

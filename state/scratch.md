@@ -19,9 +19,9 @@ for empty-space skipping; transparent surface candidate buffers, descriptors,
 root parameters, shader structs, and event traversal were cut rather than left
 as dead scaffolding. D3D12 Grid line width now mirrors the D3D11 reference:
 periodic domains use `fwidth()` and pixel-width constants instead of world-space
-`ddx/ddy` footprint guesses. The temporary D3D12 stochastic mask is screen-pixel
-stable; next polish pass should bind the Aetheria blue-noise texture like D3D11
-instead of keeping a hash dither.
+`ddx/ddy` footprint guesses. The stochastic mask now samples Aetheria's copied
+512x512 R8 blue-noise texture in screen space through D3D12 `t15/s1`, point and
+wrap sampled, without a frame-wide animation seed.
 
 ## Hot Context
 
