@@ -995,7 +995,7 @@ public sealed class D3D11Renderer : IDisposable
             angle: frame.TimeSeconds * 0.055f,
             mediumId: 1.0f,
             color: new Vector3(0.50f, 0.72f, 0.86f),
-            medium: new Vector4(0.030f, 0.018f, 0.0f, 0.45f));
+            medium: new Vector4(0.220f, 0.160f, 0.0f, 1.25f));
         fieldInstances[7] = FieldInstanceGpu.Ellipsoid(
             fieldId: 33.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
@@ -1004,7 +1004,7 @@ public sealed class D3D11Renderer : IDisposable
             angle: -0.62f + frame.TimeSeconds * 0.033f,
             mediumId: 1.0f,
             color: new Vector3(0.34f, 0.58f, 0.72f),
-            medium: new Vector4(0.024f, 0.015f, 0.0f, 0.38f));
+            medium: new Vector4(0.200f, 0.140f, 0.0f, 1.20f));
         fieldInstances[8] = FieldInstanceGpu.Ellipsoid(
             fieldId: 34.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
@@ -1013,7 +1013,7 @@ public sealed class D3D11Renderer : IDisposable
             angle: 1.15f,
             mediumId: 1.0f,
             color: new Vector3(0.75f, 0.70f, 0.52f),
-            medium: new Vector4(0.020f, 0.014f, 0.0f, 0.32f));
+            medium: new Vector4(0.180f, 0.125f, 0.0f, 1.15f));
         fieldInstances[9] = FieldInstanceGpu.Ellipsoid(
             fieldId: 35.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
@@ -1022,7 +1022,7 @@ public sealed class D3D11Renderer : IDisposable
             angle: 0.46f,
             mediumId: 1.0f,
             color: new Vector3(0.30f, 0.50f, 0.68f),
-            medium: new Vector4(0.018f, 0.012f, 0.0f, 0.35f));
+            medium: new Vector4(0.190f, 0.130f, 0.0f, 1.20f));
     }
 
     private static Vector2 HaltonJitter(int index)

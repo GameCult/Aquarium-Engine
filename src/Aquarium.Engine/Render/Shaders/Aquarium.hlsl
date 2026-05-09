@@ -418,7 +418,7 @@ float registeredMediumDensity(float3 p, out float3 scattering)
         float3 local = p - field.centerRadius.xyz;
         local.xy = rotate2(local.xy, -field.radiusAngle.w);
         local /= max(field.radiusAngle.xyz, 0.001);
-        float erosion = saturate(0.62 + fbm3(local * 3.4) * 0.38);
+        float erosion = saturate(0.86 + fbm3(local * 3.4) * 0.14);
         float core = 1.0 - smoothstep(0.80, 1.05, length(local));
         float fieldDensity = shell * core * erosion * field.mediumTerms.w;
         density += fieldDensity;
