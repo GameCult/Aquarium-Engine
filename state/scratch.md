@@ -294,16 +294,16 @@ the cut.
   and opaque SDF/solid hits.
 - D3D12 transparent-surface bins: Grid line transparency now flows through a
   transparent surface table plus froxel-binned transparent surface ids. The
-  medium shader discovers the Grid layer through the froxel bin, not through a
-  hardcoded alpha/composite side path. This is the first implementation of the
-  particle/billboard transparency contract.
+  scene shader discovers the Grid layer through the froxel bin, not through a
+  hardcoded alpha/composite side path or a medium-atlas summary. This is the
+  first implementation of the particle/billboard transparency contract.
 - D3D12 HDR presentation pass: final D3D12 scene output is now scene-linear
   `R16G16B16A16_Float`. A three-level half/quarter/eighth bloom pyramid uses
   firefly-safe downsample plus separable horizontal/vertical blur before final
   exposure, bloom/veil composite, and ACES presentation. Debug mode 7 shows
   bloom contribution; mode 8 shows exposed luminance; mode 11 still bypasses
   post to inspect the medium density atlas.
-- D3D12 binned Grid linework pass: the transparent surface medium path now
+- D3D12 binned Grid linework pass: the transparent surface scene path now
   evaluates Grid height gradients and contributes cartesian gridlines, height
   isolines, and gradient-angle field lines from the same froxel-binned
   transparent surface entry. Keep future particles/billboards in this shared
@@ -335,9 +335,11 @@ the cut.
   transparent-event support and support-weighted travel from intersected
   candidates instead of a froxel summary. This fixes the Grid blur/undersampling
   failure caused by sampling linework once per low-resolution medium atlas
-  slice. The current implementation handles one transparent event per ray
-  interval; particles/billboards need the same pipe with richer per-froxel event
-  lists and quad intersection evaluators.
+  slice. The follow-up grazing-view fix bins the Grid only into a conservative
+  height slab and brackets the height-sheet crossing inside the active ray
+  interval before solving it; otherwise shallow rays rediscover the same sheet
+  in multiple depth froxels and composite soup. Particles/billboards need the
+  same pipe with richer per-froxel event lists and quad intersection evaluators.
 - D3D12 overlay parity pass: DirectWrite/Direct2D debug UI remains native hinted
   overlay text through the documented D3D11On12 bridge. D3D12 renders the frame
   and leaves the backbuffer in render-target state; the bridge acquires the

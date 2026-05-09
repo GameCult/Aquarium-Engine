@@ -96,8 +96,10 @@ transparency is a binned transparent candidate event, not an alpha-blended
 surface, scene-depth terminator, or pre-averaged froxel medium sample. The
 scene traversal intersects the Grid height sheet, samples the height texture at
 the hit position, evaluates cartesian gridlines, height isolines, and
-gradient-angle field lines there, then keeps marching. D3D12 also owns an HDR
-scene target
+gradient-angle field lines there, then keeps marching. The Grid candidate table
+marks only a conservative height slab, and the shader brackets the sheet inside
+the active interval before solving, so grazing rays do not accumulate the same
+surface as repeated froxel events. D3D12 also owns an HDR scene target
 and bloom/present pass. Its scene pass now writes color/travel,
 field-id/normal metadata, and temporal-control targets, with debug modes `5`
 and `6` inspecting the current control and identity buffers. Its resolve pass
@@ -256,10 +258,10 @@ events; stochastic coverage may choose different events across frames; temporal
 validation compares distribution summaries instead of one canonical travel. In
 D3D12 the scene traversal discovers binned transparent candidates, intersects
 them as ordered ray events, composites them front-to-back without terminating,
-and emits `FIELD_ID_TRANSPARENT_EVENT` when event support is present. The
-current Grid path handles one transparent event per interval; particles need the
-same candidate/event pipe with a richer per-froxel event list and quad
-intersection evaluator.
+and emits `FIELD_ID_TRANSPARENT_EVENT` when event support is present. The Grid
+path uses interval-bracketed heightfield intersections; particles need the same
+candidate/event pipe with a richer per-froxel event list and quad intersection
+evaluator.
 
 The presentation path now applies an explicit exposure before display
 transformation and adds a low-gain pre-tonemap bloom/veil pyramid. The bloom

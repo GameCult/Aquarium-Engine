@@ -38,6 +38,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int FieldInstanceCount = PlanetCount + 5;
     private const int TransparentSurfaceCount = 1;
     private const int TransparentSurfaceBufferElementCount = FroxelBufferElementCount;
+    private const float GridTransparentMinZ = -1.85f;
+    private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
     private const float SunRadius = 1.12f;
     private const float FroxelMinZ = -2.0f;
@@ -1260,11 +1262,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var min = new Vector3(
             frame.Grid.Center.X - frame.Grid.Radius,
             frame.Grid.Center.Y - frame.Grid.Radius,
-            FroxelMinZ);
+            GridTransparentMinZ);
         var max = new Vector3(
             frame.Grid.Center.X + frame.Grid.Radius,
             frame.Grid.Center.Y + frame.Grid.Radius,
-            FroxelMaxZ);
+            GridTransparentMaxZ);
         var minCell = FroxelCellForPosition(frame, min);
         var maxCell = FroxelCellForPosition(frame, max);
         for (var z = minCell.Z; z <= maxCell.Z; z++)

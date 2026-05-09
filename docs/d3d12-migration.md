@@ -47,9 +47,11 @@ temporary visual reference until the old backend is deleted.
   table plus froxel-binned surface ids. The scene pass discovers transparent
   candidates through the froxel bin, so future particles and billboard-like
   surfaces can use the same event-intersection class instead of gaining special
-  alpha handling. The current Grid evaluator handles one ordered transparent
-  event per ray interval; the next expansion is a richer per-froxel event list
-  for many particles/quads.
+  alpha handling. The Grid is binned only into a conservative height slab, and
+  the shader brackets the height-sheet crossing inside the active ray interval
+  before solving it, so shallow views do not rediscover the same sheet in every
+  depth froxel. The next expansion is a richer per-froxel event list for many
+  particles/quads.
 - D3D12 presentation is HDR-linear until the present pass. The scene renders to
   `R16G16B16A16_Float`, a three-level bloom pyramid performs firefly-safe
   downsample plus separable blur, and final presentation applies exposure,

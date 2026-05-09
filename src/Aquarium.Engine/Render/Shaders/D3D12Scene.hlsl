@@ -343,29 +343,82 @@ SolidHit nearestBinnedSolidHit(float3 origin, float3 direction, float intervalSt
     return nearest;
 }
 
+float gridSurfaceDistanceAt(float3 origin, float3 direction, float travel)
+{
+    float3 p = origin + direction * travel;
+    return p.z - terrainHeight(p.xy);
+}
+
+bool bracketGridSurfaceInterval(float3 origin, float3 direction, float startTravel, float endTravel, out float bracketStart, out float bracketEnd)
+{
+    bracketStart = startTravel;
+    bracketEnd = endTravel;
+    float midTravel = (startTravel + endTravel) * 0.5;
+    float startDistance = gridSurfaceDistanceAt(origin, direction, startTravel);
+    float midDistance = gridSurfaceDistanceAt(origin, direction, midTravel);
+    float endDistance = gridSurfaceDistanceAt(origin, direction, endTravel);
+    float epsilon = 0.002;
+
+    if (abs(startDistance) <= epsilon)
+    {
+        bracketEnd = midTravel;
+        return true;
+    }
+
+    if (startDistance * midDistance <= 0.0)
+    {
+        bracketEnd = midTravel;
+        return true;
+    }
+
+    if (abs(midDistance) <= epsilon)
+    {
+        bracketStart = midTravel;
+        bracketEnd = endTravel;
+        return true;
+    }
+
+    if (midDistance * endDistance <= 0.0)
+    {
+        bracketStart = midTravel;
+        return true;
+    }
+
+    return false;
+}
+
 bool traceGridSurface(float3 origin, float3 direction, float intervalStart, float intervalEnd, TransparentSurface surface, out float travel)
 {
     travel = farDistance + 1.0;
-    if (abs(direction.z) < 0.0001)
+    if (intervalEnd <= intervalStart || intervalStart >= farDistance)
     {
         return false;
     }
 
-    float t = (0.0 - origin.z) / direction.z;
-    if (t <= 0.0 || t >= farDistance)
+    float bracketStart;
+    float bracketEnd;
+    if (!bracketGridSurfaceInterval(origin, direction, max(intervalStart, 0.0), min(intervalEnd, farDistance), bracketStart, bracketEnd))
     {
         return false;
     }
 
+    float t = (bracketStart + bracketEnd) * 0.5;
     [unroll]
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 6; i++)
     {
-        float3 p = origin + direction * t;
-        float height = terrainHeight(p.xy);
-        float2 gradient = terrainGradient(p.xy);
-        float signedDistance = p.z - height;
-        float derivative = direction.z - dot(gradient, direction.xy);
-        t -= signedDistance / (abs(derivative) > 0.0001 ? derivative : direction.z);
+        float mid = (bracketStart + bracketEnd) * 0.5;
+        float startDistance = gridSurfaceDistanceAt(origin, direction, bracketStart);
+        float midDistance = gridSurfaceDistanceAt(origin, direction, mid);
+        if (startDistance * midDistance <= 0.0)
+        {
+            bracketEnd = mid;
+        }
+        else
+        {
+            bracketStart = mid;
+        }
+
+        t = (bracketStart + bracketEnd) * 0.5;
     }
 
     float3 p = origin + direction * t;
@@ -494,9 +547,7 @@ void integrateMediumSlice(
     inout float3 inScattering,
     inout float densityMean,
     inout float densityTravelSum,
-    inout float densitySum,
-    inout float eventTravelSum,
-    inout float eventSupportSum)
+    inout float densitySum)
 {
     float2 atlasUv = mediumAtlasUv(uv, sliceIndex);
     float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
@@ -515,64 +566,6 @@ void integrateMediumSlice(
     densitySum += densityContribution;
     inScattering += transmittance * transport.rgb * scatterFraction;
     transmittance *= saturate(partialTransmittance);
-}
-
-void integrateMedium(
-    float2 uv,
-    float maxTravel,
-    out float densityMean,
-    out float transmittance,
-    out float3 inScattering,
-    out float representativeTravel,
-    out float transparentEventSupport,
-    out float transparentEventTravel)
-{
-    densityMean = 0.0;
-    transmittance = 1.0;
-    inScattering = 0.0;
-    representativeTravel = maxTravel;
-    transparentEventSupport = 0.0;
-    transparentEventTravel = maxTravel;
-    float densityTravelSum = 0.0;
-    float densitySum = 0.0;
-    float eventTravelSum = 0.0;
-    float eventSupportSum = 0.0;
-
-    [loop]
-    for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
-    {
-        float intervalStart = mediumSliceStartTravel(sliceIndex);
-        if (intervalStart >= maxTravel)
-        {
-            break;
-        }
-
-        float intervalEnd = mediumSliceEndTravel(sliceIndex);
-        float intervalFraction = saturate((maxTravel - intervalStart) / max(intervalEnd - intervalStart, 0.0001));
-        integrateMediumSlice(
-            uv,
-            sliceIndex,
-            intervalFraction,
-            transmittance,
-            inScattering,
-            densityMean,
-            densityTravelSum,
-            densitySum,
-            eventTravelSum,
-            eventSupportSum);
-    }
-
-    densityMean = saturate(densityMean / (float)MEDIUM_FROXEL_SLICE_COUNT);
-    transparentEventSupport = saturate(eventSupportSum / (float)MEDIUM_FROXEL_SLICE_COUNT * 4.0);
-    if (densitySum > 0.0001)
-    {
-        representativeTravel = densityTravelSum / densitySum;
-    }
-
-    if (eventSupportSum > 0.0001)
-    {
-        transparentEventTravel = eventTravelSum / eventSupportSum;
-    }
 }
 
 RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
@@ -615,9 +608,7 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
                 inScattering,
                 densityAccumulation,
                 densityTravelSum,
-                densitySum,
-                eventTravelSum,
-                eventSupportSum);
+                densitySum);
 
             inScattering += transmittance * transparentEvent.color * transparentEvent.alpha;
             transmittance *= 1.0 - transparentEvent.alpha;
@@ -633,9 +624,7 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
                 inScattering,
                 densityAccumulation,
                 densityTravelSum,
-                densitySum,
-                eventTravelSum,
-                eventSupportSum);
+                densitySum);
         }
         else
         {
@@ -648,9 +637,7 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
                 inScattering,
                 densityAccumulation,
                 densityTravelSum,
-                densitySum,
-                eventTravelSum,
-                eventSupportSum);
+                densitySum);
         }
 
         if (hit.hit)
