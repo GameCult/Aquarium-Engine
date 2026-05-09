@@ -6,6 +6,7 @@ internal sealed class D3D12ResourceRegistry
 {
     private readonly Dictionary<string, D3D12TrackedResource> trackedResources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, D3D12RenderTarget> renderTargets = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, D3D12StructuredBuffer> structuredBuffers = new(StringComparer.Ordinal);
 
     public void Add(string name, D3D12TrackedResource resource)
     {
@@ -20,6 +21,14 @@ internal sealed class D3D12ResourceRegistry
         if (!renderTargets.TryAdd(name, renderTarget))
         {
             throw new InvalidOperationException($"D3D12 render target already registered: {name}");
+        }
+    }
+
+    public void Add(string name, D3D12StructuredBuffer structuredBuffer)
+    {
+        if (!structuredBuffers.TryAdd(name, structuredBuffer))
+        {
+            throw new InvalidOperationException($"D3D12 structured buffer already registered: {name}");
         }
     }
 
@@ -49,6 +58,6 @@ internal sealed class D3D12ResourceRegistry
 
     public string Describe()
     {
-        return $"resources={trackedResources.Count}, renderTargets={renderTargets.Count}";
+        return $"resources={trackedResources.Count}, renderTargets={renderTargets.Count}, structuredBuffers={structuredBuffers.Count}";
     }
 }

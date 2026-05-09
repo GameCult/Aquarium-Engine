@@ -14,6 +14,19 @@ Texture2D<float4> sourceTexture : register(t0);
 RWTexture2D<float4> diagnosticUav : register(u1);
 SamplerState sourceSampler : register(s0);
 
+struct FieldInstance
+{
+    float4 centerRadius;
+    float4 radiusAngle;
+    float4 fieldFlags;
+    float4 materialMedium;
+    float4 colorIntensity;
+    float4 mediumTerms;
+};
+
+StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
+StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -28,7 +41,9 @@ float4 D3D12SmokePS(VertexOut input) : SV_Target0
     float3 baseColor = lerp(float3(0.012, 0.022, 0.032), smokeTint.rgb, input.uv.y);
     float vignette = smoothstep(0.86, 0.18, length(input.uv - 0.5));
     float pulse = 0.92 + 0.08 * sin(smokeParams.x);
-    diagnosticUav[uint2(input.position.xy)] = float4(input.uv, smokeParams.y / 16.0, 1.0);
+    float fieldProbe = saturate(fieldInstances[0].centerRadius.w);
+    float froxelProbe = max(froxelPrimitiveIds[0].x, 0) / 16.0;
+    diagnosticUav[uint2(input.position.xy)] = float4(input.uv, saturate(fieldProbe + froxelProbe), 1.0);
     return float4(baseColor * (0.72 + 0.28 * vignette) * pulse, 1.0);
 }
 

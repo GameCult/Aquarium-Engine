@@ -24,6 +24,11 @@ has feature parity.
   draws one additive up-facing gravity quad per body into a 128x128
   scalar `R16_Float` Grid height target. Render debug mode `11` displays that
   target.
+- D3D12 now owns the first field-resource upload path: CPU-built froxel
+  primitive ids and field instances upload through the per-frame upload ring,
+  copy into default-heap structured buffers, and bind as transient SRVs for the
+  diagnostic shader. This proves the backend can feed real Aquarium field data
+  without reading directly from upload memory.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

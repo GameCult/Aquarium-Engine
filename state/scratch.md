@@ -279,3 +279,10 @@ can start porting real passes while keeping D3D11 as the visual reference.
   previous camera/Grid/time state is renderer-level
   state, not swapchain-frame-resource state; swapchain image index is not frame
   history. Next D3D12 migration step is the froxel/field resource upload path.
+- D3D12 froxel/field upload pass: D3D12 now builds the froxel primitive id table
+  and field instance table, uploads them through the per-frame upload ring,
+  copies them into default-heap structured buffers, and binds transient SRVs to
+  the diagnostic shader. This proves the real field data path without forcing
+  shaders to read directly from upload heap memory. The table-building code is
+  duplicated from D3D11 for this slice; extract it into one shared field ABI
+  owner before porting the next field consumer.

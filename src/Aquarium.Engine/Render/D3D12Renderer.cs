@@ -18,6 +18,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
     private const int GridHeightBrushCount = PlanetCount + 1;
+    private const int FroxelCountX = 8;
+    private const int FroxelCountY = 8;
+    private const int FroxelCountZ = 4;
+    private const int FroxelSlotCount = 2;
+    private const int FroxelBufferElementCount = FroxelCountX * FroxelCountY * FroxelCountZ * FroxelSlotCount;
+    private const int FieldInstanceCount = PlanetCount + 5;
+    private const float SunRadius = 1.12f;
+    private const float FroxelMinZ = -2.0f;
+    private const float FroxelMaxZ = 6.0f;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";
 
@@ -41,6 +50,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget gridHeightRenderTarget;
     private D3D12RenderTarget smokeRenderTarget;
     private D3D12RenderTarget diagnosticUavTarget;
+    private readonly D3D12StructuredBuffer froxelPrimitiveBuffer;
+    private readonly D3D12StructuredBuffer fieldInstanceBuffer;
+    private readonly Int4[] froxelPrimitiveIds = new Int4[FroxelBufferElementCount];
+    private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
@@ -102,6 +115,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
         smokeRenderTarget = CreateSmokeRenderTarget();
         diagnosticUavTarget = CreateDiagnosticUavTarget();
+        froxelPrimitiveBuffer = new D3D12StructuredBuffer(device, FroxelBufferElementCount, Marshal.SizeOf<Int4>(), "Aquarium D3D12 Froxel Primitive Buffer");
+        fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
+        resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
+        resourceRegistry.Add("field-instance-buffer", fieldInstanceBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
         commandList.Close();
@@ -178,6 +195,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         BuildGridHeightBrushes(frame);
+        BuildFroxelPrimitiveTable(frame);
+        BuildFieldInstanceTable(frame);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -222,10 +241,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             frameResources.SmokeConstantsDescriptor.Cpu);
         frameResources.DiagnosticUavDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         diagnosticUavTarget.CreateUnorderedAccessView(device, frameResources.DiagnosticUavDescriptor);
+        frameResources.FroxelPrimitiveDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        froxelPrimitiveBuffer.CreateShaderResourceView(device, frameResources.FroxelPrimitiveDescriptor);
+        frameResources.FieldInstanceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        fieldInstanceBuffer.CreateShaderResourceView(device, frameResources.FieldInstanceDescriptor);
         frameResources.CommandAllocator.Reset();
         commandList.Reset(frameResources.CommandAllocator, null);
 
         commandList.BeginEvent("Aquarium D3D12 Frame");
+        UploadFieldResources(commandList, frameResources);
         RenderGridHeight(commandList, frameResources);
         ClearBackBuffer(new D3D12PassContext(commandList, frameResources.BackBuffer, frameResources.BackBufferRenderTargetView.Cpu), frame);
         commandList.EndEvent();
@@ -255,6 +279,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrushPipelineState.Dispose();
         gridHeightBasePipelineState.Dispose();
         fullscreenRootSignature.Dispose();
+        fieldInstanceBuffer.Dispose();
+        froxelPrimitiveBuffer.Dispose();
         diagnosticUavTarget.Dispose();
         smokeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
@@ -394,6 +420,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(0, frames[frameIndex].SmokeConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(2, frames[frameIndex].DiagnosticUavDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(4, frames[frameIndex].FroxelPrimitiveDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(5, frames[frameIndex].FieldInstanceDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(smokeRenderTarget.RenderTargetView.Cpu, null);
@@ -430,6 +458,20 @@ public sealed class D3D12Renderer : IAquariumRenderer
         finally
         {
             context.CommandList.EndEvent();
+        }
+    }
+
+    private void UploadFieldResources(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
+    {
+        activeCommandList.BeginEvent("Field Resource Upload");
+        try
+        {
+            froxelPrimitiveBuffer.Upload(activeCommandList, frameResources.UploadRing, froxelPrimitiveIds);
+            fieldInstanceBuffer.Upload(activeCommandList, frameResources.UploadRing, fieldInstances);
+        }
+        finally
+        {
+            activeCommandList.EndEvent();
         }
     }
 
@@ -504,6 +546,168 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var shape = new Vector4(power, amplitude, 0.0f, 0.0f);
         var wave = new Vector4(waveAmplitude, waveFrequency, waveSpeed, 0.0f);
         gridHeightBrushConstants.Set(index, centerRadius, shape, wave);
+    }
+
+    private void BuildFroxelPrimitiveTable(AquariumFrame frame)
+    {
+        for (var i = 0; i < froxelPrimitiveIds.Length; i++)
+        {
+            froxelPrimitiveIds[i] = new Int4(-1, -1, -1, -1);
+        }
+
+        AddPrimitiveToFroxels(frame, 0, new Vector3(0.0f, 0.0f, 2.2f), SunRadius * 1.22f);
+
+        for (var i = 0; i < PlanetCount; i++)
+        {
+            var radius = PlanetRadius(i);
+            AddPrimitiveToFroxels(frame, i + 1, PlanetCenter(i, frame.TimeSeconds, radius), radius * 1.16f);
+        }
+    }
+
+    private void AddPrimitiveToFroxels(AquariumFrame frame, int primitiveId, Vector3 center, float boundRadius)
+    {
+        var min = center - new Vector3(boundRadius);
+        var max = center + new Vector3(boundRadius);
+        var minCell = FroxelCellForPosition(frame, min);
+        var maxCell = FroxelCellForPosition(frame, max);
+
+        for (var z = minCell.Z; z <= maxCell.Z; z++)
+        {
+            for (var y = minCell.Y; y <= maxCell.Y; y++)
+            {
+                for (var x = minCell.X; x <= maxCell.X; x++)
+                {
+                    AddPrimitiveToFroxel(FroxelIndex(x, y, z), primitiveId);
+                }
+            }
+        }
+    }
+
+    private void AddPrimitiveToFroxel(int froxelIndex, int primitiveId)
+    {
+        var baseElement = froxelIndex * FroxelSlotCount;
+        for (var slotGroup = 0; slotGroup < FroxelSlotCount; slotGroup++)
+        {
+            var elementIndex = baseElement + slotGroup;
+            var element = froxelPrimitiveIds[elementIndex];
+
+            if (element.X == primitiveId || element.Y == primitiveId || element.Z == primitiveId || element.W == primitiveId)
+            {
+                return;
+            }
+
+            if (element.X == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { X = primitiveId };
+                return;
+            }
+
+            if (element.Y == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { Y = primitiveId };
+                return;
+            }
+
+            if (element.Z == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { Z = primitiveId };
+                return;
+            }
+
+            if (element.W == -1)
+            {
+                froxelPrimitiveIds[elementIndex] = element with { W = primitiveId };
+                return;
+            }
+        }
+    }
+
+    private static FroxelCell FroxelCellForPosition(AquariumFrame frame, Vector3 position)
+    {
+        var gridCenter = frame.Grid.Center;
+        var gridRadius = MathF.Max(frame.Grid.Radius, 0.001f);
+        var localX = ((position.X - gridCenter.X) / gridRadius) * 0.5f + 0.5f;
+        var localY = ((position.Y - gridCenter.Y) / gridRadius) * 0.5f + 0.5f;
+        var localZ = (position.Z - FroxelMinZ) / (FroxelMaxZ - FroxelMinZ);
+
+        return new FroxelCell(
+            ClampCell(localX, FroxelCountX),
+            ClampCell(localY, FroxelCountY),
+            ClampCell(localZ, FroxelCountZ));
+    }
+
+    private static int ClampCell(float normalized, int count)
+    {
+        return Math.Clamp((int)MathF.Floor(normalized * count), 0, count - 1);
+    }
+
+    private static int FroxelIndex(int x, int y, int z)
+    {
+        return x + y * FroxelCountX + z * FroxelCountX * FroxelCountY;
+    }
+
+    private void BuildFieldInstanceTable(AquariumFrame frame)
+    {
+        fieldInstances[0] = FieldInstanceGpu.Sphere(
+            fieldId: 2.0f,
+            flags: FieldFlags.Solid | FieldFlags.Emitter,
+            center: new Vector3(0.0f, 0.0f, 2.2f),
+            radius: SunRadius,
+            materialId: 1.0f,
+            mediumId: 0.0f,
+            color: new Vector3(10.0f, 8.7f, 4.2f),
+            medium: Vector4.Zero);
+
+        for (var i = 0; i < PlanetCount; i++)
+        {
+            var radius = PlanetRadius(i);
+            fieldInstances[i + 1] = FieldInstanceGpu.Sphere(
+                fieldId: 10.0f + i,
+                flags: FieldFlags.Solid | FieldFlags.ShadowCaster | FieldFlags.Receiver,
+                center: PlanetCenter(i, frame.TimeSeconds, radius),
+                radius: radius,
+                materialId: 10.0f + i,
+                mediumId: 0.0f,
+                color: Vector3.One,
+                medium: Vector4.Zero);
+        }
+
+        fieldInstances[6] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 32.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X - 3.8f, frame.Grid.Center.Y + 1.8f, 1.15f),
+            radius: new Vector3(3.4f, 1.25f, 0.92f),
+            angle: frame.TimeSeconds * 0.055f,
+            mediumId: 1.0f,
+            color: new Vector3(0.50f, 0.72f, 0.86f),
+            medium: new Vector4(0.220f, 0.160f, 0.0f, 1.25f));
+        fieldInstances[7] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 33.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X + 4.1f, frame.Grid.Center.Y - 1.4f, -0.45f),
+            radius: new Vector3(4.5f, 1.55f, 0.78f),
+            angle: -0.62f + frame.TimeSeconds * 0.033f,
+            mediumId: 1.0f,
+            color: new Vector3(0.34f, 0.58f, 0.72f),
+            medium: new Vector4(0.200f, 0.140f, 0.0f, 1.20f));
+        fieldInstances[8] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 34.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X + 0.8f, frame.Grid.Center.Y + 3.7f, 2.7f),
+            radius: new Vector3(2.2f, 1.1f, 0.62f),
+            angle: 1.15f,
+            mediumId: 1.0f,
+            color: new Vector3(0.75f, 0.70f, 0.52f),
+            medium: new Vector4(0.180f, 0.125f, 0.0f, 1.15f));
+        fieldInstances[9] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 35.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X - 0.4f, frame.Grid.Center.Y - 3.9f, -1.35f),
+            radius: new Vector3(5.2f, 1.8f, 0.88f),
+            angle: 0.46f,
+            mediumId: 1.0f,
+            color: new Vector3(0.30f, 0.50f, 0.68f),
+            medium: new Vector4(0.190f, 0.130f, 0.0f, 1.20f));
     }
 
     private void SignalFrame(FrameResources frameResources)
@@ -599,12 +803,26 @@ public sealed class D3D12Renderer : IAquariumRenderer
             1,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var froxelPrimitiveRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            1,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var fieldInstanceRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            12,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([sourceTextureRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([diagnosticUavRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([gridBrushRange]), ShaderVisibility.All),
+            new RootParameter(new RootDescriptorTable([froxelPrimitiveRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([fieldInstanceRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -826,6 +1044,70 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
+    private readonly record struct FroxelCell(int X, int Y, int Z);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct Int4(int X, int Y, int Z, int W);
+
+    [Flags]
+    private enum FieldFlags
+    {
+        Solid = 1,
+        Cloud = 2,
+        Hybrid = 4,
+        Emitter = 8,
+        ShadowCaster = 16,
+        Receiver = 32,
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct FieldInstanceGpu(
+        Vector4 CenterRadius,
+        Vector4 RadiusAngle,
+        Vector4 FieldFlags,
+        Vector4 MaterialMedium,
+        Vector4 ColorIntensity,
+        Vector4 MediumTerms)
+    {
+        public static FieldInstanceGpu Sphere(
+            float fieldId,
+            FieldFlags flags,
+            Vector3 center,
+            float radius,
+            float materialId,
+            float mediumId,
+            Vector3 color,
+            Vector4 medium)
+        {
+            return new FieldInstanceGpu(
+                new Vector4(center, radius),
+                new Vector4(radius, radius, radius, 0.0f),
+                new Vector4(fieldId, (float)flags, 1.0f, 0.0f),
+                new Vector4(materialId, mediumId, 0.0f, 0.0f),
+                new Vector4(color, 1.0f),
+                medium);
+        }
+
+        public static FieldInstanceGpu Ellipsoid(
+            float fieldId,
+            FieldFlags flags,
+            Vector3 center,
+            Vector3 radius,
+            float angle,
+            float mediumId,
+            Vector3 color,
+            Vector4 medium)
+        {
+            return new FieldInstanceGpu(
+                new Vector4(center, MathF.Max(MathF.Max(radius.X, radius.Y), radius.Z)),
+                new Vector4(radius, angle),
+                new Vector4(fieldId, (float)flags, 2.0f, 0.0f),
+                new Vector4(0.0f, mediumId, 0.0f, 0.0f),
+                new Vector4(color, 1.0f),
+                medium);
+        }
+    }
+
     private sealed class FrameResources(
         ID3D12CommandAllocator commandAllocator,
         D3D12UploadRing uploadRing,
@@ -844,6 +1126,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot SmokeConstantsDescriptor { get; set; }
 
         public D3D12DescriptorSlot DiagnosticUavDescriptor { get; set; }
+
+        public D3D12DescriptorSlot FroxelPrimitiveDescriptor { get; set; }
+
+        public D3D12DescriptorSlot FieldInstanceDescriptor { get; set; }
 
         public D3D12TrackedResource BackBuffer { get; set; } = null!;
 

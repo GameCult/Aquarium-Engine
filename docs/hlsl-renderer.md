@@ -83,6 +83,13 @@ scalar `R16_Float` Grid height target. D3D12 render debug mode `11` displays
 that target. D3D11 remains the visual reference until the full pass chain
 reaches parity.
 
+D3D12 also uploads the current froxel primitive id table and field instance
+table into default-heap structured buffers every frame. The diagnostic smoke
+shader reads both SRVs through the transient descriptor heap; this is only a
+resource-path proof, not the migrated scene or medium pass yet. The D3D11 and
+D3D12 table builders should be collapsed into one shared field ABI before more
+field consumers are ported.
+
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches
 the circular Grid fade boundary and avoids wasting raymarch work past the
