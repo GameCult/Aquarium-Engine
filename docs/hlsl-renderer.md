@@ -209,6 +209,13 @@ writes history, metadata, control, age, and weight for debug and future medium
 work, but mode `0` presents current-frame color instead of blending stale
 surface history into opaque bodies.
 
+Transparent stochastic surfaces need a separate composition and temporal
+contract from opaque solids. The Grid and future particles belong to the shared
+event-stream design in `docs/stochastic-transparent-surface-pipeline.md`, not to
+the scene first-hit surface path. A ray can encounter multiple transparent
+events; stochastic coverage may choose different events across frames; temporal
+validation must compare distribution summaries instead of one canonical travel.
+
 The presentation path now applies an explicit exposure before display
 transformation and adds a low-gain pre-tonemap bloom/veil pyramid. The bloom
 pass renders exposed scene-linear HDR color into half-, quarter-, and

@@ -144,6 +144,12 @@ Make composition explicit:
   starvation
 - debug views expose each composition term
 
+Transparent stochastic surfaces are a separate class from opaque solids. Grid
+lines and particles should emit transparent events and share the pipeline
+described in `docs/stochastic-transparent-surface-pipeline.md`. They do not own
+canonical opaque travel, and they must not use the scene first-hit path as their
+composition model.
+
 ### Gate 5: SDF Acceleration
 
 Only after profiling proves the need:
