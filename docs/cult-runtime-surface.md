@@ -45,7 +45,8 @@ again during orderly shutdown.
 - name: `aquarium-client-graphics`
 
 It stores global renderer presentation controls: render debug mode, scene
-exposure, bloom intensity, and bloom veil intensity. `GraphicsSettings` lives in
+exposure, bloom intensity, bloom veil intensity, and medium composite intensity.
+`GraphicsSettings` lives in
 the contracts assembly so the native host and renderer can consume the same
 typed values without depending on CultCache internals. The Direct2D debug panel
 edits the renderer copy, the host syncs changed values back to the live runtime,

@@ -139,6 +139,10 @@ prototype integrated along the camera ray before surface composition.
   shader into a half-resolution medium pass. The texture stores density,
   transmittance, and source diagnostics. Mode 11 shows medium source. Final scene
   color remains unchanged; composition is still the next machine part.
+- Fog composition gate: the medium pass now writes separate diagnostic and
+  transport targets. Resolve can composite `surface * transmittance +
+  in-scattering`, controlled by persisted `MediumCompositeIntensity`, which
+  defaults to zero so final remains unchanged until deliberately enabled/tuned.
 - Debug UI control grammar now includes named option rows. Render Debug uses an
   option/dropdown selector instead of a numeric slider so the expanding debug
   mode list remains legible.

@@ -17,7 +17,8 @@ cbuffer AquariumFrame : register(b0)
     float exposure;
     float bloomIntensity;
     float bloomVeilIntensity;
-    float2 presentationPadding;
+    float mediumCompositeIntensity;
+    float presentationPadding;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -33,6 +34,7 @@ Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
 Texture2D<float4> mediumVolumeTexture : register(t13);
+Texture2D<float4> mediumTransportTexture : register(t14);
 
 struct FieldInstance
 {
@@ -460,6 +462,11 @@ void integrateRegisteredMedium(float3 rayOrigin, float3 rayDirection, float maxT
 float4 sampleMediumVolume(float2 uv)
 {
     return mediumVolumeTexture.SampleLevel(gridSampler, uv, 0.0);
+}
+
+float4 sampleMediumTransport(float2 uv)
+{
+    return mediumTransportTexture.SampleLevel(gridSampler, uv, 0.0);
 }
 
 void cloudFieldInfo(int index, out float3 center, out float3 radius, out float3 tint, out float densityScale)
@@ -1444,7 +1451,13 @@ struct SceneOut
     float4 control : SV_Target2;
 };
 
-float4 MediumVolumePS(VertexOut input) : SV_Target
+struct MediumVolumeOut
+{
+    float4 diagnostic : SV_Target0;
+    float4 transport : SV_Target1;
+};
+
+MediumVolumeOut MediumVolumePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
     float2 pixel = screenUv * resolution;
@@ -1457,7 +1470,10 @@ float4 MediumVolumePS(VertexOut input) : SV_Target
 
     float densityDebug = saturate(densityIntegral * 0.18);
     float sourceDebug = saturate(dot(inScattering, float3(0.2126, 0.7152, 0.0722)) * 0.65);
-    return float4(densityDebug, saturate(transmittance), sourceDebug, 1.0);
+    MediumVolumeOut output;
+    output.diagnostic = float4(densityDebug, saturate(transmittance), sourceDebug, 1.0);
+    output.transport = float4(inScattering, saturate(transmittance));
+    return output;
 }
 
 SceneOut AquariumScenePS(VertexOut input)
@@ -1709,7 +1725,10 @@ ResolveOut AquariumResolvePS(VertexOut input)
         }
     }
 
-    float3 resolved = currentColor;
+    float4 mediumTransport = sampleMediumTransport(input.uv);
+    float mediumBlend = saturate(mediumCompositeIntensity);
+    float mediumTransmittance = lerp(1.0, saturate(mediumTransport.a), mediumBlend);
+    float3 resolved = currentColor * mediumTransmittance + mediumTransport.rgb * mediumBlend;
 
     float3 exposedColor = exposeSceneColor(resolved);
     float3 bloomColor =

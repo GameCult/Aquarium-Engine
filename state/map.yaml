@@ -62,8 +62,8 @@ renderer_state:
     - Stable planet-local displaced SDF domains.
     - DirectWrite overlay text after scene rendering.
     - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
-    - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
-    - First field instance structured buffer feeding a half-resolution registered medium diagnostic pass.
+    - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, bloom veil, and medium composite intensity.
+    - First field instance structured buffer feeding a half-resolution registered medium diagnostic/transport pass.
     - Splash screen with bundled app icon and GameCult typefaces.
   next:
     - Promote field instances from fixed renderer table to a CPU-owned registry with per-field debug controls.

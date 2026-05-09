@@ -73,6 +73,9 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Texture2D mediumVolumeTexture;
     private readonly ID3D11RenderTargetView mediumVolumeRenderTargetView;
     private readonly ID3D11ShaderResourceView mediumVolumeShaderResourceView;
+    private readonly ID3D11Texture2D mediumTransportTexture;
+    private readonly ID3D11RenderTargetView mediumTransportRenderTargetView;
+    private readonly ID3D11ShaderResourceView mediumTransportShaderResourceView;
     private readonly ID3D11Texture2D[] bloomTextures = new ID3D11Texture2D[BloomLevelCount];
     private readonly ID3D11RenderTargetView[] bloomRenderTargetViews = new ID3D11RenderTargetView[BloomLevelCount];
     private readonly ID3D11ShaderResourceView[] bloomShaderResourceViews = new ID3D11ShaderResourceView[BloomLevelCount];
@@ -205,6 +208,9 @@ public sealed class D3D11Renderer : IDisposable
         mediumVolumeTexture = CreateHdrTexture(mediumVolumeWidth, mediumVolumeHeight);
         mediumVolumeRenderTargetView = device.CreateRenderTargetView(mediumVolumeTexture);
         mediumVolumeShaderResourceView = device.CreateShaderResourceView(mediumVolumeTexture);
+        mediumTransportTexture = CreateHdrTexture(mediumVolumeWidth, mediumVolumeHeight);
+        mediumTransportRenderTargetView = device.CreateRenderTargetView(mediumTransportTexture);
+        mediumTransportShaderResourceView = device.CreateShaderResourceView(mediumTransportTexture);
         for (var level = 0; level < BloomLevelCount; level++)
         {
             var divisor = 1 << (level + 1);
@@ -326,7 +332,8 @@ public sealed class D3D11Renderer : IDisposable
             SceneExposure,
             BloomIntensity,
             BloomVeilIntensity,
-            (float2)Vector2.Zero);
+            MediumCompositeIntensity,
+            0.0f);
 
         BuildFroxelPrimitiveTable(frame);
         BuildFieldInstanceTable(frame);
@@ -357,6 +364,8 @@ public sealed class D3D11Renderer : IDisposable
 
     public float BloomVeilIntensity { get; set; } = GraphicsSettings.Default.BloomVeilIntensity;
 
+    public float MediumCompositeIntensity { get; set; } = GraphicsSettings.Default.MediumCompositeIntensity;
+
     public bool DebugUiVisible
     {
         get => debugUi.IsVisible;
@@ -375,7 +384,7 @@ public sealed class D3D11Renderer : IDisposable
 
     public GraphicsSettings CaptureGraphicsSettings()
     {
-        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity).Normalized();
+        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity).Normalized();
     }
 
     public void ApplyGraphicsSettings(GraphicsSettings settings)
@@ -385,6 +394,7 @@ public sealed class D3D11Renderer : IDisposable
         SceneExposure = normalized.SceneExposure;
         BloomIntensity = normalized.BloomIntensity;
         BloomVeilIntensity = normalized.BloomVeilIntensity;
+        MediumCompositeIntensity = normalized.MediumCompositeIntensity;
     }
 
     private DebugUi CreateDebugUi()
@@ -397,7 +407,9 @@ public sealed class D3D11Renderer : IDisposable
                 .Section("HDR")
                 .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.")
                 .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.")
-                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy."));
+                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.")
+                .Section("Medium")
+                .Slider("Composite", () => MediumCompositeIntensity, value => MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene."));
     }
 
     public void Dispose()
@@ -448,6 +460,9 @@ public sealed class D3D11Renderer : IDisposable
         mediumVolumeShaderResourceView.Dispose();
         mediumVolumeRenderTargetView.Dispose();
         mediumVolumeTexture.Dispose();
+        mediumTransportShaderResourceView.Dispose();
+        mediumTransportRenderTargetView.Dispose();
+        mediumTransportTexture.Dispose();
         sceneMetadataShaderResourceView.Dispose();
         sceneMetadataRenderTargetView.Dispose();
         sceneMetadataTexture.Dispose();
@@ -544,7 +559,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(11);
         context.PSUnsetShaderResource(12);
         context.PSUnsetShaderResource(13);
-        context.PSUnsetShaderResource(13);
+        context.PSUnsetShaderResource(14);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -560,9 +575,11 @@ public sealed class D3D11Renderer : IDisposable
     {
         context.PSUnsetShaderResource(12);
         context.PSUnsetShaderResource(13);
-        context.OMSetRenderTargets(mediumVolumeRenderTargetView);
+        context.PSUnsetShaderResource(14);
+        context.OMSetRenderTargets(new[] { mediumVolumeRenderTargetView, mediumTransportRenderTargetView });
         context.RSSetViewport(0.0f, 0.0f, mediumVolumeWidth, mediumVolumeHeight, 0.0f, 1.0f);
         context.ClearRenderTargetView(mediumVolumeRenderTargetView, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
+        context.ClearRenderTargetView(mediumTransportRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
         context.IASetInputLayout(null);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.VSSetShader(vertexShader);
@@ -585,6 +602,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
         context.PSUnsetShaderResource(13);
+        context.PSUnsetShaderResource(14);
         context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView, sceneControlRenderTargetView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(sceneRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -600,6 +618,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(2, ditherShaderResourceView);
         context.PSSetShaderResource(12, fieldInstanceShaderResourceView);
         context.PSSetShaderResource(13, mediumVolumeShaderResourceView);
+        context.PSSetShaderResource(14, mediumTransportShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.PSSetSampler(1, ditherSampler);
         context.Draw(3, 0);
@@ -611,6 +630,8 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
         context.PSUnsetShaderResource(12);
+        context.PSUnsetShaderResource(13);
+        context.PSUnsetShaderResource(14);
 
         for (var level = 0; level < BloomLevelCount; level++)
         {
@@ -674,6 +695,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
         context.PSUnsetShaderResource(13);
+        context.PSUnsetShaderResource(14);
         context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView, historyMetadataWriteView, historyControlWriteView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -692,6 +714,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(10, bloomShaderResourceViews[1]);
         context.PSSetShaderResource(11, bloomShaderResourceViews[2]);
         context.PSSetShaderResource(13, mediumVolumeShaderResourceView);
+        context.PSSetShaderResource(14, mediumTransportShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }
@@ -1043,7 +1066,8 @@ public sealed class D3D11Renderer : IDisposable
         float Exposure,
         float BloomIntensity,
         float BloomVeilIntensity,
-        float2 Padding);
+        float MediumCompositeIntensity,
+        float Padding);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 

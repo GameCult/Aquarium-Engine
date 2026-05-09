@@ -228,15 +228,17 @@ startup mode can still be set with `--render-debug` or
 Fog work has started behind diagnostics rather than final-frame haze. The host
 packs stable field instances into a structured buffer shared with HLSL. A
 half-resolution medium pass writes registered density, transmittance, and source
-lighting into a separate texture before the scene pass. Modes `9`, `10`, and
-`11` show medium density, transmittance, and source respectively. The signals
-are deliberately debug-only until the explicit volume composition path exists.
+lighting into diagnostic and transport textures before the scene pass. Modes
+`9`, `10`, and `11` show medium density, transmittance, and source respectively.
+Final composition uses `surface * transmittance + in-scattering`, gated by the
+persisted Medium Composite control. The default is `0`, so the pass can be
+inspected without changing the presented frame until the medium is tuned.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:
 controls are retained rows bound to `Func<T>`/`Action<T>` pairs. The first panel
-drives render debug mode, exposure, bloom intensity, and bloom veil. Those HDR
-controls feed the shader constant buffer directly and round-trip through the
+drives render debug mode, exposure, bloom intensity, bloom veil, and medium
+composite strength. Those presentation controls feed the shader constant buffer directly and round-trip through the
 global `GraphicsSettings` CultCache document; they are not cosmetic labels
 painted over hardcoded renderer state.
 
