@@ -14,9 +14,10 @@ has feature parity.
   root signature, and a smoke-test PSO.
 - The D3D12 path currently draws a diagnostic fullscreen pass. It exists to
   prove backend lifecycle, shader compilation, root signature creation,
-  descriptor-table binding, per-frame constant upload, PSO creation, render
-  target binding, resource state transitions, render-target-to-swapchain copy,
-  and draw submission before real scene passes migrate.
+  descriptor-table binding, per-frame upload-ring constants, PSO creation,
+  render target binding, tracked resource state transitions,
+  render-target-to-swapchain copy, named objects, command-list events, and draw
+  submission before real scene passes migrate.
 - `IAquariumRenderer` is the host boundary. The host should not learn backend
   internals as the D3D12 renderer grows teeth.
 - `docs/d3d12-best-practices-audit.md` and `research/d3d12/synthesis.md`
@@ -28,8 +29,8 @@ has feature parity.
 2. Move shared renderer contracts behind explicit backend-neutral types.
 3. Replace the smoke-only resource code with a named resource registry,
    static/transient descriptors, SRV/UAV creation, and an upload ring.
-4. Add debug names and PIX markers while the backend is still small enough to
-   make mistakes obvious.
+4. Add resize-safe recreation and capacity diagnostics while the backend is
+   still small enough to make mistakes obvious.
 5. Port the existing passes in visible order: grid height, froxel volume, scene,
    bloom, resolve, overlay/debug.
 6. Build the transparent stochastic surface pipe in D3D12 once descriptor and

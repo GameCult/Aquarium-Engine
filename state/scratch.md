@@ -10,8 +10,8 @@ renderer-owned offscreen render target, fullscreen root signature, and
 smoke-test PSO that draws a diagnostic fullscreen triangle into the offscreen
 target before copying to the swapchain. Next renderer work should generalize
 this into a named resource registry, static/transient descriptor allocators,
-SRV/UAV creation, upload ring, debug names, and PIX markers before building the
-stochastic transparent surface pipe.
+SRV/UAV creation, resize-safe resource recreation, and capacity diagnostics
+before building the stochastic transparent surface pipe.
 
 ## Hot Context
 
@@ -241,3 +241,7 @@ stochastic transparent surface pipe.
   until descriptor allocation is split into static/transient ranges, upload data
   uses a fence-reclaimed ring, resource ownership is named/tracked, and debug
   names/PIX markers exist.
+- D3D12 full-ass foundation pass: D3D12 objects now have debug names, the frame
+  and smoke/copy passes emit command-list events for PIX-style inspection,
+  swapchain backbuffers are state-tracked resources, and per-frame constants are
+  allocated from a persistent mapped upload ring after the frame fence wait.

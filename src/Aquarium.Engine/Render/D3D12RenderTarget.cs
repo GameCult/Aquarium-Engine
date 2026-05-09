@@ -12,7 +12,8 @@ internal sealed class D3D12RenderTarget : IDisposable
         int height,
         Format format,
         D3D12DescriptorSlot renderTargetView,
-        Color4 clearColor)
+        Color4 clearColor,
+        string name)
     {
         Width = width;
         Height = height;
@@ -32,6 +33,7 @@ internal sealed class D3D12RenderTarget : IDisposable
                 ResourceFlags.AllowRenderTarget),
             ResourceStates.PixelShaderResource,
             optimizedClear);
+        Resource.Name = name;
         device.CreateRenderTargetView(Resource, null, renderTargetView.Cpu);
     }
 

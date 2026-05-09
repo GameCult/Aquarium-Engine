@@ -7,11 +7,12 @@ internal sealed class D3D12DescriptorArena : IDisposable
     private readonly int descriptorSize;
     private int used;
 
-    public D3D12DescriptorArena(ID3D12Device device, DescriptorHeapType type, int capacity, DescriptorHeapFlags flags)
+    public D3D12DescriptorArena(ID3D12Device device, DescriptorHeapType type, int capacity, DescriptorHeapFlags flags, string name)
     {
         Type = type;
         Capacity = capacity;
         Heap = device.CreateDescriptorHeap(new DescriptorHeapDescription(type, (uint)capacity, flags));
+        Heap.Name = name;
         descriptorSize = (int)device.GetDescriptorHandleIncrementSize(type);
     }
 
