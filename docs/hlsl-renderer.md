@@ -292,6 +292,14 @@ composite strength. Those presentation controls feed the shader constant buffer 
 global `GraphicsSettings` CultCache document; they are not cosmetic labels
 painted over hardcoded renderer state.
 
+D3D12 keeps that native overlay text path through the documented D3D11On12
+bridge. D3D12 owns all scene, medium, bloom, resolve, and swapchain rendering;
+after the command list finishes, the overlay briefly acquires the current
+backbuffer as a wrapped D3D11 resource so Direct2D/DirectWrite can draw crisp
+hinted debug text and controls, then releases it back to Present. This is an
+overlay-only bridge. Diegetic text should still become renderer-owned MSDF/SDF
+billboards.
+
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.
 

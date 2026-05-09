@@ -29,6 +29,11 @@ internal sealed class D3D12TrackedResource : IDisposable
         State = nextState;
     }
 
+    public void MarkState(ResourceStates state)
+    {
+        State = state;
+    }
+
     public void Dispose()
     {
         if (OwnsResource)

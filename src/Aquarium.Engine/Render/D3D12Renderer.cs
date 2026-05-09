@@ -1,13 +1,20 @@
 using Aquarium.Engine.Input;
 using SharpGen.Runtime;
+using Aquarium.Engine.Render.Ui;
 using Vortice;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
+using Vortice.Direct3D11on12;
 using Vortice.Direct3D12;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using ID3D11Device = Vortice.Direct3D11.ID3D11Device;
+using ID3D11DeviceContext = Vortice.Direct3D11.ID3D11DeviceContext;
+using ID3D11Resource = Vortice.Direct3D11.ID3D11Resource;
+using D3D11DeviceCreationFlags = Vortice.Direct3D11.DeviceCreationFlags;
+using D3D11BindFlags = Vortice.Direct3D11.BindFlags;
 
 namespace Aquarium.Engine.Render;
 
@@ -40,10 +47,28 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const string MediumShaderRelativePath = "Render/Shaders/D3D12Medium.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
+    private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
+    [
+        new(0, "Final"),
+        new(1, "Raw Scene"),
+        new(2, "History"),
+        new(3, "History Age"),
+        new(4, "History Weight"),
+        new(5, "Temporal Control"),
+        new(6, "Field Identity"),
+        new(7, "Bloom"),
+        new(8, "Exposed Luminance"),
+        new(9, "Medium Ray Density"),
+        new(10, "Medium Ray Transmittance"),
+        new(11, "Froxel Density"),
+    ];
 
     private readonly IDXGIFactory4 factory;
     private readonly ID3D12Device device;
     private readonly ID3D12CommandQueue commandQueue;
+    private readonly ID3D11Device overlayDevice;
+    private readonly ID3D11DeviceContext overlayContext;
+    private readonly ID3D11On12Device overlayOn12Device;
     private readonly IDXGISwapChain3 swapChain;
     private readonly D3D12ResourceRegistry resourceRegistry = new();
     private D3D12DescriptorArena renderTargetViewArena;
@@ -63,6 +88,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12PipelineState resolvePipelineState;
     private readonly ID3D12Fence fence;
     private readonly AutoResetEvent fenceEvent = new(false);
+    private readonly DebugUi debugUi;
+    private ID3D11Resource[] overlayWrappedBackBuffers = [];
+    private DirectWriteOverlay[] overlays = [];
     private D3D12RenderTarget gridHeightRenderTarget;
     private D3D12RenderTarget mediumVolumeRenderTarget;
     private D3D12RenderTarget mediumTransportRenderTarget;
@@ -100,7 +128,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private float previousTimeSeconds;
     private GridHeightBrushConstants gridHeightBrushConstants;
     private GraphicsSettings settings = GraphicsSettings.Default;
-    private bool debugUiVisible = true;
 
     public D3D12Renderer(
         IntPtr windowHandle,
@@ -122,6 +149,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         device.Name = "Aquarium D3D12 Device";
         commandQueue = device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct));
         commandQueue.Name = "Aquarium D3D12 Direct Queue";
+        CreateOverlayDevice(out overlayDevice, out overlayContext, out overlayOn12Device);
 
         var swapChainDescription = new SwapChainDescription1
         {
@@ -146,6 +174,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         CreateRenderTargetViews();
+        CreateBackBufferOverlays();
+        debugUi = CreateDebugUi();
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
@@ -210,13 +240,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public bool DebugUiVisible
     {
-        get => debugUiVisible;
-        set => debugUiVisible = value;
+        get => debugUi.IsVisible;
+        set => debugUi.IsVisible = value;
     }
 
     public void UpdateDebugUi(InputState input)
     {
-        _ = input;
+        debugUi.Update(input);
     }
 
     public void CycleRenderDebugMode()
@@ -232,6 +262,22 @@ public sealed class D3D12Renderer : IAquariumRenderer
     public void ApplyGraphicsSettings(GraphicsSettings graphicsSettings)
     {
         settings = graphicsSettings.Normalized();
+    }
+
+    private DebugUi CreateDebugUi()
+    {
+        return new DebugUi("Aquarium Debug")
+            .Panel(panel => panel
+                .Section("View")
+                .Options("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), RenderDebugOptions, "Selects the active renderer debug view.")
+                .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.")
+                .Section("HDR")
+                .Slider("Exposure", () => settings.SceneExposure, value => settings = (settings with { SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure) }).Normalized(), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.")
+                .Slider("Bloom Intensity", () => settings.BloomIntensity, value => settings = (settings with { BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity) }).Normalized(), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.")
+                .Slider("Bloom Veil", () => settings.BloomVeilIntensity, value => settings = (settings with { BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity) }).Normalized(), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.")
+                .Section("Medium")
+                .Slider("Composite", () => settings.MediumCompositeIntensity, value => settings = (settings with { MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity) }).Normalized(), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene.")
+                .Slider("Ray Step", () => settings.MediumDebugStep, value => settings = (settings with { MediumDebugStep = Math.Clamp(value, GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep) }).Normalized(), GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep, "Selects the medium raymarch sample shown by ray debug views.", () => RenderDebugMode is 9 or 10));
     }
 
     public void Render(AquariumFrame frame, int width, int height)
@@ -351,6 +397,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         commandList.Close();
 
         commandQueue.ExecuteCommandList(commandList);
+        RenderOverlay(frame, frameResources);
         swapChain.Present(1, PresentFlags.None);
         SignalFrame(frameResources);
         ReportCapacityOncePerSecond(frame.TimeSeconds, frameResources);
@@ -368,6 +415,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fenceEvent.Dispose();
         fence.Dispose();
         commandList.Dispose();
+        DisposeBackBufferOverlays();
+        overlayOn12Device.Dispose();
+        overlayContext.Dispose();
+        overlayDevice.Dispose();
         resolvePipelineState.Dispose();
         bloomBlurVerticalPipelineState.Dispose();
         bloomBlurHorizontalPipelineState.Dispose();
@@ -417,6 +468,70 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
+    private void CreateOverlayDevice(out ID3D11Device createdDevice, out ID3D11DeviceContext createdContext, out ID3D11On12Device createdOn12Device)
+    {
+        var featureLevels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
+        var commandQueues = new IUnknown[] { commandQueue };
+        Apis.D3D11On12CreateDevice(
+            device,
+            D3D11DeviceCreationFlags.BgraSupport,
+            featureLevels,
+            commandQueues,
+            0,
+            out createdDevice,
+            out createdContext,
+            out _).CheckError();
+        createdOn12Device = createdDevice.QueryInterface<ID3D11On12Device>();
+    }
+
+    private void CreateBackBufferOverlays()
+    {
+        overlayWrappedBackBuffers = new ID3D11Resource[frames.Length];
+        overlays = new DirectWriteOverlay[frames.Length];
+        var flags = new Vortice.Direct3D11on12.ResourceFlags
+        {
+            BindFlags = D3D11BindFlags.RenderTarget,
+        };
+
+        for (var index = 0; index < frames.Length; index++)
+        {
+            var wrapped = overlayOn12Device.CreateWrappedResource<ID3D11Resource>(
+                frames[index].BackBuffer.Resource,
+                flags,
+                ResourceStates.RenderTarget,
+                ResourceStates.Present);
+            overlayWrappedBackBuffers[index] = wrapped;
+            using var surface = wrapped.QueryInterface<IDXGISurface>();
+            overlays[index] = new DirectWriteOverlay(surface, width, height);
+        }
+    }
+
+    private void RenderOverlay(AquariumFrame frame, FrameResources frameResources)
+    {
+        var wrappedBackBuffer = overlayWrappedBackBuffers[frameIndex];
+        overlayOn12Device.AcquireWrappedResources([wrappedBackBuffer]);
+        overlays[frameIndex].Render(frame, RenderDebugMode, debugUi);
+        overlayOn12Device.ReleaseWrappedResources([wrappedBackBuffer]);
+        overlayContext.Flush();
+        frameResources.BackBuffer.MarkState(ResourceStates.Present);
+    }
+
+    private void DisposeBackBufferOverlays()
+    {
+        foreach (var overlay in overlays)
+        {
+            overlay?.Dispose();
+        }
+
+        foreach (var wrappedBackBuffer in overlayWrappedBackBuffers)
+        {
+            wrappedBackBuffer?.Dispose();
+        }
+
+        overlays = [];
+        overlayWrappedBackBuffers = [];
+    }
+
     private void UpdateMediumDimensions()
     {
         mediumFroxelWidth = Math.Max(1, width / MediumFroxelDownscale);
@@ -435,6 +550,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         WaitForGpu();
+        DisposeBackBufferOverlays();
         RemoveBloomRenderTargets();
         RemoveHistoryRenderTargets();
         resourceRegistry.RemoveRenderTarget("scene-hdr-target");
@@ -470,6 +586,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         swapChain.ResizeBuffers(BackBufferCount, (uint)width, (uint)height, Format.B8G8R8A8_UNorm, SwapChainFlags.None).CheckError();
         frameIndex = (int)swapChain.CurrentBackBufferIndex;
         CreateRenderTargetViews();
+        CreateBackBufferOverlays();
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
@@ -761,7 +878,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
                 context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
                 context.CommandList.DrawInstanced(3, 1, 0, 0);
-                context.BackBuffer.Transition(context.CommandList, ResourceStates.Present);
                 return;
             }
 
@@ -804,7 +920,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             null);
             context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.CommandList.DrawInstanced(3, 1, 0, 0);
-            context.BackBuffer.Transition(context.CommandList, ResourceStates.Present);
         }
         finally
         {

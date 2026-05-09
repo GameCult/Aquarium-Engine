@@ -340,3 +340,10 @@ can start porting real passes while keeping D3D11 as the visual reference.
   treats medium and transparent-event identities as distributed history, not
   opaque surfaces, so Grid is not special-cased and future stochastic billboards
   can join the same path.
+- D3D12 overlay parity pass: DirectWrite/Direct2D debug UI remains native hinted
+  overlay text through the documented D3D11On12 bridge. D3D12 renders the frame
+  and leaves the backbuffer in render-target state; the bridge acquires the
+  current swapchain image, draws the shared `DebugUi`, releases it to Present,
+  and marks the tracked resource state accordingly. Keep this bridge narrow and
+  overlay-only. Diegetic/world text still belongs to future MSDF/SDF renderer
+  billboards.

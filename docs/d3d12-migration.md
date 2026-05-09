@@ -59,6 +59,12 @@ has feature parity.
   repainted atlas views. The resolve shader samples the field instance buffer
   for the requested `MediumDebugStep`, so density/transmittance diagnostics can
   be compared against the froxel atlas in mode `11`.
+- D3D12 now has the same native debug overlay controls as D3D11. DirectWrite
+  and Direct2D are kept for crisp overlay text through the documented D3D11On12
+  bridge: D3D12 renders the frame, then the overlay acquires the swapchain
+  backbuffer, draws debug UI, releases it to Present, and does not participate
+  in scene/medium rendering. Diegetic text remains a future renderer-owned
+  MSDF/SDF path.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a
@@ -86,3 +92,5 @@ has feature parity.
 - D3D12 work must be validated by actual headless runs, not just compilation.
 - D3D11 output remains the comparison target until D3D12 fully renders the scene.
 - Transparent surfaces are still events/candidates, not canonical depth.
+- DirectWrite overlay text belongs behind the narrow D3D11On12 bridge. Do not
+  use it for diegetic/world text or let it leak into the renderer's scene graph.
