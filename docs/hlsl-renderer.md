@@ -88,13 +88,16 @@ renders a packed frustum froxel atlas into diagnostic and transport render
 targets from those field instances, and mode `11` displays the froxel density
 target. D3D12 final mode now renders Self, planets, medium transport, and
 transparent events through a bounded interval traversal. A camera ray walks the
-medium depth intervals, integrates medium/event transport, looks up solid
-candidates from the froxel primitive table at conservative interval sample
-points, and stops at the nearest opaque hit after integrating transport up to
-that travel. Grid transparency contributes to the froxel medium as a thin
-binned transparent-surface layer, not as an alpha-blended surface or scene-depth
-terminator. That binned Grid layer now carries cartesian gridlines, height
-isolines, and gradient-angle field lines. D3D12 also owns an HDR scene target
+medium depth intervals, integrates medium transport, looks up solid and
+transparent candidates from froxel tables at conservative interval sample
+points, composites transparent events without stopping, and stops only at the
+nearest opaque hit after integrating transport up to that travel. Grid
+transparency is a binned transparent candidate event, not an alpha-blended
+surface, scene-depth terminator, or pre-averaged froxel medium sample. The
+scene traversal intersects the Grid height sheet, samples the height texture at
+the hit position, evaluates cartesian gridlines, height isolines, and
+gradient-angle field lines there, then keeps marching. D3D12 also owns an HDR
+scene target
 and bloom/present pass. Its scene pass now writes color/travel,
 field-id/normal metadata, and temporal-control targets, with debug modes `5`
 and `6` inspecting the current control and identity buffers. Its resolve pass
@@ -102,10 +105,10 @@ now writes ping-pong history color, metadata, and control targets and validates
 opaque history with previous-camera reprojection plus field, travel, normal,
 neighborhood color, coverage, and medium-continuity checks. Debug modes `3` and
 `4` show history age and weight. Medium-only pixels use a density-weighted ray
-centroid and `FIELD_ID_MEDIUM`; binned transparent surfaces emit a generic
-transparent-event summary and `FIELD_ID_TRANSPARENT_EVENT`, so transparent Grid
+centroid and `FIELD_ID_MEDIUM`; binned transparent events emit
+`FIELD_ID_TRANSPARENT_EVENT` with support-weighted travel, so transparent Grid
 and future particles can accumulate through a distributed history path without
-inventing a single alpha-surface hit.
+pretending to be opaque.
 D3D12 debug modes `9` and `10` are direct ray-step density/transmittance
 previews from the field instance buffer, matching the D3D11 diagnostic contract
 rather than sampling the froxel atlas. Mode `11` remains the froxel density
@@ -251,11 +254,12 @@ event-stream design in `docs/stochastic-transparent-surface-pipeline.md`, not to
 the scene first-hit surface path. A ray can encounter multiple transparent
 events; stochastic coverage may choose different events across frames; temporal
 validation compares distribution summaries instead of one canonical travel. In
-D3D12 the medium pass writes a transparent-event summary target beside the
-diagnostic and transport atlases. The scene pass uses event support plus
-support-weighted travel to emit `FIELD_ID_TRANSPARENT_EVENT`, and the resolve
-treats that identity as distributed medium-like history rather than a surface
-normal/depth hit.
+D3D12 the scene traversal discovers binned transparent candidates, intersects
+them as ordered ray events, composites them front-to-back without terminating,
+and emits `FIELD_ID_TRANSPARENT_EVENT` when event support is present. The
+current Grid path handles one transparent event per interval; particles need the
+same candidate/event pipe with a richer per-froxel event list and quad
+intersection evaluator.
 
 The presentation path now applies an explicit exposure before display
 transformation and adds a low-gain pre-tonemap bloom/veil pyramid. The bloom

@@ -285,10 +285,13 @@ the cut.
   atlases from the D3D12 field instance buffer. Render debug mode `11` displays
   D3D12 froxel density; the temporary Grid-height debug view was cut rather
   than left as stale bring-up scaffolding.
-- D3D12 first scene pass: final mode now renders a D3D12 scene instead of smoke.
-  Self, planets, and medium transport are visible through the D3D12 frame graph.
-  Grid line transparency is injected into the medium froxel atlas as a thin
-  participating layer and is not traced as a surface terminator.
+- D3D12 transparent candidate scene pass: Grid line transparency is no longer
+  injected into the medium froxel atlas. The scene traversal binds the
+  transparent surface table, discovers the binned Grid candidate through froxel
+  ids, intersects the Grid height sheet, evaluates cartesian gridlines, height
+  isolines, and gradient-angle field lines at the actual ray hit, composites the
+  transparent event without terminating, and continues marching toward medium
+  and opaque SDF/solid hits.
 - D3D12 transparent-surface bins: Grid line transparency now flows through a
   transparent surface table plus froxel-binned transparent surface ids. The
   medium shader discovers the Grid layer through the froxel bin, not through a
@@ -328,13 +331,13 @@ the cut.
   implements direct ray-step registered-medium previews for modes 9 and 10.
   These are correctness probes independent of the froxel atlas; mode 11 remains
   the atlas density view.
-- D3D12 transparent event temporal pass: the medium pass now writes a third
-  froxel atlas target for generic transparent-event support. The scene pass
-  samples that summary, derives support-weighted event travel, and emits
-  `FIELD_ID_TRANSPARENT_EVENT` for Grid/particle-class contributions. Resolve
-  treats medium and transparent-event identities as distributed history, not
-  opaque surfaces, so Grid is not special-cased and future stochastic billboards
-  can join the same path.
+- D3D12 transparent event traversal pass: the scene pass now derives
+  transparent-event support and support-weighted travel from intersected
+  candidates instead of a froxel summary. This fixes the Grid blur/undersampling
+  failure caused by sampling linework once per low-resolution medium atlas
+  slice. The current implementation handles one transparent event per ray
+  interval; particles/billboards need the same pipe with richer per-froxel event
+  lists and quad intersection evaluators.
 - D3D12 overlay parity pass: DirectWrite/Direct2D debug UI remains native hinted
   overlay text through the documented D3D11On12 bridge. D3D12 renders the frame
   and leaves the backbuffer in render-target state; the bridge acquires the

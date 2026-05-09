@@ -27,23 +27,29 @@ temporary visual reference until the old backend is deleted.
   and transport render targets from the field instance buffer. Render debug mode
   `11` now displays D3D12 froxel density, matching the future renderer path
   rather than the temporary Grid-height bring-up view.
-- The D3D12 scene pass now renders Self, planets, and medium transport through
-  the D3D12 frame graph. Grid line transparency is injected as a thin medium
-  contribution in the froxel atlas instead of being drawn as an alpha surface or
-  used as a scene-depth terminator.
+- The D3D12 scene pass now renders Self, planets, medium transport, and the
+  first transparent candidate event through the D3D12 frame graph. Grid line
+  transparency is no longer baked into the medium froxel atlas; the scene
+  traversal intersects the binned Grid height sheet, samples the height texture
+  at the hit position, evaluates cartesian lines, height isolines, and
+  gradient-angle field lines there, then composites that event without
+  terminating the ray.
 - The D3D12 scene pass now uses one bounded interval traversal for solids,
   medium, and transparent events. Each camera ray walks the medium slice
-  intervals, samples medium/event transport for that interval, looks up binned
-  solid candidates from the froxel primitive table at conservative interval
-  sample points, and stops at the nearest opaque hit after integrating transport
-  up to it. The current solid evaluator is still analytic spheres; the traversal
-  contract is ready for SDF surface evaluators and bracket/bisect refinements.
+  intervals, samples medium transport for that interval, looks up binned solid
+  and transparent candidates at conservative interval sample points, integrates
+  transport up to transparent events, composites those events without stopping,
+  and stops only on the nearest opaque hit after integrating transport up to it.
+  The current solid evaluator is still analytic spheres; the traversal contract
+  is ready for SDF surface evaluators, bracket/bisect refinements, and richer
+  particle event lists.
 - Transparent Grid contribution is now represented by a transparent-surface
-  table plus froxel-binned surface ids. The medium pass discovers it through the
-  froxel bin, so future particles and billboard-like surfaces can use the same
-  class of integration instead of gaining special alpha handling. The binned
-  Grid surface now carries cartesian gridlines, height isolines, and
-  gradient-angle field lines through that medium path.
+  table plus froxel-binned surface ids. The scene pass discovers transparent
+  candidates through the froxel bin, so future particles and billboard-like
+  surfaces can use the same event-intersection class instead of gaining special
+  alpha handling. The current Grid evaluator handles one ordered transparent
+  event per ray interval; the next expansion is a richer per-froxel event list
+  for many particles/quads.
 - D3D12 presentation is HDR-linear until the present pass. The scene renders to
   `R16G16B16A16_Float`, a three-level bloom pyramid performs firefly-safe
   downsample plus separable blur, and final presentation applies exposure,
@@ -58,11 +64,10 @@ temporary visual reference until the old backend is deleted.
   hits. Debug mode `3` shows history age and mode `4` shows history weight.
   Medium-only pixels use a density-weighted ray centroid as their temporal
   anchor and a `FIELD_ID_MEDIUM` identity, with continuity weighted by medium
-  opacity and coverage rather than surface normals. The medium pass also writes
-  a generic transparent-event summary target for binned stochastic surfaces.
-  Scene identity can now use `FIELD_ID_TRANSPARENT_EVENT` with event support and
-  support-weighted travel, so Grid and future particles share temporal support
-  without becoming fake alpha surfaces or opaque depth hits.
+  opacity and coverage rather than surface normals. Transparent candidate
+  events write event support and support-weighted travel directly from the scene
+  traversal, so Grid and future particles can share temporal support without
+  becoming fake alpha surfaces or opaque depth hits.
 - D3D12 debug modes `9` and `10` are direct ray-step medium previews, not
   repainted atlas views. The resolve shader samples the field instance buffer
   for the requested `MediumDebugStep`, so density/transmittance diagnostics can

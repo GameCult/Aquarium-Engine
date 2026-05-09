@@ -95,7 +95,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget gridHeightRenderTarget;
     private D3D12RenderTarget mediumVolumeRenderTarget;
     private D3D12RenderTarget mediumTransportRenderTarget;
-    private D3D12RenderTarget mediumEventRenderTarget;
     private D3D12RenderTarget sceneRenderTarget;
     private D3D12RenderTarget sceneMetadataRenderTarget;
     private D3D12RenderTarget sceneControlRenderTarget;
@@ -184,7 +183,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
-        mediumEventRenderTarget = CreateMediumVolumeRenderTarget("medium-event-target", "Aquarium D3D12 Medium Transparent Event Target");
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
@@ -348,8 +346,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumTargetsDescriptor);
         frameResources.MediumTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumTransportDescriptor);
-        frameResources.MediumEventDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumEventRenderTarget.CreateShaderResourceView(device, frameResources.MediumEventDescriptor);
         frameResources.TransparentSurfaceIndexDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         transparentSurfaceIndexBuffer.CreateShaderResourceView(device, frameResources.TransparentSurfaceIndexDescriptor);
         frameResources.TransparentSurfaceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -458,7 +454,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
         mediumTransportRenderTarget.Dispose();
-        mediumEventRenderTarget.Dispose();
         mediumVolumeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
@@ -584,7 +579,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
         mediumTransportRenderTarget.Dispose();
-        mediumEventRenderTarget.Dispose();
         mediumVolumeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
@@ -608,7 +602,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
-        mediumEventRenderTarget = CreateMediumVolumeRenderTarget("medium-event-target", "Aquarium D3D12 Medium Transparent Event Target");
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
@@ -771,7 +764,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gridHeightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             mediumTransportRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            mediumEventRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
@@ -786,7 +778,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.FroxelPrimitiveDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(5, frameResources.MediumTargetsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(13, frameResources.MediumEventDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(6, frameResources.TransparentSurfaceIndexDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -1001,24 +993,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gridHeightRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumEventRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            activeCommandList.ClearRenderTargetView(mediumEventRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetPipelineState(mediumVolumePipelineState);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(1, frameResources.GridHeightDescriptor.Gpu);
             activeCommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(6, frameResources.TransparentSurfaceIndexDescriptor.Gpu);
             activeCommandList.RSSetViewports(mediumViewport);
             activeCommandList.RSSetScissorRects(mediumScissorRect);
             activeCommandList.OMSetRenderTargets(
             [
                 mediumVolumeRenderTarget.RenderTargetView.Cpu,
                 mediumTransportRenderTarget.RenderTargetView.Cpu,
-                mediumEventRenderTarget.RenderTargetView.Cpu,
             ],
             null);
             activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
@@ -1037,10 +1024,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumEventRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            activeCommandList.ClearRenderTargetView(mediumEventRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
         }
         finally
         {
@@ -1497,12 +1482,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             8,
             0,
             D3D12.DescriptorRangeOffsetAppend);
-        var mediumEventRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            17,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -1518,7 +1497,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([historyRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyControlRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([mediumEventRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -1557,7 +1535,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             path,
             "FullscreenTriangleVS",
             "MediumVolumePS",
-            [MediumVolumeFormat, MediumVolumeFormat, MediumVolumeFormat]);
+            [MediumVolumeFormat, MediumVolumeFormat]);
     }
 
     private ID3D12PipelineState CreateMediumDensityDebugPipelineState(string path)
@@ -1880,8 +1858,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot MediumTargetsDescriptor { get; set; }
 
         public D3D12DescriptorSlot MediumTransportDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumEventDescriptor { get; set; }
 
         public D3D12DescriptorSlot TransparentSurfaceIndexDescriptor { get; set; }
 
