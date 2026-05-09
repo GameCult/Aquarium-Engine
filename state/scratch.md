@@ -191,3 +191,8 @@ prototype integrated along the camera ray before surface composition.
   field instance structured buffer at `t12`. The medium atlas pass already had
   the buffer, which is why atlas density could show blobs while ray density and
   ray transmittance were empty at every step.
+- Medium composite correction: final composition must not use the diagnostic
+  4x4 frustum atlas. The atlas intentionally reveals the current low-res pass
+  artifact; composite now uses the same direct registered-medium ray integration
+  as ray debug, clamped to the visible surface travel. Atlas density remains a
+  diagnostic view only.

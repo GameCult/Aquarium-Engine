@@ -1804,13 +1804,19 @@ ResolveOut AquariumResolvePS(VertexOut input)
         }
     }
 
-    float mediumDensityMean;
-    float atlasMediumTransmittance;
-    float3 atlasMediumInScattering;
-    integrateMediumAtlas(input.uv, mediumDensityMean, atlasMediumTransmittance, atlasMediumInScattering);
     float mediumBlend = saturate(mediumCompositeIntensity);
-    float blendedMediumTransmittance = lerp(1.0, atlasMediumTransmittance, mediumBlend);
-    float3 resolved = currentColor * blendedMediumTransmittance + atlasMediumInScattering * mediumBlend;
+    float directMediumTransmittance = 1.0;
+    float3 directMediumInScattering = 0.0;
+    if (mediumBlend > 0.0001)
+    {
+        float directMediumDensity;
+        float mediumTravel = currentTravel <= farDistance ? currentTravel : farDistance;
+        float3 mediumRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        integrateRegisteredMedium(cameraPosition, mediumRay, mediumTravel, directMediumDensity, directMediumTransmittance, directMediumInScattering);
+    }
+
+    float blendedMediumTransmittance = lerp(1.0, directMediumTransmittance, mediumBlend);
+    float3 resolved = currentColor * blendedMediumTransmittance + directMediumInScattering * mediumBlend;
 
     float3 exposedColor = exposeSceneColor(resolved);
     float3 bloomColor =
@@ -1871,6 +1877,10 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
     {
+        float mediumDensityMean;
+        float atlasMediumTransmittance;
+        float3 atlasMediumInScattering;
+        integrateMediumAtlas(input.uv, mediumDensityMean, atlasMediumTransmittance, atlasMediumInScattering);
         finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(mediumDensityMean * 6.0));
     }
 
