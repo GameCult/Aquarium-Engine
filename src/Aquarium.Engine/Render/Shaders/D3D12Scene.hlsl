@@ -32,7 +32,6 @@ SamplerState ditherSampler : register(s1);
 
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
-static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
@@ -556,48 +555,23 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
 
     integrateMediumRange(uv, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
 
-    if (gridHit && stochasticTransparency(screenUv, gridAlpha) > 0.0)
-    {
-        result.color = gridColor * gridTransmittance + gridInScattering;
-        result.travel = gridTravel;
-        result.fieldId = FIELD_ID_GRID;
-        result.normal = terrainNormal(gridPosition);
-        result.coverage = gridAlpha;
-        result.mediumOpacity = saturate(1.0 - gridTransmittance);
-        result.densityMean = saturate(gridDensityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
-        return result;
-    }
-
-    if (gridHit)
-    {
-        result.travel = gridTravel;
-        result.fieldId = FIELD_ID_GRID;
-        result.normal = terrainNormal(gridPosition);
-        result.coverage = gridAlpha;
-        result.mediumOpacity = saturate(1.0 - gridTransmittance);
-        result.densityMean = saturate(gridDensityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
-    }
+    bool drawGrid = gridHit && stochasticTransparency(screenUv, gridAlpha) > 0.0;
 
     if (nearestSolid.hit)
     {
         float3 p = origin + direction * nearestSolid.travel;
         float3 bodyColor = shadeBody(p, nearestSolid.normal, nearestSolid.primitiveId);
         result.color = bodyColor * transmittance + inScattering;
-        if (!gridHit)
-        {
-            result.travel = nearestSolid.travel;
-            result.fieldId = nearestSolid.fieldId;
-            result.normal = nearestSolid.normal;
-            result.coverage = 1.0;
-            result.mediumOpacity = saturate(1.0 - transmittance);
-            result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
-        }
-        return result;
+        result.travel = nearestSolid.travel;
+        result.fieldId = nearestSolid.fieldId;
+        result.normal = nearestSolid.normal;
+        result.coverage = 1.0;
+        result.mediumOpacity = saturate(1.0 - transmittance);
+        result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
     }
-
-    result.color = result.color * transmittance + inScattering;
-    if (!gridHit)
+    else
     {
+        result.color = result.color * transmittance + inScattering;
         result.mediumOpacity = saturate(1.0 - transmittance);
         result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
         if (result.mediumOpacity > 0.015)
@@ -607,6 +581,11 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
             result.coverage = saturate(max(result.mediumOpacity, result.densityMean * 4.0));
             result.travel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, farDistance) : farDistance;
         }
+    }
+
+    if (drawGrid)
+    {
+        result.color += gridColor * gridAlpha * gridTransmittance;
     }
 
     return result;

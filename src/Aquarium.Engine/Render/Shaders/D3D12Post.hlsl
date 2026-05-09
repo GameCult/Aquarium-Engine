@@ -23,7 +23,6 @@ cbuffer AquariumFrame : register(b0)
 };
 
 Texture2D<float4> sourceTexture : register(t0);
-Texture2D<float4> gridHeightTexture : register(t1);
 Texture2D<float4> historyTexture : register(t4);
 Texture2D<float4> currentSceneMetadataTexture : register(t5);
 Texture2D<float4> historyMetadataTexture : register(t6);
@@ -62,7 +61,6 @@ struct ResolveOut
 
 static const float SUN_RADIUS = 1.12;
 static const int PLANET_COUNT = 5;
-static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
@@ -70,19 +68,6 @@ static const float MAX_HISTORY_AGE = 32.0;
 static const int FIELD_INSTANCE_COUNT = 10;
 static const int FIELD_FLAG_CLOUD = 2;
 static const int MEDIUM_RAY_PREVIEW_STEPS = 48;
-static const float PI = 3.14159265359;
-static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
-static const float TERRAIN_ISOLINE_SPACING = 0.12;
-static const float GRID_LINE_WORLD_CELL = 2.0;
-static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
-static const float GRID_LINE_PIXEL_WIDTH = 0.46;
-static const float GRID_MAJOR_LINE_PIXEL_WIDTH = 0.82;
-static const float GRID_LINE_PIXEL_FADE = 0.95;
-static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
-static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
-static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
-static const float GRID_ALPHA_SCALE = 0.56;
-
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -234,96 +219,6 @@ float4 loadHistoryMetadata(float2 uv)
 float4 loadHistoryControl(float2 uv)
 {
     return historyControlTexture.Load(int3(pixelFromUv(uv), 0));
-}
-
-float2 gridLocal(float2 p)
-{
-    return (p - gridCenter) / max(gridRadius, 0.001);
-}
-
-float2 gridUv(float2 p)
-{
-    return gridLocal(p) * 0.5 + 0.5;
-}
-
-float terrainHeight(float2 p)
-{
-    return gridHeightTexture.SampleLevel(sourceSampler, saturate(gridUv(p)), 0.0).r;
-}
-
-float2 terrainGradient(float2 p)
-{
-    float2 uv = saturate(gridUv(p));
-    float2 texel = 1.0 / GRID_HEIGHT_TEXEL_COUNT;
-    float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.001);
-
-    float hLeft = gridHeightTexture.SampleLevel(sourceSampler, uv - float2(texel.x, 0.0), 0.0).r;
-    float hRight = gridHeightTexture.SampleLevel(sourceSampler, uv + float2(texel.x, 0.0), 0.0).r;
-    float hDown = gridHeightTexture.SampleLevel(sourceSampler, uv - float2(0.0, texel.y), 0.0).r;
-    float hUp = gridHeightTexture.SampleLevel(sourceSampler, uv + float2(0.0, texel.y), 0.0).r;
-
-    return float2(hRight - hLeft, hUp - hDown) / (texelWorld * 2.0);
-}
-
-float periodicLineMask(float coordinate, float pixelWidth, float pixelFade)
-{
-    float distanceToLine = min(frac(coordinate), 1.0 - frac(coordinate));
-    float coordinatePerPixel = max(fwidth(coordinate), 0.00001);
-    float distancePixels = distanceToLine / coordinatePerPixel;
-    return 1.0 - smoothstep(pixelWidth, pixelWidth + pixelFade, distancePixels);
-}
-
-float gridLine(float2 p)
-{
-    float2 minorDomain = p / GRID_LINE_WORLD_CELL;
-    float2 majorDomain = p / GRID_MAJOR_LINE_WORLD_CELL;
-
-    float minor = max(
-        periodicLineMask(minorDomain.x, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
-        periodicLineMask(minorDomain.y, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
-    float major = max(
-        periodicLineMask(majorDomain.x, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
-        periodicLineMask(majorDomain.y, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
-
-    return saturate(minor * 0.58 + major);
-}
-
-float isolineMask(float height)
-{
-    float contourDomain = height / TERRAIN_ISOLINE_SPACING;
-    float contour = periodicLineMask(contourDomain, TERRAIN_ISOLINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
-    float contourDerivative = max(fwidth(contourDomain), 0.00001);
-    float slopeFade = smoothstep(0.025, 0.25, contourDerivative);
-    return contour * slopeFade;
-}
-
-float fieldLineMask(float2 gradient)
-{
-    float slope = length(gradient);
-    if (slope < 0.0001)
-    {
-        return 0.0;
-    }
-
-    float angleDomain = (atan2(gradient.y, gradient.x) / PI + 1.0) * 6.0;
-    float angleLine = periodicLineMask(angleDomain, TERRAIN_FIELD_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
-    float slopeStrength = smoothstep(0.015, 0.16, slope);
-    return angleLine * slopeStrength;
-}
-
-float3 gridEventColor(float3 p, out float alpha)
-{
-    float height = terrainHeight(p.xy);
-    float2 gradient = terrainGradient(p.xy);
-    float gridAmount = gridLine(p.xy);
-    float contour = isolineMask(height);
-    float fieldLine = fieldLineMask(gradient);
-    float support = saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16);
-    float3 color = GRID_COLOR * gridAmount * 1.05;
-    color += float3(0.98, 1.0, 0.78) * contour * 0.34;
-    color += float3(0.36, 0.92, 1.0) * fieldLine * 0.22;
-    alpha = saturate(support * GRID_ALPHA_SCALE);
-    return color;
 }
 
 void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
@@ -566,18 +461,8 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
     float currentMediumOpacity = saturate(currentControl.z);
-    bool currentIsGrid = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
     bool currentIsMedium = abs(currentFieldId - FIELD_ID_MEDIUM) < 0.25;
-    bool currentIsDistributed = currentIsMedium || currentIsGrid;
-
-    if (currentIsGrid && currentTravel <= farDistance)
-    {
-        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-        float3 worldPosition = cameraPosition + currentRay * currentTravel;
-        float gridAlpha;
-        float3 gridColor = gridEventColor(worldPosition, gridAlpha);
-        currentColor = gridColor * saturate(gridAlpha) + float3(0.001, 0.003, 0.004);
-    }
+    bool currentIsDistributed = currentIsMedium;
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
@@ -593,7 +478,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
         {
             float4 previousMetadata = loadHistoryMetadata(previousUv);
             float4 previousControl = loadHistoryControl(previousUv);
-            float4 previous = currentIsGrid ? loadHistoryColor(previousUv) : historyTexture.SampleLevel(sourceSampler, previousUv, 0.0);
+            float4 previous = historyTexture.SampleLevel(sourceSampler, previousUv, 0.0);
             float previousFieldId = previousMetadata.x;
             float previousTravel = previous.a;
             float3 previousNormal = previousMetadata.yzw;
@@ -620,20 +505,17 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             currentNeighborhood(input.uv, neighborhoodMin, neighborhoodMax);
             float3 clampedHistory = currentIsDistributed ? previous.rgb : clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
             float colorDelta = length(clampedHistory - currentColor);
-            float colorWeight = currentIsGrid ? 1.0 : currentIsDistributed ? 1.0 - smoothstep(0.35, 1.6, colorDelta) : 1.0 - smoothstep(0.18, 1.2, colorDelta);
+            float colorWeight = currentIsDistributed ? 1.0 - smoothstep(0.35, 1.6, colorDelta) : 1.0 - smoothstep(0.18, 1.2, colorDelta);
             float reactiveWeight = 1.0 - currentReactive;
-            float coverageWeight = currentIsGrid ? 1.0 : smoothstep(0.02, 0.55, currentCoverage);
+            float coverageWeight = smoothstep(0.02, 0.55, currentCoverage);
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float mediumContinuityWeight = 1.0 - smoothstep(0.04, 0.35, abs(previousMediumOpacity - currentMediumOpacity));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
-            float surfaceValidationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
-            float gridSupportWeight = smoothstep(0.015, 0.18, currentCoverage);
-            float gridValidationWeight = travelWeight * fieldWeight * normalWeight * coverageContinuityWeight * mediumContinuityWeight * gridSupportWeight;
-            float validationWeight = currentIsGrid ? gridValidationWeight : surfaceValidationWeight;
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
 
             historyColor = clampedHistory;
-            float maxHistoryWeight = currentIsGrid ? 0.90 : currentIsMedium ? 0.88 : 0.82;
-            float freshHistoryScale = currentIsGrid ? 0.58 : currentIsDistributed ? 0.48 : 0.35;
+            float maxHistoryWeight = currentIsMedium ? 0.88 : 0.82;
+            float freshHistoryScale = currentIsDistributed ? 0.48 : 0.35;
             historyWeight = maxHistoryWeight * lerp(freshHistoryScale, 1.0, historyConfidence) * validationWeight;
             historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
         }

@@ -12,12 +12,14 @@ the cut.
 
 Current renderer correction: the D3D12 Grid has been removed from the
 transparent/froxel candidate experiment. The Grid now traces directly in the
-scene shader as a stochastic surface before the nearest solid, writes Grid
-identity/travel/normal/coverage for temporal support, and relies on TAA to
-accumulate coverage noise. Solid spheres still use view-froxel projected bounds
-for empty-space skipping; transparent surface candidate buffers, descriptors,
-root parameters, shader structs, and event traversal were cut rather than left
-as dead scaffolding. D3D12 Grid line width now mirrors the D3D11 reference:
+scene shader as a non-terminating stochastic color overlay before the nearest
+solid, but it no longer writes the visible scene identity/travel/control packet.
+That packet belongs to the actual opaque/medium result so fog and temporal
+debug views do not get clipped/classified by a transparent UI surface. Solid
+spheres still use view-froxel projected bounds for empty-space skipping;
+transparent surface candidate buffers, descriptors, root parameters, shader
+structs, and event traversal were cut rather than left as dead scaffolding.
+D3D12 Grid line width now mirrors the D3D11 reference:
 periodic domains use `fwidth()` and pixel-width constants instead of world-space
 `ddx/ddy` footprint guesses. The stochastic mask now samples Aetheria's copied
 512x512 R8 blue-noise texture in screen space through D3D12 `t15/s1`, point and
@@ -31,6 +33,10 @@ as current radiance. It now matches the D3D11 reference more closely: the post
 pass binds the Grid height target, reconstructs analytic Grid color from current
 Grid travel/world position, nearest-loads Grid history, and skips color-delta
 history rejection for Grid pixels. Raw debug remains the stochastic stream.
+This was later superseded because using Grid as the visible scene packet broke
+volumetric ordering. The Grid is currently a direct color overlay only; future
+work should add a separate transparent-overlay temporal lane rather than
+reusing field identity/travel/control.
 
 ## Hot Context
 
