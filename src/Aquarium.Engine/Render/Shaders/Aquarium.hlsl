@@ -1473,25 +1473,37 @@ float3 debugFieldIdColor(float fieldId)
     return float3(1.0, 0.0, 1.0);
 }
 
-float mediumDensitySliceDebug(float3 rayDirection)
+float mediumDensityColumnDebug(float3 rayDirection)
 {
-    float sliceZ = 0.0;
     float denominator = rayDirection.z;
     if (abs(denominator) < 0.0001)
     {
         return 0.0;
     }
 
-    float travel = (sliceZ - cameraPosition.z) / denominator;
+    float travel = (0.0 - cameraPosition.z) / denominator;
     if (travel <= 0.0 || travel >= farDistance)
     {
         return 0.0;
     }
 
-    float3 p = cameraPosition + rayDirection * travel;
-    float gridMask = 1.0 - smoothstep(gridRadius * 0.98, gridRadius * 1.04, length(p.xy - gridCenter));
-    float3 scattering;
-    return registeredMediumDensity(p, scattering) * gridMask;
+    float2 xy = (cameraPosition + rayDirection * travel).xy;
+    float gridMask = 1.0 - smoothstep(gridRadius * 0.98, gridRadius * 1.04, length(xy - gridCenter));
+    float maxDensity = 0.0;
+    float meanDensity = 0.0;
+
+    [unroll]
+    for (int sampleIndex = 0; sampleIndex < 16; sampleIndex++)
+    {
+        float z = lerp(-2.25, 3.5, ((float)sampleIndex + 0.5) / 16.0);
+        float3 scattering;
+        float density = registeredMediumDensity(float3(xy, z), scattering);
+        maxDensity = max(maxDensity, density);
+        meanDensity += density;
+    }
+
+    meanDensity /= 16.0;
+    return saturate((maxDensity * 0.85 + meanDensity * 1.75) * gridMask);
 }
 
 struct SceneOut
@@ -1838,8 +1850,8 @@ ResolveOut AquariumResolvePS(VertexOut input)
     else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
     {
         float3 debugRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-        float densitySlice = mediumDensitySliceDebug(debugRay);
-        finalColor = lerp(float3(0.01, 0.025, 0.04), float3(0.28, 0.78, 1.0), densitySlice);
+        float densityColumn = mediumDensityColumnDebug(debugRay);
+        finalColor = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), densityColumn);
     }
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {
@@ -1848,7 +1860,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
     {
-        float source = saturate(dot(atlasMediumInScattering, float3(0.2126, 0.7152, 0.0722)) * 0.65);
+        float source = saturate(dot(atlasMediumInScattering, float3(0.2126, 0.7152, 0.0722)) * 18.0);
         finalColor = lerp(float3(0.015, 0.015, 0.028), float3(0.95, 0.74, 0.36), source);
     }
 

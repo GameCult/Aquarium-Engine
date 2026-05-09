@@ -148,10 +148,11 @@ prototype integrated along the camera ray before surface composition.
   reconstructs a world point and evaluates field-local density there; resolve
   integrates the stored cells front-to-back. Removed the time term from erosion
   noise so the texture itself is stationary under inspection.
-- Follow-up correction: mode 9 is no longer the frustum atlas mean. It is a
-  world-anchored density slice at Grid altitude (`z = 0`) so density-field
-  texture can be inspected without confusing it with view-dependent transport
-  slices. Modes 10/11 remain transport diagnostics.
+- Follow-up correction: mode 9 is no longer the frustum atlas mean or a single
+  `z = 0` slice. It is a world-anchored density column over the Grid plane, so
+  current above/below medium ellipsoids are actually visible. Modes 10/11 remain
+  transport diagnostics; source debug is boosted separately from physical
+  transport so black-on-black patches do not pass as information.
 - Debug UI control grammar now includes named option rows. Render Debug uses an
   option/dropdown selector instead of a numeric slider so the expanding debug
   mode list remains legible.
