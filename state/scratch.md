@@ -206,3 +206,8 @@ prototype integrated along the camera ray before surface composition.
   stops at Self/planet solids only; Grid pixels integrate medium to the visible
   far distance so the schematic overlay cannot cut holes through fog or occlude
   itself.
+- Transparent Grid overlay correction: the Grid no longer writes scene color or
+  wins scene travel. Resolve integrates a thin heightfield band along the view
+  ray up to the nearest solid/far travel and composites it over the resolved
+  scene. This is the proper surface/transparency split: solids own depth, fog
+  owns volume, Grid owns a translucent schematic overlay.
