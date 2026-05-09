@@ -6,6 +6,8 @@ using Vortice.Direct3D;
 using Vortice.Direct3D12;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Aquarium.Engine.Render;
 
@@ -19,6 +21,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12CommandQueue commandQueue;
     private readonly IDXGISwapChain3 swapChain;
     private readonly ID3D12DescriptorHeap renderTargetViewHeap;
+    private readonly DescriptorArena shaderDescriptorArena;
     private readonly FrameResources[] frames = new FrameResources[BackBufferCount];
     private readonly ID3D12GraphicsCommandList commandList;
     private readonly ID3D12RootSignature fullscreenRootSignature;
@@ -66,9 +69,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         renderTargetViewHeap = device.CreateDescriptorHeap(new DescriptorHeapDescription(DescriptorHeapType.RenderTargetView, BackBufferCount));
         renderTargetViewDescriptorSize = (int)device.GetDescriptorHandleIncrementSize(DescriptorHeapType.RenderTargetView);
+        shaderDescriptorArena = new DescriptorArena(device, DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView, BackBufferCount, DescriptorHeapFlags.ShaderVisible);
         for (var index = 0; index < frames.Length; index++)
         {
-            frames[index] = new FrameResources(device.CreateCommandAllocator(CommandListType.Direct));
+            frames[index] = CreateFrameResources(index);
         }
 
         CreateRenderTargetViews();
@@ -119,6 +123,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         var frameResources = frames[frameIndex];
         WaitForFrame(frameResources);
+        frameResources.WriteSmokeConstants(new SmokeConstants(
+            new Vector4(
+                0.020f + settings.SceneExposure * 0.08f,
+                0.048f + settings.BloomIntensity * 0.55f,
+                0.066f + settings.BloomVeilIntensity * 1.2f,
+                1.0f),
+            new Vector4(frame.TimeSeconds, RenderDebugMode, DebugUiVisible ? 1.0f : 0.0f, 0.0f)));
         frameResources.CommandAllocator.Reset();
         commandList.Reset(frameResources.CommandAllocator, null);
 
@@ -137,10 +148,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fenceEvent.Dispose();
         fence.Dispose();
         commandList.Dispose();
+        smokePipelineState.Dispose();
+        fullscreenRootSignature.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
             frames[index].Dispose();
         }
+        shaderDescriptorArena.Dispose();
         renderTargetViewHeap.Dispose();
         swapChain.Dispose();
         commandQueue.Dispose();
@@ -168,8 +182,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         context.CommandList.ResourceBarrier(ResourceBarrier.BarrierTransition(context.BackBuffer, ResourceStates.Present, ResourceStates.RenderTarget));
         context.CommandList.ClearRenderTargetView(context.RenderTargetView, clearColor);
+        context.CommandList.SetDescriptorHeaps(shaderDescriptorArena.Heap);
         context.CommandList.SetPipelineState(smokePipelineState);
         context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
+        context.CommandList.SetGraphicsRootDescriptorTable(0, frames[frameIndex].SmokeConstantsGpuDescriptor);
         context.CommandList.RSSetViewports(viewport);
         context.CommandList.RSSetScissorRects(scissorRect);
         context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
@@ -215,11 +231,39 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private ID3D12RootSignature CreateFullscreenRootSignature()
     {
+        var constantBufferRange = new DescriptorRange(
+            DescriptorRangeType.ConstantBufferView,
+            1,
+            0,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var rootParameters = new[]
+        {
+            new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.Pixel),
+        };
         var description = new RootSignatureDescription(
             RootSignatureFlags.AllowInputAssemblerInputLayout,
-            [],
+            rootParameters,
             []);
         return device.CreateRootSignature(0, in description, RootSignatureVersion.Version1);
+    }
+
+    private FrameResources CreateFrameResources(int index)
+    {
+        var commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
+        var uploadBuffer = device.CreateCommittedResource(
+            HeapType.Upload,
+            ResourceDescription.Buffer(D3D12.ConstantBufferDataPlacementAlignment),
+            ResourceStates.GenericRead,
+            null);
+        var constantBufferSlot = shaderDescriptorArena.Allocate();
+        device.CreateConstantBufferView(
+            new ConstantBufferViewDescription(
+                uploadBuffer.GPUVirtualAddress,
+                D3D12.ConstantBufferDataPlacementAlignment),
+            constantBufferSlot.Cpu);
+
+        return new FrameResources(commandAllocator, uploadBuffer, constantBufferSlot.Gpu);
     }
 
     private ID3D12PipelineState CreateSmokePipelineState(string path)
@@ -258,18 +302,74 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12Resource BackBuffer,
         CpuDescriptorHandle RenderTargetView);
 
-    private sealed class FrameResources(ID3D12CommandAllocator commandAllocator) : IDisposable
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct SmokeConstants(Vector4 Tint, Vector4 Params);
+
+    private sealed class FrameResources(
+        ID3D12CommandAllocator commandAllocator,
+        ID3D12Resource smokeConstantBuffer,
+        GpuDescriptorHandle smokeConstantsGpuDescriptor) : IDisposable
     {
         public ID3D12CommandAllocator CommandAllocator { get; } = commandAllocator;
+
+        public ID3D12Resource SmokeConstantBuffer { get; } = smokeConstantBuffer;
+
+        public GpuDescriptorHandle SmokeConstantsGpuDescriptor { get; } = smokeConstantsGpuDescriptor;
 
         public ID3D12Resource BackBuffer { get; set; } = null!;
 
         public ulong FenceValue { get; set; }
 
+        public void WriteSmokeConstants(SmokeConstants constants)
+        {
+            SmokeConstantBuffer.Map<SmokeConstants>(0, 1)[0] = constants;
+        }
+
         public void Dispose()
         {
             BackBuffer.Dispose();
+            SmokeConstantBuffer.Dispose();
             CommandAllocator.Dispose();
         }
     }
+
+    private sealed class DescriptorArena : IDisposable
+    {
+        private readonly int descriptorSize;
+        private int used;
+
+        public DescriptorArena(ID3D12Device device, DescriptorHeapType type, int capacity, DescriptorHeapFlags flags)
+        {
+            Type = type;
+            Capacity = capacity;
+            Heap = device.CreateDescriptorHeap(new DescriptorHeapDescription(type, (uint)capacity, flags));
+            descriptorSize = (int)device.GetDescriptorHandleIncrementSize(type);
+        }
+
+        public ID3D12DescriptorHeap Heap { get; }
+
+        public DescriptorHeapType Type { get; }
+
+        public int Capacity { get; }
+
+        public DescriptorSlot Allocate()
+        {
+            if (used >= Capacity)
+            {
+                throw new InvalidOperationException($"D3D12 {Type} descriptor arena exhausted ({Capacity} descriptors).");
+            }
+
+            var index = used++;
+            return new DescriptorSlot(
+                Heap.GetCPUDescriptorHandleForHeapStart() + (index * descriptorSize),
+                Heap.GetGPUDescriptorHandleForHeapStart() + (index * descriptorSize));
+        }
+
+        public void Dispose()
+        {
+            Heap.Dispose();
+        }
+    }
+
+    private readonly record struct DescriptorSlot(CpuDescriptorHandle Cpu, GpuDescriptorHandle Gpu);
 }

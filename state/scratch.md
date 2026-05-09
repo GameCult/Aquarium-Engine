@@ -5,9 +5,11 @@
 D3D12 migration foothold. D3D11 remains the visual reference renderer; the host
 now talks through `IAquariumRenderer`, and `--renderer d3d12` selects a D3D12
 backend with device/queue/swapchain/RTV heap/per-frame command allocators/fence,
-plus a fullscreen root signature and smoke-test PSO that draws a diagnostic
-fullscreen triangle. Next renderer work should port descriptor/upload/resource
-ownership into D3D12 before building the stochastic transparent surface pipe.
+plus a shader-visible descriptor arena, per-frame upload constant buffers,
+fullscreen root signature, and smoke-test PSO that draws a diagnostic fullscreen
+triangle. Next renderer work should generalize this into renderer-owned
+descriptor/upload/resource helpers before building the stochastic transparent
+surface pipe.
 
 ## Hot Context
 
@@ -220,3 +222,9 @@ ownership into D3D12 before building the stochastic transparent surface pipe.
   PSO, binds viewport/scissor/RTV, and draws a fullscreen triangle. This proves
   shader, root signature, PSO, and draw submission before real Aquarium passes
   migrate.
+- D3D12 descriptor/upload foothold: the D3D12 path now owns a shader-visible
+  CBV/SRV/UAV descriptor arena and per-frame upload constant buffers. The smoke
+  pass binds a CBV descriptor table at b0 and uploads frame/debug/HDR-tinted
+  constants before drawing. This is still diagnostic, but it proves descriptor
+  heap visibility, root descriptor table binding, and per-frame CPU-to-GPU
+  upload ownership.

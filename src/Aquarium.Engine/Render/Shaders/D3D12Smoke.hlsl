@@ -4,6 +4,12 @@ struct VertexOut
     float2 uv : TEXCOORD0;
 };
 
+cbuffer SmokeConstants : register(b0)
+{
+    float4 smokeTint;
+    float4 smokeParams;
+};
+
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -15,7 +21,8 @@ VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 
 float4 D3D12SmokePS(VertexOut input) : SV_Target0
 {
-    float3 baseColor = lerp(float3(0.012, 0.022, 0.032), float3(0.018, 0.040, 0.058), input.uv.y);
+    float3 baseColor = lerp(float3(0.012, 0.022, 0.032), smokeTint.rgb, input.uv.y);
     float vignette = smoothstep(0.86, 0.18, length(input.uv - 0.5));
-    return float4(baseColor * (0.72 + 0.28 * vignette), 1.0);
+    float pulse = 0.92 + 0.08 * sin(smokeParams.x);
+    return float4(baseColor * (0.72 + 0.28 * vignette) * pulse, 1.0);
 }
