@@ -143,6 +143,11 @@ prototype integrated along the camera ray before surface composition.
   transport targets. Resolve can composite `surface * transmittance +
   in-scattering`, controlled by persisted `MediumCompositeIntensity`, which
   defaults to zero so final remains unchanged until deliberately enabled/tuned.
+- Medium density correction: the medium pass now stores a 4x4 frustum slice
+  atlas instead of a finished screen-space ray integral. Each slice texel
+  reconstructs a world point and evaluates field-local density there; resolve
+  integrates the stored cells front-to-back. Removed the time term from erosion
+  noise so the texture itself is stationary under inspection.
 - Debug UI control grammar now includes named option rows. Render Debug uses an
   option/dropdown selector instead of a numeric slider so the expanding debug
   mode list remains legible.
