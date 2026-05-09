@@ -25,6 +25,13 @@ wrap sampled. It shifts the blue-noise tile by a low-discrepancy pixel offset
 each frame so TAA sees temporal coverage variation without all pixels toggling
 together.
 
+Follow-up TAA diagnosis: D3D12 had stable Grid metadata/control but noisy final,
+raw, and history because the post resolve used stochastic hit/miss scene color
+as current radiance. It now matches the D3D11 reference more closely: the post
+pass binds the Grid height target, reconstructs analytic Grid color from current
+Grid travel/world position, nearest-loads Grid history, and skips color-delta
+history rejection for Grid pixels. Raw debug remains the stochastic stream.
+
 ## Hot Context
 
 - Root: `E:\Projects\Aquarium-Engine`
