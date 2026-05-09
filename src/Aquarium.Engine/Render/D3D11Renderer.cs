@@ -631,6 +631,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(9);
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
+        context.PSUnsetShaderResource(12);
         context.PSUnsetShaderResource(13);
         context.PSUnsetShaderResource(14);
         context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView, sceneControlRenderTargetView });
@@ -743,6 +744,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(9, bloomShaderResourceViews[0]);
         context.PSSetShaderResource(10, bloomShaderResourceViews[1]);
         context.PSSetShaderResource(11, bloomShaderResourceViews[2]);
+        context.PSSetShaderResource(12, fieldInstanceShaderResourceView);
         context.PSSetShaderResource(13, mediumVolumeShaderResourceView);
         context.PSSetShaderResource(14, mediumTransportShaderResourceView);
         context.PSSetSampler(0, gridSampler);

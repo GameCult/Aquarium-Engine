@@ -186,3 +186,8 @@ prototype integrated along the camera ray before surface composition.
   slider appears only in Medium Ray Density / Medium Ray Transmittance modes;
   density mode shows density at that selected sample, and transmittance mode
   shows accumulated survival to that sample.
+- Medium ray preview binding fix: the resolve shader uses
+  `registeredMediumDensity` for ray preview modes, so resolve must bind the
+  field instance structured buffer at `t12`. The medium atlas pass already had
+  the buffer, which is why atlas density could show blobs while ray density and
+  ray transmittance were empty at every step.
