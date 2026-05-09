@@ -2,18 +2,13 @@
 
 ## Current Slice
 
-D3D12 migration foothold. D3D11 remains the visual reference renderer; the host
-now talks through `IAquariumRenderer`, and `--renderer d3d12` selects a D3D12
-backend with device/queue/swapchain/RTV heap/per-frame command allocators/fence,
-plus a shader-visible descriptor arena, per-frame upload constant buffers,
-renderer-owned offscreen render target, fullscreen root signature, and
-smoke-test PSO that draws a diagnostic fullscreen triangle into the offscreen
-target before sampling it back to the swapchain. Render targets now support
-SRV/UAV descriptors, the smoke pass writes a diagnostic UAV through a per-frame
-transient descriptor without consuming a persistent static UAV slot, and resize
-rebuilds static shader/RTV descriptor arenas after a GPU wait instead of
-consuming fixed bring-up slots. Next renderer work
-can start porting real passes while keeping D3D11 as the visual reference.
+D3D12 parity push. The host now defaults to D3D12 unless `--renderer` or
+`AQUARIUM_RENDERER` says otherwise. D3D12 owns the visible scene path:
+Grid-height brushes, field/froxel uploads, medium diagnostic/transport/event
+atlases, scene HDR, bloom, temporal resolve/history, debug modes, and
+DirectWrite debug UI through a narrow D3D11On12 overlay bridge. D3D11 remains
+selectable only as temporary reference ballast until visible D3D12 use survives
+the cut.
 
 ## Hot Context
 
@@ -347,3 +342,8 @@ can start porting real passes while keeping D3D11 as the visual reference.
   and marks the tracked resource state accordingly. Keep this bridge narrow and
   overlay-only. Diegetic/world text still belongs to future MSDF/SDF renderer
   billboards.
+- D3D12 parity default pass: host renderer selection now defaults to `d3d12`
+  unless `--renderer` or `AQUARIUM_RENDERER` selects otherwise. D3D12 reports
+  once-per-second CPU timing averages for whole frame, command-list recording,
+  and DirectWrite overlay bridge cost. These are CPU timings, not GPU timestamp
+  query timings.

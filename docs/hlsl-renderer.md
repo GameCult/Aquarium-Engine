@@ -79,8 +79,8 @@ The D3D12 backend has begun migrating this order with a proper brush-based Grid
 height pass. It uploads the Aquarium frame constant buffer plus a fixed body
 brush table through the D3D12 upload ring, renders the base Grid field, then
 draws one additive up-facing gravity quad per body into a 128x128
-scalar `R16_Float` Grid height target. D3D11 remains the visual reference until
-the full pass chain reaches parity.
+scalar `R16_Float` Grid height target. D3D12 is now the default renderer; D3D11
+remains only as a temporary visual reference until the old backend is deleted.
 
 D3D12 also uploads the current froxel primitive id table and field instance
 table into default-heap structured buffers every frame. The D3D12 medium pass
@@ -97,11 +97,11 @@ and `6` inspecting the current control and identity buffers. Its resolve pass
 now writes ping-pong history color, metadata, and control targets and validates
 opaque history with previous-camera reprojection plus field, travel, normal,
 neighborhood color, coverage, and medium-continuity checks. Debug modes `3` and
-`4` show history age and weight. Grid/transparent-specific reconstruction and
-overlay/debug UI still need to move. Medium-only pixels already use a
-density-weighted ray centroid and `FIELD_ID_MEDIUM`, so transparent Grid and fog
-contribution can accumulate through the medium history path without inventing a
-single alpha-surface hit.
+`4` show history age and weight. Medium-only pixels use a density-weighted ray
+centroid and `FIELD_ID_MEDIUM`; binned transparent surfaces emit a generic
+transparent-event summary and `FIELD_ID_TRANSPARENT_EVENT`, so transparent Grid
+and future particles can accumulate through a distributed history path without
+inventing a single alpha-surface hit.
 D3D12 debug modes `9` and `10` are direct ray-step density/transmittance
 previews from the field instance buffer, matching the D3D11 diagnostic contract
 rather than sampling the froxel atlas. Mode `11` remains the froxel density

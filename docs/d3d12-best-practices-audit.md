@@ -78,22 +78,25 @@ resource graph beyond smoke-pass scaffolding.
   free lists only when non-resize churn proves it needs them.
 - Upload ring is per-frame and reset after fence wait. It is not yet a global
   transient allocator with suballocation statistics or overflow diagnostics.
-- The offscreen smoke target copies to the swapchain. Keep this only if the real
-  post-process graph needs it; otherwise present from the final render target
-  path with no ornamental copy.
-- The D3D12 scene pass is still a first parity slice: no full temporal resolve,
-  bloom pyramid, or full terrain line shader yet. The transparent-surface bin
-  exists but currently has only the Grid layer as its first registered surface.
+- The real present path now renders scene HDR, bloom, temporal resolve, and
+  debug views instead of the old smoke-copy scaffold. Keep the smoke shader only
+  for narrowly scoped diagnostics; do not let smoke-era policy steer production
+  pass ownership.
+- The transparent-surface bin currently has only the Grid layer as its first
+  registered producer. Future stochastic particles and billboards should extend
+  that path rather than reintroducing alpha-blended scene surfaces.
 - D3D11 and D3D12 field table builders are temporarily duplicated by design.
   D3D11 is reference-only and will be removed after migration; do not pay DRY
   tax merely to preserve it.
 
-## Required Before Real Pass Migration
+## Required Before Larger Renderer Work
 
-- Upload ring capacity policy and overflow reporting for real frame data.
-- Descriptor-owner diagnostics beyond heap-level capacity summaries.
-- Continue pass migration without cloning smoke-pass-local policy into each
-  resource.
+- Add GPU timestamp queries when D3D12 frame cost starts mattering beyond CPU
+  timing diagnostics.
+- Add descriptor-owner diagnostics beyond heap-level capacity summaries when
+  descriptor churn becomes hard to reason about.
+- Keep D3D11 reference-only and delete it once visible D3D12 use survives the
+  ballast-cut pass.
 
 ## Rule
 

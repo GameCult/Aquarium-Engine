@@ -156,7 +156,7 @@ public static class AquariumHost
             }
         }
 
-        return Environment.GetEnvironmentVariable("AQUARIUM_RENDERER") ?? "d3d11";
+        return Environment.GetEnvironmentVariable("AQUARIUM_RENDERER") ?? "d3d12";
     }
 
     private static IAquariumRenderer CreateRenderer(

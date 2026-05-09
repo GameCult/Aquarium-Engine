@@ -8,6 +8,7 @@ using Vortice.Direct3D11on12;
 using Vortice.Direct3D12;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using ID3D11Device = Vortice.Direct3D11.ID3D11Device;
@@ -128,6 +129,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private float previousTimeSeconds;
     private GridHeightBrushConstants gridHeightBrushConstants;
     private GraphicsSettings settings = GraphicsSettings.Default;
+    private double accumulatedFrameCpuMilliseconds;
+    private double accumulatedRecordCpuMilliseconds;
+    private double accumulatedOverlayCpuMilliseconds;
+    private int accumulatedTimingFrames;
 
     public D3D12Renderer(
         IntPtr windowHandle,
@@ -282,6 +287,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public void Render(AquariumFrame frame, int width, int height)
     {
+        var frameCpuStart = Stopwatch.GetTimestamp();
         ResizeIfNeeded(width, height);
         var frameResources = frames[frameIndex];
         WaitForFrame(frameResources);
@@ -380,6 +386,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         frameResources.CommandAllocator.Reset();
         commandList.Reset(frameResources.CommandAllocator, null);
 
+        var recordCpuStart = Stopwatch.GetTimestamp();
         commandList.BeginEvent("Aquarium D3D12 Frame");
         UploadFieldResources(commandList, frameResources);
         RenderGridHeight(commandList, frameResources);
@@ -395,10 +402,21 @@ public sealed class D3D12Renderer : IAquariumRenderer
         RenderSceneAndPresent(new D3D12PassContext(commandList, frameResources.BackBuffer, frameResources.BackBufferRenderTargetView.Cpu), frameResources);
         commandList.EndEvent();
         commandList.Close();
+        var recordCpuMilliseconds = ElapsedMilliseconds(recordCpuStart);
 
         commandQueue.ExecuteCommandList(commandList);
+        var overlayCpuStart = Stopwatch.GetTimestamp();
         RenderOverlay(frame, frameResources);
+        var overlayCpuMilliseconds = ElapsedMilliseconds(overlayCpuStart);
         swapChain.Present(1, PresentFlags.None);
+        var frameCpuMilliseconds = ElapsedMilliseconds(frameCpuStart);
+        if (temporalFrameIndex > 4)
+        {
+            accumulatedRecordCpuMilliseconds += recordCpuMilliseconds;
+            accumulatedOverlayCpuMilliseconds += overlayCpuMilliseconds;
+            accumulatedFrameCpuMilliseconds += frameCpuMilliseconds;
+            accumulatedTimingFrames++;
+        }
         SignalFrame(frameResources);
         ReportCapacityOncePerSecond(frame.TimeSeconds, frameResources);
         previousCameraPosition = frame.CameraPosition;
@@ -1336,6 +1354,24 @@ public sealed class D3D12Renderer : IAquariumRenderer
             $"{frameResources.TransientShaderDescriptors.Describe()}; " +
             $"{staticShaderDescriptorArena.Describe()}; " +
             $"{renderTargetViewArena.Describe()}");
+        if (accumulatedTimingFrames > 0)
+        {
+            var scale = 1.0 / accumulatedTimingFrames;
+            Console.WriteLine(
+                $"D3D12 CPU timing avg over {accumulatedTimingFrames} frames: " +
+                $"frame {accumulatedFrameCpuMilliseconds * scale:0.###} ms; " +
+                $"record {accumulatedRecordCpuMilliseconds * scale:0.###} ms; " +
+                $"overlay {accumulatedOverlayCpuMilliseconds * scale:0.###} ms");
+            accumulatedFrameCpuMilliseconds = 0.0;
+            accumulatedRecordCpuMilliseconds = 0.0;
+            accumulatedOverlayCpuMilliseconds = 0.0;
+            accumulatedTimingFrames = 0;
+        }
+    }
+
+    private static double ElapsedMilliseconds(long startTimestamp)
+    {
+        return (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
     }
 
     private void WaitForFrame(FrameResources frameResources)
