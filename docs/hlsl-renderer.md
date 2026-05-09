@@ -253,8 +253,10 @@ the renderer as MSDF/SDF billboards.
 
 The debug controls live in `Render/Ui/DebugUi.cs`. The intended grammar is a
 native version of CultLib's generator API: panels, sections, sliders, toggles,
-and buttons are declared in code and bound to engine state with explicit read
-and write delegates. The visual language is flat and compact: dark panel,
+options, and buttons are declared in code and bound to engine state with explicit
+read and write delegates. The render debug selector uses named options instead
+of a numeric slider so the growing debug surface remains legible. The visual
+language is flat and compact: dark panel,
 slab rows, thin dividers, orange accent, and pale values. It is debug UI, but it
 does not have permission to be ugly by default.
 

@@ -29,6 +29,21 @@ public sealed class D3D11Renderer : IDisposable
     private const int FroxelBufferElementCount = FroxelCountX * FroxelCountY * FroxelCountZ * FroxelSlotCount;
     private const int PlanetCount = 5;
     private const int FieldInstanceCount = PlanetCount + 5;
+    private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
+    [
+        new(0, "Final"),
+        new(1, "Raw Scene"),
+        new(2, "History"),
+        new(3, "History Age"),
+        new(4, "History Weight"),
+        new(5, "Temporal Control"),
+        new(6, "Field Identity"),
+        new(7, "Bloom"),
+        new(8, "Exposed Luminance"),
+        new(9, "Medium Density"),
+        new(10, "Medium Transmittance"),
+    ];
+
     private const float SunRadius = 1.12f;
     private const float FroxelMinZ = -2.0f;
     private const float FroxelMaxZ = 6.0f;
@@ -362,7 +377,7 @@ public sealed class D3D11Renderer : IDisposable
         return new DebugUi("Aquarium Debug")
             .Panel(panel => panel
                 .Section("View")
-                .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode, "Selects the active renderer debug view.")
+                .Options("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), RenderDebugOptions, "Selects the active renderer debug view.")
                 .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.")
                 .Section("HDR")
                 .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.")

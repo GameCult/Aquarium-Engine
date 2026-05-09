@@ -103,6 +103,7 @@ internal sealed class DebugUi
             return;
         }
 
+        DebugUiControl? clickedControl = null;
         for (var index = controls.Count - 1; index >= 0; index--)
         {
             var control = controls[index];
@@ -120,7 +121,16 @@ internal sealed class DebugUi
                 slider.Drag(mousePosition);
             }
 
+            clickedControl = control;
             break;
+        }
+
+        foreach (var control in controls)
+        {
+            if (!ReferenceEquals(control, clickedControl))
+            {
+                control.DismissTransientState();
+            }
         }
     }
 
@@ -211,7 +221,7 @@ internal sealed class DebugUi
         var y = PanelTop + HeaderHeight + 10.0f;
         foreach (var control in controls)
         {
-            var height = control is SectionControl ? SectionHeight : RowHeight;
+            var height = control.LayoutHeight;
             control.Bounds = RectFromEdges(PanelLeft + 10.0f, y, PanelLeft + PanelWidth - 10.0f, y + height);
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
@@ -324,7 +334,15 @@ internal sealed class DebugUi
             controls.Add(new IntSliderControl(label, read, write, min, max, tooltip));
             return this;
         }
+
+        public DebugUiPanel Options(string label, Func<int> read, Action<int> write, IReadOnlyList<DebugUiOption> options, string? tooltip = null)
+        {
+            controls.Add(new OptionControl(label, read, write, options, tooltip));
+            return this;
+        }
     }
+
+    public readonly record struct DebugUiOption(int Value, string Label);
 
     internal abstract class DebugUiControl(string label, string? tooltip = null)
     {
@@ -344,6 +362,8 @@ internal sealed class DebugUi
 
         public virtual bool IsInteractive => true;
 
+        public virtual float LayoutHeight => this is SectionControl ? SectionHeight : RowHeight;
+
         public virtual bool HitTest(Vector2 mouse) => Contains(Bounds, mouse);
 
         public virtual void UpdateHover(Vector2 mouse)
@@ -352,6 +372,10 @@ internal sealed class DebugUi
         }
 
         public virtual void Click(Vector2 mouse)
+        {
+        }
+
+        public virtual void DismissTransientState()
         {
         }
 
@@ -484,6 +508,138 @@ internal sealed class DebugUi
                 target.DrawLine(new Vector2(box.Left + 3.0f, box.Top + 8.0f), new Vector2(box.Left + 7.0f, box.Bottom - 3.0f), accentBrush, 2.0f);
                 target.DrawLine(new Vector2(box.Left + 7.0f, box.Bottom - 3.0f), new Vector2(box.Right - 2.0f, box.Top + 3.0f), accentBrush, 2.0f);
             }
+        }
+    }
+
+    private sealed class OptionControl(
+        string label,
+        Func<int> read,
+        Action<int> write,
+        IReadOnlyList<DebugUiOption> options,
+        string? tooltip) : DebugUiControl(label, tooltip)
+    {
+        private bool isOpen;
+        private int hoveredOptionIndex = -1;
+
+        public override float LayoutHeight => RowHeight + (isOpen ? options.Count * RowHeight : 0.0f);
+
+        public override void UpdateHover(Vector2 mouse)
+        {
+            hoveredOptionIndex = -1;
+            IsHovered = HitTest(mouse);
+            if (!isOpen || !IsHovered || Contains(MainBounds(), mouse))
+            {
+                return;
+            }
+
+            for (var index = 0; index < options.Count; index++)
+            {
+                if (Contains(OptionBounds(index), mouse))
+                {
+                    hoveredOptionIndex = index;
+                    return;
+                }
+            }
+        }
+
+        public override void Click(Vector2 mouse)
+        {
+            if (!isOpen)
+            {
+                isOpen = true;
+                return;
+            }
+
+            if (Contains(MainBounds(), mouse))
+            {
+                isOpen = false;
+                return;
+            }
+
+            if (hoveredOptionIndex >= 0 && hoveredOptionIndex < options.Count)
+            {
+                write(options[hoveredOptionIndex].Value);
+                isOpen = false;
+            }
+        }
+
+        public override void DismissTransientState()
+        {
+            isOpen = false;
+        }
+
+        public override void Draw(
+            ID2D1RenderTarget target,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
+            ID2D1SolidColorBrush outlineBrush,
+            ID2D1SolidColorBrush primaryBrush,
+            ID2D1SolidColorBrush quietBrush,
+            ID2D1SolidColorBrush accentBrush,
+            ID2D1SolidColorBrush accentHoverBrush,
+            ID2D1SolidColorBrush accentActiveBrush,
+            ID2D1SolidColorBrush dimAccentBrush,
+            ID2D1SolidColorBrush trackHoverBrush,
+            ID2D1SolidColorBrush trackActiveBrush)
+        {
+            var main = MainBounds();
+            target.FillRectangle(main, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
+            target.DrawLine(new Vector2(main.Left, main.Bottom), new Vector2(main.Right, main.Bottom), outlineBrush, 1.0f);
+            target.DrawText(Label.ToUpperInvariant(), format, RectFromEdges(main.Left + 8.0f, main.Top, main.Left + LabelWidth, main.Bottom), accentBrush, DrawTextOptions.Clip);
+            target.DrawText(SelectedLabel(), format, RectFromEdges(main.Left + LabelWidth + 10.0f, main.Top, main.Right - 32.0f, main.Bottom), primaryBrush, DrawTextOptions.Clip);
+
+            var arrowBrush = IsActive ? accentActiveBrush : IsHovered ? accentHoverBrush : accentBrush;
+            var cy = (main.Top + main.Bottom) * 0.5f;
+            target.DrawLine(new Vector2(main.Right - 24.0f, cy - 3.0f), new Vector2(main.Right - 18.0f, cy + 3.0f), arrowBrush, 1.5f);
+            target.DrawLine(new Vector2(main.Right - 18.0f, cy + 3.0f), new Vector2(main.Right - 12.0f, cy - 3.0f), arrowBrush, 1.5f);
+
+            if (!isOpen)
+            {
+                return;
+            }
+
+            for (var index = 0; index < options.Count; index++)
+            {
+                var bounds = OptionBounds(index);
+                var selected = options[index].Value == read();
+                var hovered = index == hoveredOptionIndex;
+                target.FillRectangle(bounds, hovered ? hoverRowBrush : rowBrush);
+                target.DrawLine(new Vector2(bounds.Left, bounds.Bottom), new Vector2(bounds.Right, bounds.Bottom), outlineBrush, 1.0f);
+                var labelBrush = selected ? accentBrush : primaryBrush;
+                target.DrawText(options[index].Label, format, RectFromEdges(bounds.Left + 18.0f, bounds.Top, bounds.Right - 12.0f, bounds.Bottom), labelBrush, DrawTextOptions.Clip);
+                if (selected)
+                {
+                    target.DrawLine(new Vector2(bounds.Left + 7.0f, bounds.Top + 16.0f), new Vector2(bounds.Left + 10.0f, bounds.Top + 20.0f), accentBrush, 1.75f);
+                    target.DrawLine(new Vector2(bounds.Left + 10.0f, bounds.Top + 20.0f), new Vector2(bounds.Left + 15.0f, bounds.Top + 10.0f), accentBrush, 1.75f);
+                }
+            }
+        }
+
+        private string SelectedLabel()
+        {
+            var value = read();
+            foreach (var option in options)
+            {
+                if (option.Value == value)
+                {
+                    return option.Label;
+                }
+            }
+
+            return value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private Rect MainBounds()
+        {
+            return RectFromEdges(Bounds.Left, Bounds.Top, Bounds.Right, Bounds.Top + RowHeight);
+        }
+
+        private Rect OptionBounds(int index)
+        {
+            var top = Bounds.Top + RowHeight + index * RowHeight;
+            return RectFromEdges(Bounds.Left + 8.0f, top, Bounds.Right, top + RowHeight);
         }
     }
 

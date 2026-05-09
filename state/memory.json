@@ -74,6 +74,7 @@
     "text_and_ui": [
       "Overlay text uses DirectWrite/Direct2D after scene rendering. It is crisp final-pixel UI for debug surfaces, terminals, inspectors, and splash/status text.",
       "Aquarium debug controls should follow the CultLib code-first binding style without importing Unity prefab assumptions: panels, sections, sliders, toggles, and buttons bound by explicit read/write delegates, drawn as flat Direct2D/DirectWrite overlay UI.",
+      "Long enum-like debug controls should use named option/dropdown rows, not numeric sliders that force the user to memorize mode numbers.",
       "Vortice.Mathematics.Rect uses x, y, width, height, not left, top, right, bottom. UI code should use explicit RectFromEdges helpers when reasoning in edges, or it will paint giant accidental slabs across the swapchain.",
       "Debug UI feedback needs honest element-specific states. Use base, hover, and active visual states; sliders should respond on their track/fill and handle separately, keep geometry stable, and brighten by lerping accent colors toward white rather than resizing the handle or darkening the track.",
       "Tooltips belong in the code-first control declarations as optional intent strings. Render them as compact Direct2D overlay slabs clamped to the viewport, not as an afterthought bolted to anonymous widgets.",

@@ -135,6 +135,9 @@ prototype integrated along the camera ray before surface composition.
   for registered medium density/transmittance diagnostics. Debug mode 9 shows
   medium density, mode 10 shows transmittance. Final scene composition is still
   untouched until the explicit low-res volume pass exists.
+- Debug UI control grammar now includes named option rows. Render Debug uses an
+  option/dropdown selector instead of a numeric slider so the expanding debug
+  mode list remains legible.
 - Dev watcher correction: live runtime reload now waits for the host stdout log
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last
