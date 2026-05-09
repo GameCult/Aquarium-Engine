@@ -99,7 +99,9 @@ VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 
 float stochasticTransparency(float2 screenUv, float alpha)
 {
-    float2 ditherUv = screenUv * (resolution / DITHER_TEXTURE_SIZE);
+    float2 screenPixel = floor(screenUv * resolution);
+    float2 frameOffset = floor(frac(frameIndex * float2(0.754877666, 0.569840296)) * DITHER_TEXTURE_SIZE);
+    float2 ditherUv = (screenPixel + frameOffset + 0.5) / DITHER_TEXTURE_SIZE;
     float dither = ditherTexture.SampleLevel(ditherSampler, ditherUv, 0.0).r;
     return alpha - dither - 0.001 * (1.0 - ceil(alpha));
 }

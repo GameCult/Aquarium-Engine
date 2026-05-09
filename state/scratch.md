@@ -21,7 +21,9 @@ as dead scaffolding. D3D12 Grid line width now mirrors the D3D11 reference:
 periodic domains use `fwidth()` and pixel-width constants instead of world-space
 `ddx/ddy` footprint guesses. The stochastic mask now samples Aetheria's copied
 512x512 R8 blue-noise texture in screen space through D3D12 `t15/s1`, point and
-wrap sampled, without a frame-wide animation seed.
+wrap sampled. It shifts the blue-noise tile by a low-discrepancy pixel offset
+each frame so TAA sees temporal coverage variation without all pixels toggling
+together.
 
 ## Hot Context
 
