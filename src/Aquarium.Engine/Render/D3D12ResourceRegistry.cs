@@ -56,6 +56,11 @@ internal sealed class D3D12ResourceRegistry
         renderTargets.Remove(name);
     }
 
+    public void RemoveStructuredBuffer(string name)
+    {
+        structuredBuffers.Remove(name);
+    }
+
     public string Describe()
     {
         return $"resources={trackedResources.Count}, renderTargets={renderTargets.Count}, structuredBuffers={structuredBuffers.Count}";

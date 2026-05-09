@@ -10,14 +10,14 @@ DirectWrite debug UI through a narrow D3D11On12 overlay bridge. D3D11 remains
 selectable only as temporary reference ballast until visible D3D12 use survives
 the cut.
 
-Current renderer correction: the D3D12 scene shader no longer uses the 32
-medium travel slices to discover Grid/transparent surface candidates. It now
-intersects the ray with the 8x8x4 spatial froxel bounds, DDA-steps crossed
-froxels, tests solid/transparent candidates inside each cell's exact travel
-interval, chooses the nearest solid and nearest transparent event, and only then
-evaluates Grid line/contour filtering for the selected transparent hit. The
-medium atlas remains a view-space range-integrated cache for now; it no longer
-drives surface discovery.
+Current renderer correction: transparent Grid candidates now live in the
+view-froxel volume, not the coarse 8x8x4 world broadphase. CPU bootstrap code
+intersects each low-res 8x8 pixel tube with the Grid height slab, marks the
+overlapping 160x90x32-at-720p depth slices, and the scene shader looks up
+transparent candidate ids by `(lowX, lowY, slice)` before doing exact Grid
+height-sheet intersection for that slice interval. Solids still use the old
+world broadphase. Next steel-plate step is replacing the CPU-filled transparent
+candidate buffer with a GPU/raster binning pass.
 
 ## Hot Context
 

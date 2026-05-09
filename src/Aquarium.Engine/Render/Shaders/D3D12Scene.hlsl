@@ -48,6 +48,7 @@ static const float FIELD_ID_TRANSPARENT_EVENT = 4.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
+static const int MEDIUM_FROXEL_DOWNSCALE = 8;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
@@ -685,6 +686,34 @@ float mediumSliceEndTravel(int sliceIndex)
     return (((float)sliceIndex + 1.0) / (float)MEDIUM_FROXEL_SLICE_COUNT) * farDistance;
 }
 
+int viewFroxelIndexForUvSlice(float2 uv, int sliceIndex)
+{
+    int width = max((int)(resolution.x / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
+    int height = max((int)(resolution.y / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
+    int2 cell = clamp((int2)floor(uv * float2(width, height)), int2(0, 0), int2(width - 1, height - 1));
+    return cell.x + cell.y * width + sliceIndex * width * height;
+}
+
+TransparentEvent nearestViewFroxelTransparentEvent(float2 uv, float3 origin, float3 direction, int sliceIndex, uint consumedSurfaceMask)
+{
+    float intervalStart = mediumSliceStartTravel(sliceIndex);
+    float intervalEnd = min(mediumSliceEndTravel(sliceIndex), farDistance);
+    TransparentEvent nearest;
+    nearest.hit = false;
+    nearest.travel = intervalEnd;
+    nearest.color = 0.0;
+    nearest.alpha = 0.0;
+    nearest.coverage = 0.0;
+    nearest.surfaceId = -1;
+
+    int4 ids = transparentSurfaceIds[viewFroxelIndexForUvSlice(uv, sliceIndex)];
+    considerTransparentSurfaceEvent(origin, direction, ids.x, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    considerTransparentSurfaceEvent(origin, direction, ids.y, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    considerTransparentSurfaceEvent(origin, direction, ids.z, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    considerTransparentSurfaceEvent(origin, direction, ids.w, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
+    return nearest;
+}
+
 void integrateMediumSlice(
     float2 uv,
     int sliceIndex,
@@ -791,13 +820,6 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
     nearestSolid.normal = 0.0;
     nearestSolid.fieldId = 0.0;
     nearestSolid.primitiveId = -1;
-    TransparentEvent nearestTransparent;
-    nearestTransparent.hit = false;
-    nearestTransparent.travel = farDistance;
-    nearestTransparent.color = 0.0;
-    nearestTransparent.alpha = 0.0;
-    nearestTransparent.coverage = 0.0;
-    nearestTransparent.surfaceId = -1;
     FroxelDda dda = beginFroxelDda(origin, direction, froxelEnter, froxelExit);
     float cellStart = froxelEnter;
     [loop]
@@ -818,14 +840,25 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
             nearestSolid = cellSolid;
         }
 
-        TransparentEvent cellTransparent = nearestFroxelTransparentEvent(origin, direction, froxelIndex, 0u, cellStart, min(cellEnd, nearestTransparent.travel));
+        cellStart = cellEnd;
+        advanceFroxelDda(dda);
+    }
+
+    TransparentEvent nearestTransparent;
+    nearestTransparent.hit = false;
+    nearestTransparent.travel = farDistance;
+    nearestTransparent.color = 0.0;
+    nearestTransparent.alpha = 0.0;
+    nearestTransparent.coverage = 0.0;
+    nearestTransparent.surfaceId = -1;
+    [loop]
+    for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
+    {
+        TransparentEvent cellTransparent = nearestViewFroxelTransparentEvent(uv, origin, direction, sliceIndex, 0u);
         if (cellTransparent.hit && cellTransparent.travel < nearestTransparent.travel)
         {
             nearestTransparent = cellTransparent;
         }
-
-        cellStart = cellEnd;
-        advanceFroxelDda(dda);
     }
 
     if (nearestTransparent.hit)

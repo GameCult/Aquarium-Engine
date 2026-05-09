@@ -26,6 +26,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MediumFroxelDownscale = 8;
     private const int MediumFroxelAtlasColumns = 8;
     private const int MediumFroxelAtlasRows = 4;
+    private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
     private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
@@ -37,7 +38,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int FroxelBufferElementCount = FroxelCountX * FroxelCountY * FroxelCountZ * FroxelSlotCount;
     private const int FieldInstanceCount = PlanetCount + 5;
     private const int TransparentSurfaceCount = 1;
-    private const int TransparentSurfaceBufferElementCount = FroxelBufferElementCount;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -107,11 +107,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12StructuredBuffer froxelPrimitiveBuffer;
     private readonly D3D12StructuredBuffer fieldInstanceBuffer;
-    private readonly D3D12StructuredBuffer transparentSurfaceIndexBuffer;
+    private D3D12StructuredBuffer transparentSurfaceIndexBuffer;
     private readonly D3D12StructuredBuffer transparentSurfaceBuffer;
     private readonly Int4[] froxelPrimitiveIds = new Int4[FroxelBufferElementCount];
     private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
-    private readonly Int4[] transparentSurfaceIds = new Int4[TransparentSurfaceBufferElementCount];
+    private Int4[] transparentSurfaceIds = [];
     private readonly TransparentSurfaceGpu[] transparentSurfaces = new TransparentSurfaceGpu[TransparentSurfaceCount];
     private Viewport viewport;
     private RawRect scissorRect;
@@ -205,7 +205,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateBloomRenderTargets();
         froxelPrimitiveBuffer = new D3D12StructuredBuffer(device, FroxelBufferElementCount, Marshal.SizeOf<Int4>(), "Aquarium D3D12 Froxel Primitive Buffer");
         fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
-        transparentSurfaceIndexBuffer = new D3D12StructuredBuffer(device, TransparentSurfaceBufferElementCount, Marshal.SizeOf<Int4>(), "Aquarium D3D12 Transparent Surface Index Buffer");
+        transparentSurfaceIndexBuffer = CreateTransparentSurfaceIndexBuffer();
         transparentSurfaceBuffer = new D3D12StructuredBuffer(device, TransparentSurfaceCount, Marshal.SizeOf<TransparentSurfaceGpu>(), "Aquarium D3D12 Transparent Surface Buffer");
         resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
         resourceRegistry.Add("field-instance-buffer", fieldInstanceBuffer);
@@ -594,6 +594,20 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeHeight = mediumFroxelHeight * MediumFroxelAtlasRows;
     }
 
+    private int ViewFroxelCount => mediumFroxelWidth * mediumFroxelHeight * MediumFroxelSliceCount;
+
+    private int TransparentSurfaceBufferElementCount => ViewFroxelCount;
+
+    private D3D12StructuredBuffer CreateTransparentSurfaceIndexBuffer()
+    {
+        transparentSurfaceIds = new Int4[TransparentSurfaceBufferElementCount];
+        return new D3D12StructuredBuffer(
+            device,
+            TransparentSurfaceBufferElementCount,
+            Marshal.SizeOf<Int4>(),
+            "Aquarium D3D12 View-Froxel Transparent Surface Index Buffer");
+    }
+
     private D3D12PipelineSet CreatePipelineSet(D3D12ShaderPaths paths)
     {
         var gridHeightBase = CreateGridHeightBasePipelineState(paths.Grid);
@@ -650,6 +664,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("medium-event-target");
         resourceRegistry.RemoveRenderTarget("medium-volume-target");
         resourceRegistry.RemoveRenderTarget("grid-height-target");
+        resourceRegistry.RemoveStructuredBuffer("transparent-surface-index-buffer");
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
@@ -658,6 +673,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumTransportRenderTarget.Dispose();
         mediumVolumeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
+        transparentSurfaceIndexBuffer.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
             resourceRegistry.RemoveResource($"backbuffer-{index}");
@@ -679,6 +695,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
+        transparentSurfaceIndexBuffer = CreateTransparentSurfaceIndexBuffer();
+        resourceRegistry.Add("transparent-surface-index-buffer", transparentSurfaceIndexBuffer);
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
@@ -1342,55 +1360,151 @@ public sealed class D3D12Renderer : IAquariumRenderer
             frame.Grid.Center.X + frame.Grid.Radius,
             frame.Grid.Center.Y + frame.Grid.Radius,
             GridTransparentMaxZ);
-        var minCell = FroxelCellForPosition(frame, min);
-        var maxCell = FroxelCellForPosition(frame, max);
-        for (var z = minCell.Z; z <= maxCell.Z; z++)
+        var gridOrigin = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
+        var farDistance = Vector3.Distance(frame.CameraPosition, gridOrigin) + MathF.Max(frame.Grid.Radius, 0.001f);
+        for (var y = 0; y < mediumFroxelHeight; y++)
         {
-            for (var y = minCell.Y; y <= maxCell.Y; y++)
+            for (var x = 0; x < mediumFroxelWidth; x++)
             {
-                for (var x = minCell.X; x <= maxCell.X; x++)
+                if (!TraceViewFroxelSlab(
+                    frame.CameraPosition,
+                    frame.Grid.Center,
+                    x,
+                    y,
+                    min,
+                    max,
+                    out var enterTravel,
+                    out var exitTravel))
                 {
-                    AddTransparentSurfaceToFroxel(FroxelIndex(x, y, z), 0);
+                    continue;
+                }
+
+                enterTravel = Math.Clamp(enterTravel, 0.0f, farDistance);
+                exitTravel = Math.Clamp(exitTravel, 0.0f, farDistance);
+                if (exitTravel <= enterTravel)
+                {
+                    continue;
+                }
+
+                var firstSlice = ClampCell(enterTravel / farDistance, MediumFroxelSliceCount);
+                var lastSlice = ClampCell(exitTravel / farDistance, MediumFroxelSliceCount);
+                for (var slice = firstSlice; slice <= lastSlice; slice++)
+                {
+                    AddTransparentSurfaceToViewFroxel(ViewFroxelIndex(x, y, slice), 0);
                 }
             }
         }
     }
 
-    private void AddTransparentSurfaceToFroxel(int froxelIndex, int surfaceId)
+    private bool TraceViewFroxelSlab(
+        Vector3 cameraPosition,
+        Vector2 gridCenter,
+        int x,
+        int y,
+        Vector3 min,
+        Vector3 max,
+        out float enterTravel,
+        out float exitTravel)
     {
-        var baseElement = froxelIndex * FroxelSlotCount;
-        for (var slotGroup = 0; slotGroup < FroxelSlotCount; slotGroup++)
+        enterTravel = float.PositiveInfinity;
+        exitTravel = 0.0f;
+        Span<Vector2> samples =
+        [
+            new Vector2(x * MediumFroxelDownscale, y * MediumFroxelDownscale),
+            new Vector2((x + 1) * MediumFroxelDownscale, y * MediumFroxelDownscale),
+            new Vector2(x * MediumFroxelDownscale, (y + 1) * MediumFroxelDownscale),
+            new Vector2((x + 1) * MediumFroxelDownscale, (y + 1) * MediumFroxelDownscale),
+            new Vector2((x + 0.5f) * MediumFroxelDownscale, (y + 0.5f) * MediumFroxelDownscale),
+        ];
+
+        var hit = false;
+        foreach (var pixel in samples)
         {
-            var elementIndex = baseElement + slotGroup;
-            var element = transparentSurfaceIds[elementIndex];
-            if (element.X == surfaceId || element.Y == surfaceId || element.Z == surfaceId || element.W == surfaceId)
+            var clampedPixel = new Vector2(
+                Math.Clamp(pixel.X, 0.0f, MathF.Max(width - 1.0f, 0.0f)),
+                Math.Clamp(pixel.Y, 0.0f, MathF.Max(height - 1.0f, 0.0f)));
+            var direction = RayDirectionForPixel(clampedPixel, cameraPosition, gridCenter);
+            if (!TraceAabb(cameraPosition, direction, min, max, out var sampleEnter, out var sampleExit))
             {
-                return;
+                continue;
             }
 
-            if (element.X == -1)
-            {
-                transparentSurfaceIds[elementIndex] = element with { X = surfaceId };
-                return;
-            }
+            enterTravel = MathF.Min(enterTravel, sampleEnter);
+            exitTravel = MathF.Max(exitTravel, sampleExit);
+            hit = true;
+        }
 
-            if (element.Y == -1)
-            {
-                transparentSurfaceIds[elementIndex] = element with { Y = surfaceId };
-                return;
-            }
+        return hit;
+    }
 
-            if (element.Z == -1)
-            {
-                transparentSurfaceIds[elementIndex] = element with { Z = surfaceId };
-                return;
-            }
+    private Vector3 RayDirectionForPixel(Vector2 pixel, Vector3 cameraPosition, Vector2 gridCenter)
+    {
+        var ndc = ((pixel * 2.0f) - new Vector2(width, height)) / MathF.Max(height, 1.0f);
+        var target = new Vector3(gridCenter.X, gridCenter.Y, 0.0f);
+        var forward = Vector3.Normalize(target - cameraPosition);
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
+        var up = Vector3.Cross(right, forward);
+        return Vector3.Normalize((forward * 1.6f) + (right * ndc.X) + (up * ndc.Y));
+    }
 
-            if (element.W == -1)
-            {
-                transparentSurfaceIds[elementIndex] = element with { W = surfaceId };
-                return;
-            }
+    private static bool TraceAabb(Vector3 origin, Vector3 direction, Vector3 min, Vector3 max, out float enterTravel, out float exitTravel)
+    {
+        enterTravel = 0.0f;
+        exitTravel = float.PositiveInfinity;
+        return ClipAabbAxis(origin.X, direction.X, min.X, max.X, ref enterTravel, ref exitTravel)
+            && ClipAabbAxis(origin.Y, direction.Y, min.Y, max.Y, ref enterTravel, ref exitTravel)
+            && ClipAabbAxis(origin.Z, direction.Z, min.Z, max.Z, ref enterTravel, ref exitTravel)
+            && exitTravel > enterTravel;
+    }
+
+    private static bool ClipAabbAxis(float origin, float direction, float min, float max, ref float enterTravel, ref float exitTravel)
+    {
+        if (MathF.Abs(direction) < 0.000001f)
+        {
+            return origin >= min && origin <= max;
+        }
+
+        var t0 = (min - origin) / direction;
+        var t1 = (max - origin) / direction;
+        enterTravel = MathF.Max(enterTravel, MathF.Min(t0, t1));
+        exitTravel = MathF.Min(exitTravel, MathF.Max(t0, t1));
+        return exitTravel >= enterTravel;
+    }
+
+    private int ViewFroxelIndex(int x, int y, int slice)
+    {
+        return x + y * mediumFroxelWidth + slice * mediumFroxelWidth * mediumFroxelHeight;
+    }
+
+    private void AddTransparentSurfaceToViewFroxel(int viewFroxelIndex, int surfaceId)
+    {
+        var element = transparentSurfaceIds[viewFroxelIndex];
+        if (element.X == surfaceId || element.Y == surfaceId || element.Z == surfaceId || element.W == surfaceId)
+        {
+            return;
+        }
+
+        if (element.X == -1)
+        {
+            transparentSurfaceIds[viewFroxelIndex] = element with { X = surfaceId };
+            return;
+        }
+
+        if (element.Y == -1)
+        {
+            transparentSurfaceIds[viewFroxelIndex] = element with { Y = surfaceId };
+            return;
+        }
+
+        if (element.Z == -1)
+        {
+            transparentSurfaceIds[viewFroxelIndex] = element with { Z = surfaceId };
+            return;
+        }
+
+        if (element.W == -1)
+        {
+            transparentSurfaceIds[viewFroxelIndex] = element with { W = surfaceId };
         }
     }
 
@@ -1791,7 +1905,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         var commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
         commandAllocator.Name = $"Aquarium D3D12 Frame {index} Command Allocator";
-        var uploadRing = new D3D12UploadRing(device, 64 * 1024, $"Aquarium D3D12 Frame {index} Upload Ring");
+        var uploadRing = new D3D12UploadRing(device, 16 * 1024 * 1024, $"Aquarium D3D12 Frame {index} Upload Ring");
         var transientDescriptors = new D3D12DescriptorArena(
             device,
             DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
