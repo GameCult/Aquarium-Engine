@@ -42,8 +42,13 @@ static const int VIEW_FROXEL_PRIMITIVE_SLOT_COUNT = 2;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
-static const float GRID_MINOR_CELL = 2.0;
-static const float GRID_MAJOR_CELL = 10.0;
+static const float GRID_LINE_WORLD_CELL = 2.0;
+static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
+static const float GRID_LINE_PIXEL_WIDTH = 0.46;
+static const float GRID_MAJOR_LINE_PIXEL_WIDTH = 0.82;
+static const float GRID_LINE_PIXEL_FADE = 0.95;
+static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
+static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.24;
 
@@ -98,8 +103,7 @@ float hash21(float2 p)
 
 float stochasticTransparency(float2 screenUv, float alpha)
 {
-    float frameSeed = frac(frameIndex * 0.754877666);
-    float dither = frac(hash21(screenUv * resolution + frameIndex.xx * float2(17.0, 43.0)) + frameSeed);
+    float dither = hash21(floor(screenUv * resolution));
     return alpha - dither - 0.001 * (1.0 - ceil(alpha));
 }
 
@@ -172,24 +176,39 @@ float3 terrainNormal(float3 p)
     return normalize(float3(-gradient.x, -gradient.y, 1.0));
 }
 
-float lineDistance(float2 p, float cell)
+float periodicLineMask(float coordinate, float pixelWidth, float pixelFade)
 {
-    float2 centered = abs(frac(p / cell + 0.5) - 0.5) * cell;
-    return min(centered.x, centered.y);
+    float distanceToLine = min(frac(coordinate), 1.0 - frac(coordinate));
+    float coordinatePerPixel = max(fwidth(coordinate), 0.00001);
+    float distancePixels = distanceToLine / coordinatePerPixel;
+    return 1.0 - smoothstep(pixelWidth, pixelWidth + pixelFade, distancePixels);
 }
 
-float lineMaskFromDistance(float distanceValue, float width, float fade)
+float gridLine(float2 p)
 {
-    return 1.0 - smoothstep(width, max(width + fade, width + 0.0001), distanceValue);
+    float2 minorDomain = p / GRID_LINE_WORLD_CELL;
+    float2 majorDomain = p / GRID_MAJOR_LINE_WORLD_CELL;
+
+    float minor = max(
+        periodicLineMask(minorDomain.x, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
+        periodicLineMask(minorDomain.y, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
+    float major = max(
+        periodicLineMask(majorDomain.x, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
+        periodicLineMask(majorDomain.y, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
+
+    return saturate(minor * 0.58 + major);
 }
 
-float isolineMask(float height, float width)
+float isolineMask(float height)
 {
-    float wrapped = abs(frac(height / TERRAIN_ISOLINE_SPACING + 0.5) - 0.5) * TERRAIN_ISOLINE_SPACING;
-    return lineMaskFromDistance(wrapped, width, width * 1.8);
+    float contourDomain = height / TERRAIN_ISOLINE_SPACING;
+    float contour = periodicLineMask(contourDomain, TERRAIN_ISOLINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
+    float contourDerivative = max(fwidth(contourDomain), 0.00001);
+    float slopeFade = smoothstep(0.025, 0.25, contourDerivative);
+    return contour * slopeFade;
 }
 
-float fieldLineMask(float2 gradient, float width)
+float fieldLineMask(float2 gradient)
 {
     float slope = length(gradient);
     if (slope < 0.0001)
@@ -198,8 +217,7 @@ float fieldLineMask(float2 gradient, float width)
     }
 
     float angleDomain = (atan2(gradient.y, gradient.x) / PI + 1.0) * 6.0;
-    float wrapped = abs(frac(angleDomain + 0.5) - 0.5);
-    float angleLine = lineMaskFromDistance(wrapped, width, width * 1.6);
+    float angleLine = periodicLineMask(angleDomain, TERRAIN_FIELD_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
     float slopeStrength = smoothstep(0.015, 0.16, slope);
     return angleLine * slopeStrength;
 }
@@ -350,14 +368,11 @@ float3 gridEventColor(float3 p, out float alpha)
 {
     float height = terrainHeight(p.xy);
     float2 gradient = terrainGradient(p.xy);
-    float2 footprint = max(abs(ddx(p.xy)), abs(ddy(p.xy)));
-    float pixelWidth = max(max(footprint.x, footprint.y), 0.006);
-    float minor = lineMaskFromDistance(lineDistance(p.xy, GRID_MINOR_CELL), pixelWidth * 0.56, pixelWidth * 1.35);
-    float major = lineMaskFromDistance(lineDistance(p.xy, GRID_MAJOR_CELL), pixelWidth * 0.88, pixelWidth * 1.60);
-    float contour = isolineMask(height, max(pixelWidth * 0.52, 0.010)) * smoothstep(0.025, 0.25, length(gradient));
-    float fieldLine = fieldLineMask(gradient, max(pixelWidth * 0.90, 0.016));
-    float support = saturate(minor * 0.38 + major * 0.92 + contour * 0.28 + fieldLine * 0.18);
-    float3 color = GRID_COLOR * (minor * 0.30 + major * 0.74);
+    float gridAmount = gridLine(p.xy);
+    float contour = isolineMask(height);
+    float fieldLine = fieldLineMask(gradient);
+    float support = saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16);
+    float3 color = GRID_COLOR * gridAmount * 0.90;
     color += float3(0.98, 1.0, 0.78) * contour * 0.16;
     color += float3(0.36, 0.92, 1.0) * fieldLine * 0.12;
     alpha = saturate(support * GRID_ALPHA_SCALE);

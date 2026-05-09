@@ -17,7 +17,11 @@ identity/travel/normal/coverage for temporal support, and relies on TAA to
 accumulate coverage noise. Solid spheres still use view-froxel projected bounds
 for empty-space skipping; transparent surface candidate buffers, descriptors,
 root parameters, shader structs, and event traversal were cut rather than left
-as dead scaffolding.
+as dead scaffolding. D3D12 Grid line width now mirrors the D3D11 reference:
+periodic domains use `fwidth()` and pixel-width constants instead of world-space
+`ddx/ddy` footprint guesses. The temporary D3D12 stochastic mask is screen-pixel
+stable; next polish pass should bind the Aetheria blue-noise texture like D3D11
+instead of keeping a hash dither.
 
 ## Hot Context
 
