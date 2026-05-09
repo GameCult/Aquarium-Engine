@@ -251,8 +251,7 @@ float4 D3D12ScenePS(VertexOut input) : SV_Target0
     float3 inScattering;
     float mediumTravel = travel <= farDistance ? travel : farDistance;
     integrateMedium(input.uv, mediumTravel, densityMean, transmittance, inScattering);
-    float mediumBlend = saturate(mediumCompositeIntensity);
-    color = color * lerp(1.0, transmittance, mediumBlend) + inScattering * mediumBlend;
+    color = color * transmittance + inScattering;
 
     if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
     {

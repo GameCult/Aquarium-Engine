@@ -36,6 +36,10 @@ has feature parity.
   the D3D12 frame graph. Grid line transparency is injected as a thin medium
   contribution in the froxel atlas instead of being drawn as an alpha surface or
   used as a scene-depth terminator.
+- Transparent Grid contribution is now represented by a transparent-surface
+  table plus froxel-binned surface ids. The medium pass discovers it through the
+  froxel bin, so future particles and billboard-like surfaces can use the same
+  class of integration instead of gaining special alpha handling.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

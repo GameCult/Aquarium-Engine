@@ -32,17 +32,31 @@ struct FieldInstance
     float4 mediumTerms;
 };
 
+struct TransparentSurface
+{
+    float4 centerRadius;
+    float4 kindDensity;
+    float4 lineParams;
+    float4 colorScatter;
+};
+
 StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+StructuredBuffer<int4> transparentSurfaceIds : register(t15);
+StructuredBuffer<TransparentSurface> transparentSurfaces : register(t16);
 Texture2D<float4> gridHeightTexture : register(t0);
 SamplerState gridSampler : register(s0);
 
 static const int FIELD_INSTANCE_COUNT = 10;
 static const int FIELD_FLAG_CLOUD = 2;
+static const int FROXEL_COUNT_X = 8;
+static const int FROXEL_COUNT_Y = 8;
+static const int FROXEL_COUNT_Z = 4;
+static const int FROXEL_SLOT_COUNT = 2;
+static const float FROXEL_MIN_Z = -2.0;
+static const float FROXEL_MAX_Z = 6.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
-static const float GRID_LINE_WORLD_CELL = 2.0;
-static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
 
 struct VertexOut
 {
@@ -217,22 +231,77 @@ float lineDistance(float2 p, float cell)
     return min(centered.x, centered.y);
 }
 
-float transparentGridDensity(float3 p, out float3 scattering)
+int clampCell(float normalized, int count)
+{
+    return clamp((int)floor(normalized * (float)count), 0, count - 1);
+}
+
+int froxelIndexForPosition(float3 p)
+{
+    float2 local = gridLocal(p.xy);
+    float localZ = (p.z - FROXEL_MIN_Z) / (FROXEL_MAX_Z - FROXEL_MIN_Z);
+    if (abs(local.x) > 1.0 || abs(local.y) > 1.0 || localZ < 0.0 || localZ > 1.0)
+    {
+        return -1;
+    }
+
+    int x = clampCell(local.x * 0.5 + 0.5, FROXEL_COUNT_X);
+    int y = clampCell(local.y * 0.5 + 0.5, FROXEL_COUNT_Y);
+    int z = clampCell(localZ, FROXEL_COUNT_Z);
+    return x + y * FROXEL_COUNT_X + z * FROXEL_COUNT_X * FROXEL_COUNT_Y;
+}
+
+float transparentSurfaceDensity(float3 p, TransparentSurface surface, out float3 scattering)
 {
     scattering = 0.0;
-    float radiusMask = 1.0 - smoothstep(0.92, 1.0, length(gridLocal(p.xy)));
+    float radius = max(surface.centerRadius.w, 0.001);
+    float2 local = (p.xy - surface.centerRadius.xy) / radius;
+    float radiusMask = 1.0 - smoothstep(0.92, 1.0, length(local));
     if (radiusMask <= 0.0)
     {
         return 0.0;
     }
 
     float height = terrainHeight(p.xy);
-    float sheet = 1.0 - smoothstep(0.018, 0.075, abs(p.z - height));
-    float minor = 1.0 - smoothstep(0.016, 0.055, lineDistance(p.xy, GRID_LINE_WORLD_CELL));
-    float major = 1.0 - smoothstep(0.030, 0.090, lineDistance(p.xy, GRID_MAJOR_LINE_WORLD_CELL));
+    float sheet = 1.0 - smoothstep(0.018, max(surface.kindDensity.w, 0.02), abs(p.z - height));
+    float minor = 1.0 - smoothstep(0.016, max(surface.lineParams.z, 0.016), lineDistance(p.xy, surface.lineParams.x));
+    float major = 1.0 - smoothstep(0.030, max(surface.lineParams.w, 0.030), lineDistance(p.xy, surface.lineParams.y));
     float density = sheet * radiusMask * saturate(minor * 0.42 + major * 0.92);
-    scattering = float3(0.30, 0.90, 0.82) * density * 0.24;
-    return density * 0.42;
+    scattering = surface.colorScatter.rgb * density * surface.colorScatter.w;
+    return density * surface.kindDensity.y;
+}
+
+float registeredTransparentSurfaceDensity(float3 p, out float3 scattering)
+{
+    scattering = 0.0;
+    float density = 0.0;
+    int froxelIndex = froxelIndexForPosition(p);
+    if (froxelIndex < 0)
+    {
+        return 0.0;
+    }
+
+    [unroll]
+    for (int slotGroup = 0; slotGroup < FROXEL_SLOT_COUNT; slotGroup++)
+    {
+        int4 ids = transparentSurfaceIds[froxelIndex * FROXEL_SLOT_COUNT + slotGroup];
+        [unroll]
+        for (int lane = 0; lane < 4; lane++)
+        {
+            int id = lane == 0 ? ids.x : lane == 1 ? ids.y : lane == 2 ? ids.z : ids.w;
+            if (id < 0)
+            {
+                continue;
+            }
+
+            float3 surfaceScattering;
+            float surfaceDensity = transparentSurfaceDensity(p, transparentSurfaces[id], surfaceScattering);
+            density += surfaceDensity;
+            scattering += surfaceScattering;
+        }
+    }
+
+    return saturate(density);
 }
 
 float mediumSliceTravel(int sliceIndex)
@@ -256,8 +325,11 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     float3 p = cameraPosition + rayDirection * travel;
     float3 scattering;
     float density = registeredMediumDensity(p, scattering);
+    float mediumBlend = saturate(mediumCompositeIntensity);
+    density *= mediumBlend;
+    scattering *= mediumBlend;
     float3 gridScattering;
-    float gridDensity = transparentGridDensity(p, gridScattering);
+    float gridDensity = registeredTransparentSurfaceDensity(p, gridScattering);
     density = saturate(density + gridDensity);
     scattering += gridScattering;
     float extinction = density * 0.16;

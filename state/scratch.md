@@ -293,6 +293,9 @@ can start porting real passes while keeping D3D11 as the visual reference.
 - D3D12 first scene pass: final mode now renders a D3D12 scene instead of smoke.
   Self, planets, and medium transport are visible through the D3D12 frame graph.
   Grid line transparency is injected into the medium froxel atlas as a thin
-  participating layer and is not traced as a surface terminator. This honors the
-  transparency lesson, though the general transparent-surface bin table is still
-  future work.
+  participating layer and is not traced as a surface terminator.
+- D3D12 transparent-surface bins: Grid line transparency now flows through a
+  transparent surface table plus froxel-binned transparent surface ids. The
+  medium shader discovers the Grid layer through the froxel bin, not through a
+  hardcoded alpha/composite side path. This is the first implementation of the
+  particle/billboard transparency contract.

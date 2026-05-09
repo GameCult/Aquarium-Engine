@@ -49,6 +49,11 @@ resource graph beyond smoke-pass scaffolding.
   contribution is sampled into the medium atlas as a thin participating layer,
   so it is integrated with volumetrics rather than alpha-blended or used to
   occlude the ray.
+- The transparent Grid layer is no longer hardcoded as a medium-special case:
+  D3D12 now uploads a transparent-surface table and a froxel-binned transparent
+  surface id buffer, then the medium shader resolves transparent contributions
+  through that bin. This is the pipeline shape particles and billboards should
+  grow into.
 - Renderer calls receive current window dimensions, and the D3D12 backend can
   recreate swapchain buffers plus dependent smoke resources on resize.
 - Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds
@@ -77,9 +82,8 @@ resource graph beyond smoke-pass scaffolding.
   post-process graph needs it; otherwise present from the final render target
   path with no ornamental copy.
 - The D3D12 scene pass is still a first parity slice: no full temporal resolve,
-  bloom pyramid, full terrain line shader, or transparent-surface bin table yet.
-  The transparency contract is correct; the implementation still needs the
-  general binned transparent surface representation.
+  bloom pyramid, or full terrain line shader yet. The transparent-surface bin
+  exists but currently has only the Grid layer as its first registered surface.
 - D3D11 and D3D12 field table builders are temporarily duplicated by design.
   D3D11 is reference-only and will be removed after migration; do not pay DRY
   tax merely to preserve it.

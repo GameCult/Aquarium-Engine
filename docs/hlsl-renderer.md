@@ -88,9 +88,9 @@ renders a packed frustum froxel atlas into diagnostic and transport render
 targets from those field instances, and mode `11` displays the froxel density
 target. D3D12 final mode now renders a first scene pass for Self, planets, and
 medium transport. Grid line transparency contributes to the froxel medium as a
-thin participating layer, not as an alpha-blended surface or scene-depth
-terminator. The full temporal resolve, bloom pyramid, and full Grid line shader
-still need to move.
+thin binned transparent-surface layer, not as an alpha-blended surface or
+scene-depth terminator. The full temporal resolve, bloom pyramid, and full Grid
+line shader still need to move.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches
