@@ -17,8 +17,10 @@ internal sealed class DebugUi
     private const float RowGap = 6.0f;
     private const float SectionHeight = 22.0f;
     private const float LabelWidth = 168.0f;
-    private const float TrackWidth = 116.0f;
+    private const float TrackWidth = 104.0f;
     private const float TrackHeight = 5.0f;
+    private const float ValueTrackGap = 12.0f;
+    private const float CloseButtonSize = 20.0f;
 
     private readonly List<DebugUiControl> controls = [];
     private int? activeSliderId;
@@ -80,6 +82,12 @@ internal sealed class DebugUi
             return;
         }
 
+        if (Contains(CloseButtonBounds(), mouse))
+        {
+            IsVisible = false;
+            return;
+        }
+
         for (var index = controls.Count - 1; index >= 0; index--)
         {
             var control = controls[index];
@@ -129,21 +137,22 @@ internal sealed class DebugUi
         target.DrawText(
             Title,
             titleFormat,
-            RectFromEdges(panelBounds.Left + 12.0f, panelBounds.Top + 8.0f, panelBounds.Right - 12.0f, panelBounds.Top + HeaderHeight - 4.0f),
+            RectFromEdges(panelBounds.Left + 12.0f, panelBounds.Top + 8.0f, panelBounds.Right - 42.0f, panelBounds.Top + HeaderHeight - 4.0f),
             primaryBrush,
+            DrawTextOptions.Clip);
+
+        var close = CloseButtonBounds();
+        target.DrawText(
+            "x",
+            titleFormat,
+            close,
+            quietBrush,
             DrawTextOptions.Clip);
 
         foreach (var control in controls)
         {
             control.Draw(target, smallFormat, rowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush, dimAccentBrush);
         }
-
-        target.DrawText(
-            "F2 hide",
-            smallFormat,
-            RectFromEdges(panelBounds.Left + 12.0f, panelBounds.Bottom - 26.0f, panelBounds.Right - 12.0f, panelBounds.Bottom - 8.0f),
-            quietBrush,
-            DrawTextOptions.Clip);
     }
 
     private void Layout()
@@ -157,6 +166,15 @@ internal sealed class DebugUi
         }
 
         panelBounds = RectFromEdges(PanelLeft, PanelTop, PanelLeft + PanelWidth, y + 30.0f);
+    }
+
+    private Rect CloseButtonBounds()
+    {
+        return RectFromEdges(
+            panelBounds.Right - CloseButtonSize - 10.0f,
+            panelBounds.Top + 11.0f,
+            panelBounds.Right - 10.0f,
+            panelBounds.Top + 11.0f + CloseButtonSize);
     }
 
     private static bool Contains(Rect bounds, Vector2 point)
@@ -250,12 +268,12 @@ internal sealed class DebugUi
 
         protected Rect LabelBounds()
         {
-            return RectFromEdges(Bounds.Left + 8.0f, Bounds.Top + 6.0f, Bounds.Left + LabelWidth, Bounds.Bottom);
+            return RectFromEdges(Bounds.Left + 8.0f, Bounds.Top, Bounds.Left + LabelWidth, Bounds.Bottom);
         }
 
         protected Rect ValueBounds()
         {
-            return RectFromEdges(Bounds.Left + LabelWidth + 10.0f, Bounds.Top + 6.0f, Bounds.Right - TrackWidth - 20.0f, Bounds.Bottom);
+            return RectFromEdges(Bounds.Left + LabelWidth + 10.0f, Bounds.Top, Bounds.Right - TrackWidth - ValueTrackGap, Bounds.Bottom);
         }
     }
 

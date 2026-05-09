@@ -331,7 +331,7 @@ public sealed class D3D11Renderer : IDisposable
 
     private DebugUi CreateDebugUi()
     {
-        return new DebugUi("Aetheric Field Tester")
+        return new DebugUi("Aquarium Debug")
             .Panel(panel => panel
                 .Section("View")
                 .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, 0, 8), 0, 8)
@@ -339,9 +339,7 @@ public sealed class D3D11Renderer : IDisposable
                 .Section("HDR")
                 .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, 0.02f, 1.2f), 0.02f, 1.2f, "0.###")
                 .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, 0.0f, 0.24f), 0.0f, 0.24f, "0.###")
-                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, 0.0f, 0.08f), 0.0f, 0.08f, "0.###")
-                .Section("Overlay")
-                .Toggle("Panel Visible", () => DebugUiVisible, value => DebugUiVisible = value));
+                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, 0.0f, 0.08f), 0.0f, 0.08f, "0.###"));
     }
 
     public void Dispose()

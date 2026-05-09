@@ -142,6 +142,7 @@ internal sealed class DirectWriteOverlay : IDisposable
             size,
             "en-us");
         format.WordWrapping = WordWrapping.NoWrap;
+        format.ParagraphAlignment = ParagraphAlignment.Center;
         return format;
     }
 
