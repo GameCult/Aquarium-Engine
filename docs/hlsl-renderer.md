@@ -226,10 +226,11 @@ startup mode can still be set with `--render-debug` or
 `AQUARIUM_RENDER_DEBUG_MODE`.
 
 Fog work has started behind diagnostics rather than final-frame haze. The host
-packs stable field instances into a structured buffer shared with HLSL. Modes
-`9` and `10` show registered medium density and transmittance from that field
-contract; the signals are deliberately debug-only until the explicit low-res
-volume pass and composition path exist.
+packs stable field instances into a structured buffer shared with HLSL. A
+half-resolution medium pass writes registered density, transmittance, and source
+lighting into a separate texture before the scene pass. Modes `9`, `10`, and
+`11` show medium density, transmittance, and source respectively. The signals
+are deliberately debug-only until the explicit volume composition path exists.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:

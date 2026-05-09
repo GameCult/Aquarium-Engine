@@ -135,6 +135,10 @@ prototype integrated along the camera ray before surface composition.
   for registered medium density/transmittance diagnostics. Debug mode 9 shows
   medium density, mode 10 shows transmittance. Final scene composition is still
   untouched until the explicit low-res volume pass exists.
+- Fog-land Gate 3 foothold: registered medium integration moved out of the scene
+  shader into a half-resolution medium pass. The texture stores density,
+  transmittance, and source diagnostics. Mode 11 shows medium source. Final scene
+  color remains unchanged; composition is still the next machine part.
 - Debug UI control grammar now includes named option rows. Render Debug uses an
   option/dropdown selector instead of a numeric slider so the expanding debug
   mode list remains legible.

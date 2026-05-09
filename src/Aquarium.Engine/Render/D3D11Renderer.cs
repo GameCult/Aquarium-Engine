@@ -22,6 +22,7 @@ public sealed class D3D11Renderer : IDisposable
     private const int GridHeightTextureSize = 128;
     private const int DitherTextureSize = 512;
     private const int BloomLevelCount = 3;
+    private const int MediumVolumeDownscale = 2;
     private const int FroxelCountX = 8;
     private const int FroxelCountY = 8;
     private const int FroxelCountZ = 4;
@@ -42,6 +43,7 @@ public sealed class D3D11Renderer : IDisposable
         new(8, "Exposed Luminance"),
         new(9, "Medium Density"),
         new(10, "Medium Transmittance"),
+        new(11, "Medium Source"),
     ];
 
     private const float SunRadius = 1.12f;
@@ -68,6 +70,9 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Texture2D sceneControlTexture;
     private readonly ID3D11RenderTargetView sceneControlRenderTargetView;
     private readonly ID3D11ShaderResourceView sceneControlShaderResourceView;
+    private readonly ID3D11Texture2D mediumVolumeTexture;
+    private readonly ID3D11RenderTargetView mediumVolumeRenderTargetView;
+    private readonly ID3D11ShaderResourceView mediumVolumeShaderResourceView;
     private readonly ID3D11Texture2D[] bloomTextures = new ID3D11Texture2D[BloomLevelCount];
     private readonly ID3D11RenderTargetView[] bloomRenderTargetViews = new ID3D11RenderTargetView[BloomLevelCount];
     private readonly ID3D11ShaderResourceView[] bloomShaderResourceViews = new ID3D11ShaderResourceView[BloomLevelCount];
@@ -103,11 +108,14 @@ public sealed class D3D11Renderer : IDisposable
     private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
     private readonly int width;
     private readonly int height;
+    private readonly int mediumVolumeWidth;
+    private readonly int mediumVolumeHeight;
     private readonly string shaderPath;
     private readonly Stopwatch shaderReloadClock = Stopwatch.StartNew();
     private ID3D11VertexShader vertexShader;
     private ID3D11PixelShader gridHeightPixelShader;
     private ID3D11PixelShader scenePixelShader;
+    private ID3D11PixelShader mediumVolumePixelShader;
     private ID3D11PixelShader bloomPrefilterPixelShader;
     private ID3D11PixelShader bloomDownsamplePixelShader;
     private ID3D11PixelShader bloomBlurHorizontalPixelShader;
@@ -126,6 +134,8 @@ public sealed class D3D11Renderer : IDisposable
     {
         this.width = width;
         this.height = height;
+        mediumVolumeWidth = Math.Max(1, width / MediumVolumeDownscale);
+        mediumVolumeHeight = Math.Max(1, height / MediumVolumeDownscale);
         ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
         startupProgress?.Invoke("Creating D3D11 device and swapchain");
@@ -171,6 +181,7 @@ public sealed class D3D11Renderer : IDisposable
         vertexShader = initialShaders.VertexShader;
         gridHeightPixelShader = initialShaders.GridHeightPixelShader;
         scenePixelShader = initialShaders.AquariumScenePixelShader;
+        mediumVolumePixelShader = initialShaders.MediumVolumePixelShader;
         bloomPrefilterPixelShader = initialShaders.BloomPrefilterPixelShader;
         bloomDownsamplePixelShader = initialShaders.BloomDownsamplePixelShader;
         bloomBlurHorizontalPixelShader = initialShaders.BloomBlurHorizontalPixelShader;
@@ -191,6 +202,9 @@ public sealed class D3D11Renderer : IDisposable
         sceneControlTexture = CreateHdrTexture(width, height);
         sceneControlRenderTargetView = device.CreateRenderTargetView(sceneControlTexture);
         sceneControlShaderResourceView = device.CreateShaderResourceView(sceneControlTexture);
+        mediumVolumeTexture = CreateHdrTexture(mediumVolumeWidth, mediumVolumeHeight);
+        mediumVolumeRenderTargetView = device.CreateRenderTargetView(mediumVolumeTexture);
+        mediumVolumeShaderResourceView = device.CreateShaderResourceView(mediumVolumeTexture);
         for (var level = 0; level < BloomLevelCount; level++)
         {
             var divisor = 1 << (level + 1);
@@ -320,6 +334,7 @@ public sealed class D3D11Renderer : IDisposable
         context.UpdateSubresource(froxelPrimitiveIds, froxelPrimitiveBuffer);
         context.UpdateSubresource(fieldInstances, fieldInstanceBuffer);
         RenderGridHeight();
+        RenderMediumVolume();
         RenderScene();
         RenderBloom();
         ResolveTemporal();
@@ -430,6 +445,9 @@ public sealed class D3D11Renderer : IDisposable
         sceneControlShaderResourceView.Dispose();
         sceneControlRenderTargetView.Dispose();
         sceneControlTexture.Dispose();
+        mediumVolumeShaderResourceView.Dispose();
+        mediumVolumeRenderTargetView.Dispose();
+        mediumVolumeTexture.Dispose();
         sceneMetadataShaderResourceView.Dispose();
         sceneMetadataRenderTargetView.Dispose();
         sceneMetadataTexture.Dispose();
@@ -438,6 +456,7 @@ public sealed class D3D11Renderer : IDisposable
         gridHeightTexture.Dispose();
         resolvePixelShader.Dispose();
         scenePixelShader.Dispose();
+        mediumVolumePixelShader.Dispose();
         bloomBlurVerticalPixelShader.Dispose();
         bloomBlurHorizontalPixelShader.Dispose();
         bloomDownsamplePixelShader.Dispose();
@@ -524,6 +543,8 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
         context.PSUnsetShaderResource(12);
+        context.PSUnsetShaderResource(13);
+        context.PSUnsetShaderResource(13);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -532,6 +553,23 @@ public sealed class D3D11Renderer : IDisposable
         context.VSSetShader(vertexShader);
         context.PSSetShader(gridHeightPixelShader);
         context.PSSetConstantBuffer(0, frameConstantBuffer);
+        context.Draw(3, 0);
+    }
+
+    private void RenderMediumVolume()
+    {
+        context.PSUnsetShaderResource(12);
+        context.PSUnsetShaderResource(13);
+        context.OMSetRenderTargets(mediumVolumeRenderTargetView);
+        context.RSSetViewport(0.0f, 0.0f, mediumVolumeWidth, mediumVolumeHeight, 0.0f, 1.0f);
+        context.ClearRenderTargetView(mediumVolumeRenderTargetView, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
+        context.IASetInputLayout(null);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.VSSetShader(vertexShader);
+        context.PSSetShader(mediumVolumePixelShader);
+        context.PSSetConstantBuffer(0, frameConstantBuffer);
+        context.PSSetShaderResource(12, fieldInstanceShaderResourceView);
+        context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }
 
@@ -546,6 +584,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(9);
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
+        context.PSUnsetShaderResource(13);
         context.OMSetRenderTargets(new[] { sceneRenderTargetView, sceneMetadataRenderTargetView, sceneControlRenderTargetView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(sceneRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -560,6 +599,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(1, froxelPrimitiveShaderResourceView);
         context.PSSetShaderResource(2, ditherShaderResourceView);
         context.PSSetShaderResource(12, fieldInstanceShaderResourceView);
+        context.PSSetShaderResource(13, mediumVolumeShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.PSSetSampler(1, ditherSampler);
         context.Draw(3, 0);
@@ -633,6 +673,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(9);
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
+        context.PSUnsetShaderResource(13);
         context.OMSetRenderTargets(new[] { renderTargetView, historyWriteView, historyMetadataWriteView, historyControlWriteView });
         context.RSSetViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         context.ClearRenderTargetView(renderTargetView, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -650,6 +691,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(9, bloomShaderResourceViews[0]);
         context.PSSetShaderResource(10, bloomShaderResourceViews[1]);
         context.PSSetShaderResource(11, bloomShaderResourceViews[2]);
+        context.PSSetShaderResource(13, mediumVolumeShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.Draw(3, 0);
     }
@@ -691,6 +733,7 @@ public sealed class D3D11Renderer : IDisposable
             var oldVertexShader = vertexShader;
             var oldGridHeightPixelShader = gridHeightPixelShader;
             var oldScenePixelShader = scenePixelShader;
+            var oldMediumVolumePixelShader = mediumVolumePixelShader;
             var oldBloomPrefilterPixelShader = bloomPrefilterPixelShader;
             var oldBloomDownsamplePixelShader = bloomDownsamplePixelShader;
             var oldBloomBlurHorizontalPixelShader = bloomBlurHorizontalPixelShader;
@@ -700,6 +743,7 @@ public sealed class D3D11Renderer : IDisposable
             vertexShader = replacement.VertexShader;
             gridHeightPixelShader = replacement.GridHeightPixelShader;
             scenePixelShader = replacement.AquariumScenePixelShader;
+            mediumVolumePixelShader = replacement.MediumVolumePixelShader;
             bloomPrefilterPixelShader = replacement.BloomPrefilterPixelShader;
             bloomDownsamplePixelShader = replacement.BloomDownsamplePixelShader;
             bloomBlurHorizontalPixelShader = replacement.BloomBlurHorizontalPixelShader;
@@ -711,6 +755,7 @@ public sealed class D3D11Renderer : IDisposable
             oldBloomBlurHorizontalPixelShader.Dispose();
             oldBloomDownsamplePixelShader.Dispose();
             oldBloomPrefilterPixelShader.Dispose();
+            oldMediumVolumePixelShader.Dispose();
             oldScenePixelShader.Dispose();
             oldGridHeightPixelShader.Dispose();
             oldVertexShader.Dispose();
@@ -961,6 +1006,7 @@ public sealed class D3D11Renderer : IDisposable
         var vertexShaderBytecode = CompileShader(path, "FullscreenTriangleVS", "vs_5_0");
         var gridHeightShaderBytecode = CompileShader(path, "GridHeightPS", "ps_5_0");
         var sceneShaderBytecode = CompileShader(path, "AquariumScenePS", "ps_5_0");
+        var mediumVolumeShaderBytecode = CompileShader(path, "MediumVolumePS", "ps_5_0");
         var bloomPrefilterShaderBytecode = CompileShader(path, "BloomPrefilterPS", "ps_5_0");
         var bloomDownsampleShaderBytecode = CompileShader(path, "BloomDownsamplePS", "ps_5_0");
         var bloomBlurHorizontalShaderBytecode = CompileShader(path, "BloomBlurHorizontalPS", "ps_5_0");
@@ -971,6 +1017,7 @@ public sealed class D3D11Renderer : IDisposable
             device.CreateVertexShader(vertexShaderBytecode.Span, null),
             device.CreatePixelShader(gridHeightShaderBytecode.Span, null),
             device.CreatePixelShader(sceneShaderBytecode.Span, null),
+            device.CreatePixelShader(mediumVolumeShaderBytecode.Span, null),
             device.CreatePixelShader(bloomPrefilterShaderBytecode.Span, null),
             device.CreatePixelShader(bloomDownsampleShaderBytecode.Span, null),
             device.CreatePixelShader(bloomBlurHorizontalShaderBytecode.Span, null),
@@ -1066,6 +1113,7 @@ public sealed class D3D11Renderer : IDisposable
         ID3D11VertexShader VertexShader,
         ID3D11PixelShader GridHeightPixelShader,
         ID3D11PixelShader AquariumScenePixelShader,
+        ID3D11PixelShader MediumVolumePixelShader,
         ID3D11PixelShader BloomPrefilterPixelShader,
         ID3D11PixelShader BloomDownsamplePixelShader,
         ID3D11PixelShader BloomBlurHorizontalPixelShader,

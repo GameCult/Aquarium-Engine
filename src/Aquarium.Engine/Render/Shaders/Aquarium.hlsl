@@ -32,6 +32,7 @@ Texture2D<float4> historyControlTexture : register(t8);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
+Texture2D<float4> mediumVolumeTexture : register(t13);
 
 struct FieldInstance
 {
@@ -454,6 +455,11 @@ void integrateRegisteredMedium(float3 rayOrigin, float3 rayDirection, float maxT
 
         travel += stepLength;
     }
+}
+
+float4 sampleMediumVolume(float2 uv)
+{
+    return mediumVolumeTexture.SampleLevel(gridSampler, uv, 0.0);
 }
 
 void cloudFieldInfo(int index, out float3 center, out float3 radius, out float3 tint, out float densityScale)
@@ -1438,6 +1444,22 @@ struct SceneOut
     float4 control : SV_Target2;
 };
 
+float4 MediumVolumePS(VertexOut input) : SV_Target
+{
+    float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
+    float2 pixel = screenUv * resolution;
+    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+
+    float densityIntegral;
+    float transmittance;
+    float3 inScattering;
+    integrateRegisteredMedium(cameraPosition, rayDirection, farDistance, densityIntegral, transmittance, inScattering);
+
+    float densityDebug = saturate(densityIntegral * 0.18);
+    float sourceDebug = saturate(dot(inScattering, float3(0.2126, 0.7152, 0.0722)) * 0.65);
+    return float4(densityDebug, saturate(transmittance), sourceDebug, 1.0);
+}
+
 SceneOut AquariumScenePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
@@ -1488,12 +1510,9 @@ SceneOut AquariumScenePS(VertexOut input)
         }
     }
 
-    float mediumDensityIntegral;
-    float mediumTransmittance;
-    float3 mediumInScattering;
-    integrateRegisteredMedium(cameraPosition, rayDirection, min(outputTravel, farDistance), mediumDensityIntegral, mediumTransmittance, mediumInScattering);
-    outputMediumOpacity = saturate(1.0 - mediumTransmittance);
-    outputMediumDensity = saturate(mediumDensityIntegral * 0.18);
+    float4 mediumVolume = sampleMediumVolume(input.uv);
+    outputMediumOpacity = saturate(1.0 - mediumVolume.y);
+    outputMediumDensity = saturate(mediumVolume.x);
 
     color += float3(0.001, 0.003, 0.004);
 
@@ -1740,6 +1759,11 @@ ResolveOut AquariumResolvePS(VertexOut input)
     {
         float transmittance = saturate(1.0 - currentMediumOpacity);
         finalColor = lerp(float3(0.10, 0.02, 0.01), float3(0.72, 1.0, 0.86), transmittance);
+    }
+    else if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
+    {
+        float source = saturate(sampleMediumVolume(input.uv).z);
+        finalColor = lerp(float3(0.015, 0.015, 0.028), float3(0.95, 0.74, 0.36), source);
     }
 
     ResolveOut output;

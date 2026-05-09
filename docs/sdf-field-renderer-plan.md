@@ -100,8 +100,9 @@ except to replace them.
 
 Current status: the renderer now packs a first fixed-size field instance buffer
 for Self, planets, and local cloud/medium ellipsoids. HLSL consumes that buffer
-for medium diagnostics, while final scene color remains unchanged. This is the
-contract foothold, not the final volume renderer.
+in a half-resolution medium pass that writes density, transmittance, and source
+diagnostics while final scene color remains unchanged. This is the contract
+foothold, not the final volume renderer.
 
 ### Gate 2: Broad Phase
 
