@@ -86,8 +86,12 @@ D3D12 also uploads the current froxel primitive id table and field instance
 table into default-heap structured buffers every frame. The D3D12 medium pass
 renders a packed frustum froxel atlas into diagnostic and transport render
 targets from those field instances, and mode `11` displays the froxel density
-target. D3D12 final mode now renders a first scene pass for Self, planets, and
-medium transport. Grid transparency contributes to the froxel medium as a thin
+target. D3D12 final mode now renders Self, planets, medium transport, and
+transparent events through a bounded interval traversal. A camera ray walks the
+medium depth intervals, integrates medium/event transport, looks up solid
+candidates from the froxel primitive table at conservative interval sample
+points, and stops at the nearest opaque hit after integrating transport up to
+that travel. Grid transparency contributes to the froxel medium as a thin
 binned transparent-surface layer, not as an alpha-blended surface or scene-depth
 terminator. That binned Grid layer now carries cartesian gridlines, height
 isolines, and gradient-angle field lines. D3D12 also owns an HDR scene target
@@ -283,6 +287,13 @@ final-frame authority. Final composition uses `surface * transmittance +
 in-scattering`, gated by the persisted Medium Composite control. The default is
 `0`, so the pass can be inspected without changing the presented frame until the
 medium is tuned.
+
+The D3D12 scene pass has begun collapsing solid, medium, and transparent-event
+composition into one traversal clock. The first implementation still uses
+analytic sphere evaluators for Self and planets, but those evaluators are called
+only from froxel-binned solid candidates inside each ray interval. Future SDF
+surfaces should replace the sphere evaluator with bounded SDF marching plus
+bracket/bisect surface refinement inside that same interval contract.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:

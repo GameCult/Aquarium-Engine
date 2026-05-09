@@ -347,3 +347,10 @@ the cut.
   once-per-second CPU timing averages for whole frame, command-list recording,
   and DirectWrite overlay bridge cost. These are CPU timings, not GPU timestamp
   query timings.
+- D3D12 unified traversal foothold: `D3D12Scene.hlsl` now uses one bounded ray
+  interval traversal for solid candidates, medium transport, and transparent
+  events. Each interval samples transport, checks conservative start/mid/end
+  froxel primitive bins for solid candidates, integrates partial transport up
+  to a hit, then stops on the nearest opaque surface. Current solid evaluators
+  are analytic spheres; future SDF surfaces should replace that evaluator
+  inside this traversal rather than creating a second solid pass.

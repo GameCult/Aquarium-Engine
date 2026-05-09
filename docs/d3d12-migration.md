@@ -31,6 +31,13 @@ temporary visual reference until the old backend is deleted.
   the D3D12 frame graph. Grid line transparency is injected as a thin medium
   contribution in the froxel atlas instead of being drawn as an alpha surface or
   used as a scene-depth terminator.
+- The D3D12 scene pass now uses one bounded interval traversal for solids,
+  medium, and transparent events. Each camera ray walks the medium slice
+  intervals, samples medium/event transport for that interval, looks up binned
+  solid candidates from the froxel primitive table at conservative interval
+  sample points, and stops at the nearest opaque hit after integrating transport
+  up to it. The current solid evaluator is still analytic spheres; the traversal
+  contract is ready for SDF surface evaluators and bracket/bisect refinements.
 - Transparent Grid contribution is now represented by a transparent-surface
   table plus froxel-binned surface ids. The medium pass discovers it through the
   froxel bin, so future particles and billboard-like surfaces can use the same
@@ -87,10 +94,8 @@ temporary visual reference until the old backend is deleted.
 3. Port the Grid height pass after preserving D3D11 as the reference output.
 4. Keep capacity diagnostics loud while the backend is still small enough to
    make mistakes obvious.
-5. Port the existing passes in visible order: grid height, froxel volume, scene,
-   bloom, resolve, overlay/debug.
-6. Build the transparent stochastic surface pipe in D3D12 once descriptor and
-   candidate-buffer ownership is explicit.
+5. Keep replacing placeholder evaluators inside the unified traversal with real
+   field/SDF/particle implementations instead of adding side-channel passes.
 
 ## Invariants
 

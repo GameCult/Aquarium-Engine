@@ -49,6 +49,11 @@ resource graph beyond smoke-pass scaffolding.
   contribution is sampled into the medium atlas as a thin participating layer,
   so it is integrated with volumetrics rather than alpha-blended or used to
   occlude the ray.
+- The D3D12 scene shader now follows a unified ray traversal shape: it walks
+  ray-depth intervals, integrates medium/event transport, queries the binned
+  froxel primitive table for solid candidates, and resolves the nearest opaque
+  hit in order. Current solids are still analytic spheres, but the hot loop now
+  has the right ownership boundary for future SDF evaluators.
 - The transparent Grid layer is no longer hardcoded as a medium-special case:
   D3D12 now uploads a transparent-surface table and a froxel-binned transparent
   surface id buffer, then the medium shader resolves transparent contributions
@@ -85,6 +90,9 @@ resource graph beyond smoke-pass scaffolding.
 - The transparent-surface bin currently has only the Grid layer as its first
   registered producer. Future stochastic particles and billboards should extend
   that path rather than reintroducing alpha-blended scene surfaces.
+- Solid bins currently contain only Self/planet analytic sphere candidates.
+  Future work should replace the analytic evaluator with bounded SDF surface
+  solving inside the existing interval traversal, not a separate solid pass.
 - D3D11 and D3D12 field table builders are temporarily duplicated by design.
   D3D11 is reference-only and will be removed after migration; do not pay DRY
   tax merely to preserve it.
