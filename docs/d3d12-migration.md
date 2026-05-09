@@ -41,6 +41,11 @@ has feature parity.
   downsample plus separable blur, and final presentation applies exposure,
   bloom/veil, and ACES. Debug mode `7` shows bloom and `8` shows exposed
   luminance.
+- The D3D12 scene pass writes the first temporal diagnostic spine: color/travel,
+  field id/normal metadata, and temporal control render targets. The present
+  shader can inspect current temporal control in debug mode `5` and field
+  identity in debug mode `6`. History ping-pong and reprojection are still
+  pending; these targets are the buffers that make that work honest.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a

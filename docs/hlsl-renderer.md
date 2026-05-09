@@ -91,8 +91,10 @@ medium transport. Grid transparency contributes to the froxel medium as a thin
 binned transparent-surface layer, not as an alpha-blended surface or scene-depth
 terminator. That binned Grid layer now carries cartesian gridlines, height
 isolines, and gradient-angle field lines. D3D12 also owns an HDR scene target
-and bloom/present pass. The full temporal resolve and overlay/debug UI still
-need to move.
+and bloom/present pass. Its scene pass now writes color/travel,
+field-id/normal metadata, and temporal-control targets, with debug modes `5`
+and `6` inspecting the current control and identity buffers. The full temporal
+history ping-pong/reprojection and overlay/debug UI still need to move.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches

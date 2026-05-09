@@ -23,6 +23,8 @@ cbuffer AquariumFrame : register(b0)
 };
 
 Texture2D<float4> sourceTexture : register(t0);
+Texture2D<float4> currentSceneMetadataTexture : register(t5);
+Texture2D<float4> currentSceneControlTexture : register(t7);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
@@ -56,6 +58,35 @@ float3 aces(float3 color)
     const float d = 0.59;
     const float e = 0.14;
     return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
+}
+
+float3 debugFieldIdColor(float fieldId)
+{
+    if (fieldId < 0.5)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+
+    if (abs(fieldId - 1.0) < 0.25)
+    {
+        return float3(0.0, 0.9, 1.0);
+    }
+
+    if (abs(fieldId - 2.0) < 0.25)
+    {
+        return float3(1.0, 0.92, 0.25);
+    }
+
+    if (fieldId >= 10.0)
+    {
+        float phase = frac((fieldId - 10.0) * 0.37);
+        return 0.35 + 0.65 * float3(
+            0.5 + 0.5 * sin(phase * 6.28318 + 0.0),
+            0.5 + 0.5 * sin(phase * 6.28318 + 2.1),
+            0.5 + 0.5 * sin(phase * 6.28318 + 4.2));
+    }
+
+    return float3(1.0, 0.0, 1.0);
 }
 
 float4 D3D12BloomPrefilterPS(VertexOut input) : SV_Target0
@@ -125,6 +156,23 @@ float4 D3D12PresentPS(VertexOut input) : SV_Target0
         bloomTexture0.SampleLevel(sourceSampler, input.uv, 0.0).rgb * 0.42 +
         bloomTexture1.SampleLevel(sourceSampler, input.uv, 0.0).rgb * 0.34 +
         bloomTexture2.SampleLevel(sourceSampler, input.uv, 0.0).rgb * 0.24;
+    if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
+    {
+        return float4(aces(scene), 1.0);
+    }
+
+    if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
+    {
+        float4 control = currentSceneControlTexture.SampleLevel(sourceSampler, input.uv, 0.0);
+        return float4(saturate(control.xyz), 1.0);
+    }
+
+    if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
+    {
+        float fieldId = currentSceneMetadataTexture.SampleLevel(sourceSampler, input.uv, 0.0).x;
+        return float4(debugFieldIdColor(fieldId), 1.0);
+    }
+
     if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
     {
         return float4(aces(bloom * bloomIntensity), 1.0);

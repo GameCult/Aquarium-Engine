@@ -30,6 +30,8 @@ SamplerState gridSampler : register(s0);
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_GRID = 1.0;
+static const float FIELD_ID_SELF = 2.0;
+static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
@@ -38,6 +40,13 @@ struct VertexOut
 {
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
+};
+
+struct SceneOut
+{
+    float4 colorTravel : SV_Target0;
+    float4 metadata : SV_Target1;
+    float4 control : SV_Target2;
 };
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -207,7 +216,7 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
     return albedo * (0.08 + ndl * 1.6);
 }
 
-float4 D3D12ScenePS(VertexOut input) : SV_Target0
+SceneOut D3D12ScenePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
     float2 pixel = screenUv * resolution;
@@ -215,12 +224,18 @@ float4 D3D12ScenePS(VertexOut input) : SV_Target0
 
     float travel = farDistance + 1.0;
     float3 color = float3(0.001, 0.003, 0.004);
+    float outputFieldId = 0.0;
+    float3 outputNormal = 0.0;
+    float outputCoverage = 0.0;
     float hitTravel;
     if (traceSphere(cameraPosition, rayDirection, float3(0.0, 0.0, 2.2), SUN_RADIUS, hitTravel))
     {
         travel = hitTravel;
         float3 p = cameraPosition + rayDirection * hitTravel;
-        color = shadeBody(p, normalize(p - float3(0.0, 0.0, 2.2)), 0);
+        outputNormal = normalize(p - float3(0.0, 0.0, 2.2));
+        color = shadeBody(p, outputNormal, 0);
+        outputFieldId = FIELD_ID_SELF;
+        outputCoverage = 1.0;
     }
 
     [unroll]
@@ -232,7 +247,10 @@ float4 D3D12ScenePS(VertexOut input) : SV_Target0
         {
             travel = hitTravel;
             float3 p = cameraPosition + rayDirection * hitTravel;
-            color = shadeBody(p, normalize(p - center), i + 1);
+            outputNormal = normalize(p - center);
+            color = shadeBody(p, outputNormal, i + 1);
+            outputFieldId = FIELD_ID_PLANET_BASE + (float)i;
+            outputCoverage = 1.0;
         }
     }
 
@@ -248,5 +266,9 @@ float4 D3D12ScenePS(VertexOut input) : SV_Target0
         color = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(densityMean * 6.0));
     }
 
-    return float4(color, 1.0);
+    SceneOut output;
+    output.colorTravel = float4(color, min(travel, farDistance + 1.0));
+    output.metadata = float4(outputFieldId, outputNormal);
+    output.control = float4(0.0, outputCoverage, saturate(1.0 - transmittance), densityMean);
+    return output;
 }

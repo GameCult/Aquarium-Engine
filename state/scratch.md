@@ -311,3 +311,8 @@ can start porting real passes while keeping D3D11 as the visual reference.
   transparent surface entry. Keep future particles/billboards in this shared
   transparent-surface integration class; do not resurrect alpha surfaces for
   them.
+- D3D12 temporal diagnostic spine pass: the scene pass now writes MRTs for
+  color/travel, field-id/normal metadata, and temporal control. Present debug
+  mode 5 shows current control and mode 6 shows field identity. History
+  ping-pong/reprojection is still pending; do not claim TAA parity until those
+  buffers are written and validated.
