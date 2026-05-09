@@ -123,6 +123,13 @@ prototype integrated along the camera ray before surface composition.
   element-specific base/hover/active states where track/fill and handle brighten
   independently without geometry changes. To brighten saturated orange, lerp
   toward white instead of trying to increase HSV value.
+- Global graphics settings pass: render debug mode, exposure, bloom intensity,
+  and bloom veil now live in the typed `epiphany.aquarium.graphics_settings`
+  CultCache document. `GraphicsSettings` is a contracts DTO shared by host,
+  live runtime, and renderer. The UI still binds to renderer properties, the
+  host syncs changed renderer settings back to the live runtime, and the runtime
+  flushes dirty settings on the normal state interval, shutdown, and before live
+  assembly reload.
 - Dev watcher correction: live runtime reload now waits for the host stdout log
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last

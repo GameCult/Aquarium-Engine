@@ -8,9 +8,13 @@ public interface IAquariumRuntime : IDisposable
 
     AquariumFrame Frame { get; }
 
+    GraphicsSettings GraphicsSettings { get; set; }
+
     void Start();
 
     void Update(float deltaSeconds, InputState input);
+
+    void FlushState();
 }
 
 public interface IAquariumRuntimeFactory
@@ -18,5 +22,5 @@ public interface IAquariumRuntimeFactory
     IAquariumRuntime Create(AquariumRuntimeOptions options);
 }
 
-public readonly record struct AquariumRuntimeOptions(bool Headless, string? CultCachePath);
+public readonly record struct AquariumRuntimeOptions(bool Headless, string? CultCachePath, int? RenderDebugModeOverride = null);
 

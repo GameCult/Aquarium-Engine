@@ -19,9 +19,6 @@ public sealed class D3D11Renderer : IDisposable
     private static readonly TimeSpan ShaderReloadPollInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ShaderReloadWriteSettleTime = TimeSpan.FromMilliseconds(150);
     private const float TemporalJitterScale = 0.0f;
-    private const float DefaultSceneExposure = 0.16f;
-    private const float DefaultBloomIntensity = 0.072f;
-    private const float DefaultBloomVeilIntensity = 0.014f;
     private const int GridHeightTextureSize = 128;
     private const int DitherTextureSize = 512;
     private const int BloomLevelCount = 3;
@@ -106,11 +103,11 @@ public sealed class D3D11Renderer : IDisposable
     private float previousGridRadius;
     private float previousTimeSeconds;
 
-    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null, int renderDebugMode = 0, Action<string>? startupProgress = null)
+    public D3D11Renderer(IntPtr windowHandle, int width, int height, string? shaderPath = null, GraphicsSettings? graphicsSettings = null, Action<string>? startupProgress = null)
     {
         this.width = width;
         this.height = height;
-        RenderDebugMode = Math.Clamp(renderDebugMode, 0, 8);
+        ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.shaderPath = shaderPath ?? Path.Combine(AppContext.BaseDirectory, ShaderRelativePath);
         startupProgress?.Invoke("Creating D3D11 device and swapchain");
 
@@ -307,11 +304,11 @@ public sealed class D3D11Renderer : IDisposable
 
     public int RenderDebugMode { get; set; }
 
-    public float SceneExposure { get; set; } = DefaultSceneExposure;
+    public float SceneExposure { get; set; } = GraphicsSettings.Default.SceneExposure;
 
-    public float BloomIntensity { get; set; } = DefaultBloomIntensity;
+    public float BloomIntensity { get; set; } = GraphicsSettings.Default.BloomIntensity;
 
-    public float BloomVeilIntensity { get; set; } = DefaultBloomVeilIntensity;
+    public float BloomVeilIntensity { get; set; } = GraphicsSettings.Default.BloomVeilIntensity;
 
     public bool DebugUiVisible
     {
@@ -326,7 +323,21 @@ public sealed class D3D11Renderer : IDisposable
 
     public void CycleRenderDebugMode()
     {
-        RenderDebugMode = (RenderDebugMode + 1) % 9;
+        RenderDebugMode = (RenderDebugMode + 1) % (GraphicsSettings.MaxRenderDebugMode + 1);
+    }
+
+    public GraphicsSettings CaptureGraphicsSettings()
+    {
+        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity).Normalized();
+    }
+
+    public void ApplyGraphicsSettings(GraphicsSettings settings)
+    {
+        var normalized = settings.Normalized();
+        RenderDebugMode = normalized.RenderDebugMode;
+        SceneExposure = normalized.SceneExposure;
+        BloomIntensity = normalized.BloomIntensity;
+        BloomVeilIntensity = normalized.BloomVeilIntensity;
     }
 
     private DebugUi CreateDebugUi()
@@ -334,12 +345,12 @@ public sealed class D3D11Renderer : IDisposable
         return new DebugUi("Aquarium Debug")
             .Panel(panel => panel
                 .Section("View")
-                .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, 0, 8), 0, 8, "Selects the active renderer debug view.")
+                .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode, "Selects the active renderer debug view.")
                 .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.")
                 .Section("HDR")
-                .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, 0.02f, 1.2f), 0.02f, 1.2f, "0.###", "Manual scene exposure before display transform.")
-                .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, 0.0f, 0.24f), 0.0f, 0.24f, "0.###", "Strength of pre-tonemap bloom energy.")
-                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, 0.0f, 0.08f), 0.0f, 0.08f, "0.###", "Low-frequency veil from bright HDR energy."));
+                .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.")
+                .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.")
+                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy."));
     }
 
     public void Dispose()

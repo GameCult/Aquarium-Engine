@@ -35,6 +35,26 @@ It currently stores the camera target, yaw, pitch, distance, runtime time, and a
 monotonic save generation. `AquariumRuntime` writes it every 0.2 seconds and
 again during orderly shutdown.
 
+## Graphics Settings
+
+`AquariumGraphicsSettingsState` is a CultCache document:
+
+- schema name: `epiphany.aquarium.graphics_settings`
+- schema version: `epiphany.aquarium.graphics_settings.v0`
+- record key: `aquarium-client/graphics-settings`
+- name: `aquarium-client-graphics`
+
+It stores global renderer presentation controls: render debug mode, scene
+exposure, bloom intensity, and bloom veil intensity. `GraphicsSettings` lives in
+the contracts assembly so the native host and renderer can consume the same
+typed values without depending on CultCache internals. The Direct2D debug panel
+edits the renderer copy, the host syncs changed values back to the live runtime,
+and the runtime persists dirty graphics settings through the same CultCache file
+used for live state.
+
+Live reload flushes the current runtime before loading the next live assembly,
+so changed graphics settings survive both process restart and assembly reload.
+
 ## CultNet Surface
 
 The runtime creates a `CultNetHelloMessage` from the local CultCache registry.

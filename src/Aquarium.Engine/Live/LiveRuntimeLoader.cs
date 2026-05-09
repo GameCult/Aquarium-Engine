@@ -106,6 +106,7 @@ public sealed class LiveRuntimeLoader : IDisposable
 
         try
         {
+            current?.Runtime.FlushState();
             Reload(candidatePath, options);
             Console.WriteLine($"Live runtime reload applied: {candidatePath}");
         }

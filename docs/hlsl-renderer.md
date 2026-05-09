@@ -229,7 +229,8 @@ The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:
 controls are retained rows bound to `Func<T>`/`Action<T>` pairs. The first panel
 drives render debug mode, exposure, bloom intensity, and bloom veil. Those HDR
-controls feed the shader constant buffer directly; they are not cosmetic labels
+controls feed the shader constant buffer directly and round-trip through the
+global `GraphicsSettings` CultCache document; they are not cosmetic labels
 painted over hardcoded renderer state.
 
 It deliberately does not pretend to solve general non-rigid field velocity,

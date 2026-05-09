@@ -10,7 +10,7 @@ public static class AquariumHost
 {
     public static int Run(string[] args)
     {
-        var runtimeOptions = new AquariumRuntimeOptions(ParseHeadless(args), ParseCachePath(args));
+        var runtimeOptions = new AquariumRuntimeOptions(ParseHeadless(args), ParseCachePath(args), ParseRenderDebugMode(args));
         using var runtimeLoader = new LiveRuntimeLoader(runtimeOptions, ParseLiveAssemblyPath(args), ParseLiveReloadPointerPath(args));
         var runtime = runtimeLoader.Load();
         var input = new InputState();
@@ -24,8 +24,9 @@ public static class AquariumHost
             window.ClientWidth,
             window.ClientHeight,
             ParseShaderPath(args),
-            ParseRenderDebugMode(args),
+            runtime.GraphicsSettings,
             body => window.PaintSplash("Aquarium", body));
+        var settingsRuntime = runtimeLoader.Runtime;
 
         var frameClock = Stopwatch.StartNew();
         var lastFrame = frameClock.Elapsed;
@@ -44,8 +45,15 @@ public static class AquariumHost
             lastFrame = now;
 
             renderer.UpdateDebugUi(input);
-            runtimeLoader.Update(deltaSeconds, input);
             ApplyRendererDebugInput(renderer, input);
+            SyncRendererSettingsToRuntime(renderer, runtimeLoader.Runtime);
+            runtimeLoader.Update(deltaSeconds, input);
+            if (!ReferenceEquals(settingsRuntime, runtimeLoader.Runtime))
+            {
+                settingsRuntime = runtimeLoader.Runtime;
+                renderer.ApplyGraphicsSettings(settingsRuntime.GraphicsSettings);
+            }
+
             renderer.Render(runtimeLoader.Runtime.Frame);
 
             if (runtime.Options.Headless && ++frames >= 2)
@@ -118,7 +126,7 @@ public static class AquariumHost
         return Environment.GetEnvironmentVariable("AQUARIUM_LIVE_RELOAD_POINTER");
     }
 
-    private static int ParseRenderDebugMode(IReadOnlyCollection<string> args)
+    private static int? ParseRenderDebugMode(IReadOnlyCollection<string> args)
     {
         var values = args.ToArray();
         for (var index = 0; index < values.Length - 1; index++)
@@ -132,7 +140,16 @@ public static class AquariumHost
 
         return int.TryParse(Environment.GetEnvironmentVariable("AQUARIUM_RENDER_DEBUG_MODE"), out var environmentMode)
             ? environmentMode
-            : 0;
+            : null;
+    }
+
+    private static void SyncRendererSettingsToRuntime(D3D11Renderer renderer, IAquariumRuntime runtime)
+    {
+        var settings = renderer.CaptureGraphicsSettings();
+        if (settings != runtime.GraphicsSettings)
+        {
+            runtime.GraphicsSettings = settings;
+        }
     }
 
     private static void ApplyRendererDebugInput(D3D11Renderer renderer, InputState input)

@@ -12,14 +12,22 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private readonly AquariumCultStateStore stateStore;
 
     private GridFrame gridFrame;
+    private GraphicsSettings graphicsSettings;
     private float timeSeconds;
     private float secondsSinceStateSave;
+    private bool graphicsSettingsDirty;
 
     public AquariumRuntime(AquariumRuntimeOptions options)
     {
         Options = options;
         stateStore = AquariumCultStateStore.Open(options.CultCachePath);
         var liveState = stateStore.LoadOrCreate();
+        graphicsSettings = stateStore.LoadOrCreateGraphicsSettings().ToSettings();
+        if (options.RenderDebugModeOverride.HasValue)
+        {
+            GraphicsSettings = graphicsSettings with { RenderDebugMode = options.RenderDebugModeOverride.Value };
+        }
+
         cameraRig = new OrbitCameraRig(
             target: new Vector2(liveState.CameraTargetX, liveState.CameraTargetY),
             yawRadians: liveState.CameraYawRadians,
@@ -33,10 +41,27 @@ public sealed class AquariumRuntime : IAquariumRuntime
 
     public AquariumFrame Frame => new(gridFrame, cameraRig.Position, timeSeconds);
 
+    public GraphicsSettings GraphicsSettings
+    {
+        get => graphicsSettings;
+        set
+        {
+            var normalized = value.Normalized();
+            if (normalized == graphicsSettings)
+            {
+                return;
+            }
+
+            graphicsSettings = normalized;
+            graphicsSettingsDirty = true;
+        }
+    }
+
     public void Start()
     {
         Console.WriteLine("Aquarium Engine booted.");
         Console.WriteLine($"Grid center: {gridFrame.Center}, radius: {gridFrame.Radius:0.00}");
+        Console.WriteLine($"Graphics settings: debug {graphicsSettings.RenderDebugMode}, exposure {graphicsSettings.SceneExposure:0.###}, bloom {graphicsSettings.BloomIntensity:0.###}, veil {graphicsSettings.BloomVeilIntensity:0.###}");
         Console.WriteLine($"CultCache: {stateStore.CachePath}");
         Console.WriteLine($"CultNet hello: {stateStore.Hello.RuntimeKind} / {stateStore.Hello.DisplayName}");
         Console.WriteLine("Vortice D3D11 is present as the host shell; Aquarium owns the invariants.");
@@ -50,14 +75,20 @@ public sealed class AquariumRuntime : IAquariumRuntime
         secondsSinceStateSave += Math.Max(deltaSeconds, 0.0f);
         if (secondsSinceStateSave >= StateSaveIntervalSeconds)
         {
-            SaveLiveState();
+            FlushState();
             secondsSinceStateSave = 0.0f;
         }
     }
 
-    public void Dispose()
+    public void FlushState()
     {
         SaveLiveState();
+        SaveGraphicsSettingsIfDirty();
+    }
+
+    public void Dispose()
+    {
+        FlushState();
         stateStore.Dispose();
     }
 
@@ -72,6 +103,17 @@ public sealed class AquariumRuntime : IAquariumRuntime
             CameraPitchRadians = cameraRig.PitchRadians,
             CameraDistance = cameraRig.Distance
         });
+    }
+
+    private void SaveGraphicsSettingsIfDirty()
+    {
+        if (!graphicsSettingsDirty)
+        {
+            return;
+        }
+
+        stateStore.SaveGraphicsSettings(AquariumGraphicsSettingsState.FromSettings(graphicsSettings));
+        graphicsSettingsDirty = false;
     }
 }
 

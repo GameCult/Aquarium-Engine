@@ -22,6 +22,7 @@ current_model:
     implementation: src/Aquarium.Engine.Live
     state_store: src/Aquarium.Engine.Live/State/AquariumCultStateStore.cs
     state_document: epiphany.aquarium.live_state
+    graphics_settings_document: epiphany.aquarium.graphics_settings
   dependencies:
     cult_math: E:\Projects\CultMath
     cult_lib: E:\Projects\CultLib
@@ -47,6 +48,7 @@ invariants:
   - Visible scene lighting is diegetic; no default ambient/global fill.
   - Overlay text is DirectWrite final-pixel UI; scene text needs renderer-owned billboards.
   - CultCache persists live app state through reload.
+  - Global GraphicsSettings persists renderer debug/HDR presentation knobs through restart and live reload.
   - Failed shader/live-runtime reloads must leave the last good frame alive.
   - Live-runtime reload success requires host acknowledgement of the exact live DLL path, not merely a pointer update.
   - Closed visible dev windows can be reopened from the last good slot without rebuilding.
@@ -60,6 +62,7 @@ renderer_state:
     - Stable planet-local displaced SDF domains.
     - DirectWrite overlay text after scene rendering.
     - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
+    - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Splash screen with bundled app icon and GameCult typefaces.
   next:
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
@@ -67,7 +70,6 @@ renderer_state:
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
     - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.
-    - Promote exposure and HDR presentation controls from process-local debug UI into typed CultCache renderer state.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
@@ -82,5 +84,5 @@ next_actions:
   - Follow docs/sdf-field-renderer-plan.md when adding SDF solids, SDF clouds, or hybrid field objects.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
   - Follow docs/tsr-inspired-taa-spec.md when changing jitter, history, stochastic coverage, or temporal rejection.
-  - Promote runtime knobs into typed CultCache documents.
+  - Promote future runtime knobs into typed CultCache documents before they become process folklore.
   - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

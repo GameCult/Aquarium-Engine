@@ -10,6 +10,7 @@ public sealed class AquariumCultStateStore : IDisposable
 {
     public const string DefaultRelativePath = "artifacts/dev-reload/cultcache/aquarium-client.msgpack";
     private static readonly CultRecordKey LiveStateKey = new("aquarium-client/live-state");
+    private static readonly CultRecordKey GraphicsSettingsKey = new("aquarium-client/graphics-settings");
 
     private readonly CultCache cache;
     private readonly SingleFileMessagePackBackingStore backingStore;
@@ -58,11 +59,39 @@ public sealed class AquariumCultStateStore : IDisposable
         return state;
     }
 
+    public AquariumGraphicsSettingsState LoadOrCreateGraphicsSettings()
+    {
+        var state = cache.Get<AquariumGraphicsSettingsState>(GraphicsSettingsKey)
+            ?? cache.GetByName<AquariumGraphicsSettingsState>(AquariumGraphicsSettingsState.PrimaryName);
+
+        if (state != null)
+        {
+            return state;
+        }
+
+        state = AquariumGraphicsSettingsState.FromSettings(GraphicsSettings.Default);
+        SaveGraphicsSettings(state);
+        return state;
+    }
+
     public void Save(AquariumLiveState state)
     {
         state.Name = AquariumLiveState.PrimaryName;
         state.SaveGeneration++;
         cache.AddAsync(state, new CultRecordHandle<AquariumLiveState>(LiveStateKey)).GetAwaiter().GetResult();
+        backingStore.PushAll();
+    }
+
+    public void SaveGraphicsSettings(AquariumGraphicsSettingsState state)
+    {
+        var normalized = state.ToSettings();
+        state.Name = AquariumGraphicsSettingsState.PrimaryName;
+        state.RenderDebugMode = normalized.RenderDebugMode;
+        state.SceneExposure = normalized.SceneExposure;
+        state.BloomIntensity = normalized.BloomIntensity;
+        state.BloomVeilIntensity = normalized.BloomVeilIntensity;
+        state.SaveGeneration++;
+        cache.AddAsync(state, new CultRecordHandle<AquariumGraphicsSettingsState>(GraphicsSettingsKey)).GetAwaiter().GetResult();
         backingStore.PushAll();
     }
 
