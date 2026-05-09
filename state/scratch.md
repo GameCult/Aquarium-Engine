@@ -9,7 +9,8 @@ plus a shader-visible descriptor arena, per-frame upload constant buffers,
 renderer-owned offscreen render target, fullscreen root signature, and
 smoke-test PSO that draws a diagnostic fullscreen triangle into the offscreen
 target before copying to the swapchain. Next renderer work should generalize
-this into renderer-owned SRV/UAV/upload-ring helpers before building the
+this into a named resource registry, static/transient descriptor allocators,
+SRV/UAV creation, upload ring, debug names, and PIX markers before building the
 stochastic transparent surface pipe.
 
 ## Hot Context
@@ -234,3 +235,9 @@ stochastic transparent surface pipe.
   tracked state transitions, then copies that texture into the swapchain
   backbuffer. This proves render-target resource lifetime and copy barriers
   before Aquarium scene/history/froxel targets are ported.
+- D3D12 research pass: `research/d3d12/synthesis.md` and
+  `docs/d3d12-best-practices-audit.md` distill Microsoft/NVIDIA/AMD guidance.
+  Current D3D12 path is valid bring-up scaffolding, but do not port real passes
+  until descriptor allocation is split into static/transient ranges, upload data
+  uses a fence-reclaimed ring, resource ownership is named/tracked, and debug
+  names/PIX markers exist.

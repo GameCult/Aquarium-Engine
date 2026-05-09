@@ -19,16 +19,20 @@ has feature parity.
   and draw submission before real scene passes migrate.
 - `IAquariumRenderer` is the host boundary. The host should not learn backend
   internals as the D3D12 renderer grows teeth.
+- `docs/d3d12-best-practices-audit.md` and `research/d3d12/synthesis.md`
+  capture the current D3D12 doctrine and audit.
 
 ## Migration Order
 
 1. Keep D3D11 as the visual reference.
 2. Move shared renderer contracts behind explicit backend-neutral types.
-3. Replace the smoke-only resource code with general render-target, SRV/UAV,
-   and upload ring helpers.
-4. Port the existing passes in visible order: grid height, froxel volume, scene,
+3. Replace the smoke-only resource code with a named resource registry,
+   static/transient descriptors, SRV/UAV creation, and an upload ring.
+4. Add debug names and PIX markers while the backend is still small enough to
+   make mistakes obvious.
+5. Port the existing passes in visible order: grid height, froxel volume, scene,
    bloom, resolve, overlay/debug.
-5. Build the transparent stochastic surface pipe in D3D12 once descriptor and
+6. Build the transparent stochastic surface pipe in D3D12 once descriptor and
    candidate-buffer ownership is explicit.
 
 ## Invariants
