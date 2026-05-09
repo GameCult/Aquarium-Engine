@@ -34,6 +34,7 @@ static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
+static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
@@ -66,6 +67,8 @@ struct SceneOut
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
     float4 mediumPacket : SV_Target3;
+    float4 eventColor : SV_Target4;
+    float4 eventMetadata : SV_Target5;
 };
 
 struct SolidHit
@@ -87,6 +90,9 @@ struct RayMarchResult
     float mediumOpacity;
     float densityMean;
     float mediumTravel;
+    float eventTravel;
+    float eventCoverage;
+    float3 eventColor;
 };
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -511,6 +517,9 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     result.mediumOpacity = 0.0;
     result.densityMean = 0.0;
     result.mediumTravel = farDistance + 1.0;
+    result.eventTravel = farDistance + 1.0;
+    result.eventCoverage = 0.0;
+    result.eventColor = 0.0;
 
     float transmittance = 1.0;
     float3 inScattering = 0.0;
@@ -546,22 +555,18 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         gridHit = gridAlpha > 0.001;
     }
 
-    float gridTransmittance = 1.0;
-    float3 gridInScattering = 0.0;
-    float gridDensityAccumulation = 0.0;
-    float gridDensityTravelSum = 0.0;
-    float gridDensitySum = 0.0;
-    if (gridHit)
-    {
-        integrateMediumRange(uv, 0.0, gridTravel, gridTransmittance, gridInScattering, gridDensityAccumulation, gridDensityTravelSum, gridDensitySum);
-    }
-
     integrateMediumRange(uv, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
     float mediumOpacity = saturate(1.0 - transmittance);
     float mediumDensityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
     float mediumTravel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, stopTravel) : farDistance + 1.0;
 
     bool drawGrid = gridHit && stochasticTransparency(screenUv, gridAlpha) > 0.0;
+    if (gridHit)
+    {
+        result.eventTravel = gridTravel;
+        result.eventCoverage = gridAlpha;
+        result.eventColor = drawGrid ? gridColor : 0.0;
+    }
 
     if (nearestSolid.hit)
     {
@@ -589,11 +594,6 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
             result.coverage = saturate(max(result.mediumOpacity, result.densityMean * 4.0));
             result.travel = mediumTravel;
         }
-    }
-
-    if (drawGrid)
-    {
-        result.color += gridColor * gridAlpha * gridTransmittance;
     }
 
     return result;
@@ -632,5 +632,7 @@ SceneOut D3D12ScenePS(VertexOut input)
     output.metadata = float4(result.fieldId, result.normal);
     output.control = float4(0.0, result.coverage, result.mediumOpacity, result.densityMean);
     output.mediumPacket = float4(FIELD_ID_MEDIUM, result.mediumTravel, result.mediumOpacity, result.densityMean);
+    output.eventColor = float4(result.eventColor, result.eventCoverage);
+    output.eventMetadata = float4(FIELD_ID_GRID, result.eventTravel, result.eventCoverage, 0.0);
     return output;
 }

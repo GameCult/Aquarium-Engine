@@ -44,6 +44,14 @@ reusing field identity/travel/control.
   show medium where opacity exists instead of pretending the planet behind it
   is the whole truth. This is the pattern Grid/particles need next: a separate
   stochastic-event packet, not reuse of the surface packet.
+- Stochastic event temporal split: D3D12 now emits `sceneEventColor` and
+  `sceneEventMetadata` MRTs for Grid-style stochastic transparent events and
+  ping-pongs matching event history targets. The base scene no longer uses
+  binary Grid hits as scene color truth; resolve accumulates the stochastic
+  event lane by event travel/coverage/identity and composites it over the
+  resolved surface+medium scene. This is the future particle/billboard class:
+  sampled event color plus event metadata, not alpha blending and not the solid
+  surface packet.
 
 ## Hot Context
 
