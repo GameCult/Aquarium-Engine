@@ -27,7 +27,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MediumFroxelAtlasColumns = 8;
     private const int MediumFroxelAtlasRows = 4;
     private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
-    private const int GridBinRaySamplesPerAxis = 3;
+    private const int GridBinRaySamplesPerAxis = 1;
     private const int GridBinTravelSegments = MediumFroxelSliceCount;
     private const int ViewFroxelPrimitiveSlotCount = 2;
     private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
@@ -1208,16 +1208,18 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private void AddPrimitiveToFroxels(AquariumFrame frame, int primitiveId, Vector3 center, float boundRadius)
     {
         var farDistance = FrameFarDistance(frame);
-        for (var slice = 0; slice < MediumFroxelSliceCount; slice++)
+        if (!TryProjectSphereToViewFroxelBounds(frame, center, boundRadius, farDistance, out var bounds))
         {
-            for (var y = 0; y < mediumFroxelHeight; y++)
+            return;
+        }
+
+        for (var slice = bounds.MinSlice; slice <= bounds.MaxSlice; slice++)
+        {
+            for (var y = bounds.MinY; y <= bounds.MaxY; y++)
             {
-                for (var x = 0; x < mediumFroxelWidth; x++)
+                for (var x = bounds.MinX; x <= bounds.MaxX; x++)
                 {
-                    if (ViewFroxelMayContainSphere(frame, x, y, slice, farDistance, center, boundRadius))
-                    {
-                        AddPrimitiveToViewFroxel(ViewFroxelIndex(x, y, slice), primitiveId);
-                    }
+                    AddPrimitiveToViewFroxel(ViewFroxelIndex(x, y, slice), primitiveId);
                 }
             }
         }
@@ -1325,9 +1327,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 {
                     for (var sx = 0; sx < GridBinRaySamplesPerAxis; sx++)
                     {
-                        var sample = new Vector2(
-                            (x + ((sx + 0.5f) / GridBinRaySamplesPerAxis)) * MediumFroxelDownscale,
-                            (y + ((sy + 0.5f) / GridBinRaySamplesPerAxis)) * MediumFroxelDownscale);
+                        var sample = ScreenRayPixelForViewFroxelSample(x, y, sx, sy);
                         var direction = RayDirectionForPixel(sample, frame.CameraPosition, frame.Grid.Center);
                         if (!TryFindGridSurfaceTravel(frame, direction, farDistance, out var travel))
                         {
@@ -1413,34 +1413,82 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
-    private bool ViewFroxelMayContainSphere(AquariumFrame frame, int x, int y, int slice, float farDistance, Vector3 center, float radius)
+    private Vector2 ScreenRayPixelForViewFroxelSample(int x, int y, int sampleX, int sampleY)
     {
-        Span<Vector3> corners = stackalloc Vector3[8];
-        FillViewFroxelCorners(frame, x, y, slice, farDistance, corners);
-        var froxelCenter = Vector3.Zero;
-        foreach (var corner in corners)
+        var localX = (sampleX + 0.5f) / GridBinRaySamplesPerAxis;
+        var localY = (sampleY + 0.5f) / GridBinRaySamplesPerAxis;
+        var pixelX = (x + localX) * MediumFroxelDownscale;
+        var pixelY = height - ((y + localY) * MediumFroxelDownscale);
+        return new Vector2(
+            Math.Clamp(pixelX, 0.0f, MathF.Max(width - 1.0f, 0.0f)),
+            Math.Clamp(pixelY, 0.0f, MathF.Max(height - 1.0f, 0.0f)));
+    }
+
+    private bool TryProjectSphereToViewFroxelBounds(
+        AquariumFrame frame,
+        Vector3 center,
+        float radius,
+        float farDistance,
+        out ViewFroxelBounds bounds)
+    {
+        bounds = default;
+        var target = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
+        var forward = Vector3.Normalize(target - frame.CameraPosition);
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
+        var up = Vector3.Cross(right, forward);
+        var delta = center - frame.CameraPosition;
+        var forwardDistance = Vector3.Dot(delta, forward);
+        if (forwardDistance <= -radius)
         {
-            froxelCenter += corner;
+            return false;
         }
 
-        froxelCenter /= corners.Length;
-        var froxelRadius = 0.0f;
-        foreach (var corner in corners)
+        var safeForward = MathF.Max(forwardDistance, 0.001f);
+        var projected = new Vector2(Vector3.Dot(delta, right), Vector3.Dot(delta, up)) / safeForward * 1.6f;
+        var pixel = (projected * height + new Vector2(width, height)) * 0.5f;
+        var projectedRadius = (radius / safeForward) * 1.6f * height * 0.5f;
+        projectedRadius += MediumFroxelDownscale * 2.0f;
+
+        var minPixelX = pixel.X - projectedRadius;
+        var maxPixelX = pixel.X + projectedRadius;
+        var minPixelY = height - (pixel.Y + projectedRadius);
+        var maxPixelY = height - (pixel.Y - projectedRadius);
+        var minX = (int)MathF.Floor(minPixelX / MediumFroxelDownscale) - 1;
+        var maxX = (int)MathF.Floor(maxPixelX / MediumFroxelDownscale) + 1;
+        var minY = (int)MathF.Floor(minPixelY / MediumFroxelDownscale) - 1;
+        var maxY = (int)MathF.Floor(maxPixelY / MediumFroxelDownscale) + 1;
+        minX = Math.Clamp(minX, 0, mediumFroxelWidth - 1);
+        maxX = Math.Clamp(maxX, 0, mediumFroxelWidth - 1);
+        minY = Math.Clamp(minY, 0, mediumFroxelHeight - 1);
+        maxY = Math.Clamp(maxY, 0, mediumFroxelHeight - 1);
+        if (minX > maxX || minY > maxY)
         {
-            froxelRadius = MathF.Max(froxelRadius, Vector3.Distance(froxelCenter, corner));
+            return false;
         }
 
-        return Vector3.Distance(froxelCenter, center) <= froxelRadius + radius;
+        var centerTravel = Vector3.Distance(frame.CameraPosition, center);
+        var minSlice = (int)MathF.Floor(Math.Clamp((centerTravel - radius) / farDistance, 0.0f, 0.99999f) * MediumFroxelSliceCount) - 1;
+        var maxSlice = (int)MathF.Floor(Math.Clamp((centerTravel + radius) / farDistance, 0.0f, 0.99999f) * MediumFroxelSliceCount) + 1;
+        bounds = new ViewFroxelBounds(
+            minX,
+            maxX,
+            minY,
+            maxY,
+            Math.Clamp(minSlice, 0, MediumFroxelSliceCount - 1),
+            Math.Clamp(maxSlice, 0, MediumFroxelSliceCount - 1));
+        return true;
     }
 
     private void FillViewFroxelCorners(AquariumFrame frame, int x, int y, int slice, float farDistance, Span<Vector3> corners)
     {
         var nearTravel = (slice / (float)MediumFroxelSliceCount) * farDistance;
         var farTravel = ((slice + 1.0f) / MediumFroxelSliceCount) * farDistance;
-        var px0 = x * MediumFroxelDownscale;
-        var px1 = Math.Min((x + 1) * MediumFroxelDownscale, width - 1);
-        var py0 = y * MediumFroxelDownscale;
-        var py1 = Math.Min((y + 1) * MediumFroxelDownscale, height - 1);
+        var px0 = (float)(x * MediumFroxelDownscale);
+        var px1 = (float)Math.Min((x + 1) * MediumFroxelDownscale, width - 1);
+        var py0 = (float)(height - Math.Min((y + 1) * MediumFroxelDownscale, height - 1));
+        var py1 = (float)(height - (y * MediumFroxelDownscale));
+        py0 = Math.Clamp(py0, 0.0f, MathF.Max(height - 1.0f, 0.0f));
+        py1 = Math.Clamp(py1, 0.0f, MathF.Max(height - 1.0f, 0.0f));
 
         var d00 = RayDirectionForPixel(new Vector2(px0, py0), frame.CameraPosition, frame.Grid.Center);
         var d10 = RayDirectionForPixel(new Vector2(px1, py0), frame.CameraPosition, frame.Grid.Center);
@@ -2199,6 +2247,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float WaveAmplitude,
         float WaveFrequency,
         float WaveSpeed);
+
+    private readonly record struct ViewFroxelBounds(
+        int MinX,
+        int MaxX,
+        int MinY,
+        int MaxY,
+        int MinSlice,
+        int MaxSlice);
 
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct Int4(int X, int Y, int Z, int W);
