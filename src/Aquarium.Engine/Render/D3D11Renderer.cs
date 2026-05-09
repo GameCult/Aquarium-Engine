@@ -41,7 +41,7 @@ public sealed class D3D11Renderer : IDisposable
         new(6, "Field Identity"),
         new(7, "Bloom"),
         new(8, "Exposed Luminance"),
-        new(9, "Medium Density"),
+        new(9, "Density Slice"),
         new(10, "Medium Transmittance"),
         new(11, "Medium Source"),
     ];

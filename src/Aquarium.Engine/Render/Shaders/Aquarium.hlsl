@@ -1473,6 +1473,27 @@ float3 debugFieldIdColor(float fieldId)
     return float3(1.0, 0.0, 1.0);
 }
 
+float mediumDensitySliceDebug(float3 rayDirection)
+{
+    float sliceZ = 0.0;
+    float denominator = rayDirection.z;
+    if (abs(denominator) < 0.0001)
+    {
+        return 0.0;
+    }
+
+    float travel = (sliceZ - cameraPosition.z) / denominator;
+    if (travel <= 0.0 || travel >= farDistance)
+    {
+        return 0.0;
+    }
+
+    float3 p = cameraPosition + rayDirection * travel;
+    float gridMask = 1.0 - smoothstep(gridRadius * 0.98, gridRadius * 1.04, length(p.xy - gridCenter));
+    float3 scattering;
+    return registeredMediumDensity(p, scattering) * gridMask;
+}
+
 struct SceneOut
 {
     float4 colorTravel : SV_Target0;
@@ -1816,7 +1837,9 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
     {
-        finalColor = lerp(float3(0.01, 0.025, 0.04), float3(0.28, 0.78, 1.0), currentMediumDensity);
+        float3 debugRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float densitySlice = mediumDensitySliceDebug(debugRay);
+        finalColor = lerp(float3(0.01, 0.025, 0.04), float3(0.28, 0.78, 1.0), densitySlice);
     }
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {

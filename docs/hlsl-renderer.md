@@ -230,11 +230,12 @@ packs stable field instances into a structured buffer shared with HLSL. A
 half-resolution medium pass writes a 4x4 frustum slice atlas into diagnostic and
 transport textures before the scene pass. Each atlas texel reconstructs a world
 position and samples registered medium density there; resolve integrates those
-stored cells front-to-back for density, transmittance, and source diagnostics.
-Modes `9`, `10`, and `11` show medium density, transmittance, and source
-respectively. Final composition uses `surface * transmittance + in-scattering`,
-gated by the persisted Medium Composite control. The default is `0`, so the pass
-can be inspected without changing the presented frame until the medium is tuned.
+stored cells front-to-back for transport diagnostics. Mode `9` is a separate
+world-anchored density slice at Grid altitude, while modes `10` and `11` show
+transport transmittance and source respectively. Final composition uses `surface
+* transmittance + in-scattering`, gated by the persisted Medium Composite
+control. The default is `0`, so the pass can be inspected without changing the
+presented frame until the medium is tuned.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:
