@@ -27,8 +27,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MediumFroxelAtlasColumns = 8;
     private const int MediumFroxelAtlasRows = 4;
     private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
-    private const int GridBinRaySamplesPerAxis = 1;
-    private const int GridBinTravelSegments = MediumFroxelSliceCount;
     private const int ViewFroxelPrimitiveSlotCount = 2;
     private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
     private const Format GridHeightFormat = Format.R16_Float;
@@ -1321,107 +1319,45 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             for (var x = 0; x < mediumFroxelWidth; x++)
             {
-                var minTravel = float.PositiveInfinity;
-                var maxTravel = float.NegativeInfinity;
-                for (var sy = 0; sy < GridBinRaySamplesPerAxis; sy++)
-                {
-                    for (var sx = 0; sx < GridBinRaySamplesPerAxis; sx++)
-                    {
-                        var sample = ScreenRayPixelForViewFroxelSample(x, y, sx, sy);
-                        var direction = RayDirectionForPixel(sample, frame.CameraPosition, frame.Grid.Center);
-                        if (!TryFindGridSurfaceTravel(frame, direction, farDistance, out var travel))
-                        {
-                            continue;
-                        }
-
-                        minTravel = MathF.Min(minTravel, travel);
-                        maxTravel = MathF.Max(maxTravel, travel);
-                    }
-                }
-
-                if (float.IsPositiveInfinity(minTravel))
+                if (!ViewFroxelTubeMaySeeGrid(frame, x, y, farDistance))
                 {
                     continue;
                 }
 
-                var slicePad = farDistance / MediumFroxelSliceCount;
-                AddGridSliceRangeToViewFroxels(x, y, minTravel - slicePad, maxTravel + slicePad, farDistance, surfaceId);
+                for (var slice = 0; slice < MediumFroxelSliceCount; slice++)
+                {
+                    AddTransparentSurfaceToViewFroxel(ViewFroxelIndex(x, y, slice), surfaceId);
+                }
             }
         }
     }
 
-    private bool TryFindGridSurfaceTravel(AquariumFrame frame, Vector3 direction, float farDistance, out float travel)
+    private bool ViewFroxelTubeMaySeeGrid(AquariumFrame frame, int x, int y, float farDistance)
     {
-        travel = 0.0f;
-        var previousTravel = 0.0f;
-        var previousDistance = GridSurfaceDistanceAt(frame, direction, previousTravel);
-        const float epsilon = 0.002f;
-        if (MathF.Abs(previousDistance) <= epsilon)
+        var gridCenter = new Vector2(frame.Grid.Center.X, frame.Grid.Center.Y);
+        var expandedRadius = frame.Grid.Radius + MediumFroxelDownscale * 0.1f;
+        Span<Vector3> corners = stackalloc Vector3[8];
+        FillViewFroxelCorners(frame, x, y, 0, farDistance, corners);
+        if (AnyCornerInsideGridRadius(corners, gridCenter, expandedRadius))
         {
             return true;
         }
 
-        for (var segment = 1; segment <= GridBinTravelSegments; segment++)
-        {
-            var currentTravel = (segment / (float)GridBinTravelSegments) * farDistance;
-            var currentDistance = GridSurfaceDistanceAt(frame, direction, currentTravel);
-            if (MathF.Abs(currentDistance) <= epsilon || previousDistance * currentDistance <= 0.0f)
-            {
-                var a = previousTravel;
-                var b = currentTravel;
-                var fa = previousDistance;
-                for (var i = 0; i < 6; i++)
-                {
-                    var mid = (a + b) * 0.5f;
-                    var fm = GridSurfaceDistanceAt(frame, direction, mid);
-                    if (fa * fm <= 0.0f)
-                    {
-                        b = mid;
-                    }
-                    else
-                    {
-                        a = mid;
-                        fa = fm;
-                    }
-                }
+        FillViewFroxelCorners(frame, x, y, MediumFroxelSliceCount - 1, farDistance, corners);
+        return AnyCornerInsideGridRadius(corners, gridCenter, expandedRadius);
+    }
 
-                travel = (a + b) * 0.5f;
+    private static bool AnyCornerInsideGridRadius(ReadOnlySpan<Vector3> corners, Vector2 gridCenter, float radius)
+    {
+        foreach (var corner in corners)
+        {
+            if (Vector2.Distance(new Vector2(corner.X, corner.Y), gridCenter) <= radius)
+            {
                 return true;
             }
-
-            previousTravel = currentTravel;
-            previousDistance = currentDistance;
         }
 
         return false;
-    }
-
-    private float GridSurfaceDistanceAt(AquariumFrame frame, Vector3 direction, float travel)
-    {
-        var p = frame.CameraPosition + direction * travel;
-        return p.Z - EvaluateGridHeight(frame, new Vector2(p.X, p.Y));
-    }
-
-    private void AddGridSliceRangeToViewFroxels(int x, int y, float minTravel, float maxTravel, float farDistance, int surfaceId)
-    {
-        var safeFarDistance = MathF.Max(farDistance, 0.001f);
-        var start = (int)MathF.Floor(Math.Clamp(minTravel / safeFarDistance, 0.0f, 0.99999f) * MediumFroxelSliceCount);
-        var end = (int)MathF.Floor(Math.Clamp(maxTravel / safeFarDistance, 0.0f, 0.99999f) * MediumFroxelSliceCount);
-        for (var slice = Math.Max(0, start); slice <= Math.Min(MediumFroxelSliceCount - 1, end); slice++)
-        {
-            AddTransparentSurfaceToViewFroxel(ViewFroxelIndex(x, y, slice), surfaceId);
-        }
-    }
-
-    private Vector2 ScreenRayPixelForViewFroxelSample(int x, int y, int sampleX, int sampleY)
-    {
-        var localX = (sampleX + 0.5f) / GridBinRaySamplesPerAxis;
-        var localY = (sampleY + 0.5f) / GridBinRaySamplesPerAxis;
-        var pixelX = (x + localX) * MediumFroxelDownscale;
-        var pixelY = height - ((y + localY) * MediumFroxelDownscale);
-        return new Vector2(
-            Math.Clamp(pixelX, 0.0f, MathF.Max(width - 1.0f, 0.0f)),
-            Math.Clamp(pixelY, 0.0f, MathF.Max(height - 1.0f, 0.0f)));
     }
 
     private bool TryProjectSphereToViewFroxelBounds(

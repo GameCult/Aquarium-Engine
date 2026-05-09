@@ -15,12 +15,13 @@ volume. The repeated horizontal-strip failure was a CPU/GPU row-contract bug:
 the scene shader flips screen Y before ray generation, while CPU binning used
 raw top-left pixel Y. CPU binning now mirrors the shader's screen-ray pixel
 convention. Solid spheres use projected screen bounds plus travel slice ranges
-instead of brute-force testing every froxel, and the Grid bins per low-res
-screen tube by solving height-sheet crossings and marking crossed depth slices.
-The scene shader looks up solid and transparent candidate ids by
-`(lowX, lowY, slice)` before doing exact intersection for that slice interval.
-Next steel-plate step is replacing the CPU-filled candidate buffers with
-GPU/raster binning passes.
+instead of brute-force testing every froxel. The Grid no longer guesses sparse
+depth residency: if a low-res screen tube may see the Grid radius, the Grid
+candidate is written to every depth slice for that tube and the shader's exact
+height-sheet intersection decides the visible event. The scene shader looks up
+solid and transparent candidate ids by `(lowX, lowY, slice)` before doing exact
+intersection for that slice interval. Next steel-plate step is replacing the
+CPU-filled candidate buffers with GPU/raster binning passes.
 
 ## Hot Context
 
