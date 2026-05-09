@@ -11,13 +11,14 @@ selectable only as temporary reference ballast until visible D3D12 use survives
 the cut.
 
 Current renderer correction: D3D12 scene candidates now live in the view-froxel
-volume. CPU bootstrap code now bins sphere primitives by the view-froxel cell
-face planes expanded by sphere radius, and bins the Grid by evaluating signed
-heightfield distance at all eight view-froxel corners and requiring a crossing.
-The scene shader looks up solid and transparent candidate ids by
-`(lowX, lowY, slice)` before doing exact intersection for that slice interval.
-Next steel-plate step is replacing the CPU-filled candidate buffers with
-GPU/raster binning passes.
+volume. The corner-sign Grid test and face-plane sphere test produced the same
+horizontal-strip failure as the earlier representative binning, so the current
+CPU bootstrap bins solids with a conservative froxel bounding-sphere test and
+bins the Grid per low-res screen tube by solving actual height-sheet crossings
+on a 3x3 ray stencil, then marking the crossed depth slice range. The scene
+shader looks up solid and transparent candidate ids by `(lowX, lowY, slice)`
+before doing exact intersection for that slice interval. Next steel-plate step
+is replacing the CPU-filled candidate buffers with GPU/raster binning passes.
 
 ## Hot Context
 
