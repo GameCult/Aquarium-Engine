@@ -64,7 +64,6 @@ static const int PLANET_COUNT = 5;
 static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
-static const float FIELD_ID_TRANSPARENT_EVENT = 4.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
 static const int FIELD_INSTANCE_COUNT = 10;
@@ -115,11 +114,6 @@ float3 debugFieldIdColor(float fieldId)
     if (abs(fieldId - FIELD_ID_MEDIUM) < 0.25)
     {
         return float3(0.28, 0.72, 1.0);
-    }
-
-    if (abs(fieldId - FIELD_ID_TRANSPARENT_EVENT) < 0.25)
-    {
-        return float3(0.20, 1.0, 0.74);
     }
 
     if (fieldId >= 10.0)
@@ -468,9 +462,9 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
     float currentMediumOpacity = saturate(currentControl.z);
+    bool currentIsGrid = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
     bool currentIsMedium = abs(currentFieldId - FIELD_ID_MEDIUM) < 0.25;
-    bool currentIsTransparentEvent = abs(currentFieldId - FIELD_ID_TRANSPARENT_EVENT) < 0.25;
-    bool currentIsDistributed = currentIsMedium || currentIsTransparentEvent;
+    bool currentIsDistributed = currentIsMedium || currentIsGrid;
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
@@ -522,8 +516,8 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight * mediumContinuityWeight;
 
             historyColor = clampedHistory;
-            float maxHistoryWeight = currentIsTransparentEvent ? 0.90 : currentIsMedium ? 0.88 : 0.82;
-            float freshHistoryScale = currentIsDistributed ? 0.48 : 0.35;
+            float maxHistoryWeight = currentIsGrid ? 0.90 : currentIsMedium ? 0.88 : 0.82;
+            float freshHistoryScale = currentIsGrid ? 0.58 : currentIsDistributed ? 0.48 : 0.35;
             historyWeight = maxHistoryWeight * lerp(freshHistoryScale, 1.0, historyConfidence) * validationWeight;
             historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
         }

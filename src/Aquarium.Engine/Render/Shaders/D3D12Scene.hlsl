@@ -28,23 +28,11 @@ Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumTransportTexture : register(t14);
 SamplerState gridSampler : register(s0);
 
-struct TransparentSurface
-{
-    float4 centerRadius;
-    float4 kindDensity;
-    float4 lineParams;
-    float4 colorScatter;
-};
-
-StructuredBuffer<int4> transparentSurfaceIds : register(t15);
-StructuredBuffer<TransparentSurface> transparentSurfaces : register(t16);
-
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
-static const float FIELD_ID_TRANSPARENT_EVENT = 4.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
@@ -54,6 +42,10 @@ static const int VIEW_FROXEL_PRIMITIVE_SLOT_COUNT = 2;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
+static const float GRID_MINOR_CELL = 2.0;
+static const float GRID_MAJOR_CELL = 10.0;
+static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
+static const float GRID_ALPHA_SCALE = 0.24;
 
 struct VertexOut
 {
@@ -75,16 +67,6 @@ struct SolidHit
     float3 normal;
     float fieldId;
     int primitiveId;
-};
-
-struct TransparentEvent
-{
-    bool hit;
-    float travel;
-    float3 color;
-    float alpha;
-    float coverage;
-    int surfaceId;
 };
 
 struct RayMarchResult
@@ -112,6 +94,13 @@ float hash21(float2 p)
     p = frac(p * float2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return frac(p.x * p.y);
+}
+
+float stochasticTransparency(float2 screenUv, float alpha)
+{
+    float frameSeed = frac(frameIndex * 0.754877666);
+    float dither = frac(hash21(screenUv * resolution + frameIndex.xx * float2(17.0, 43.0)) + frameSeed);
+    return alpha - dither - 0.001 * (1.0 - ceil(alpha));
 }
 
 void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
@@ -175,6 +164,12 @@ float2 terrainGradient(float2 p)
     float hUp = gridHeightTexture.SampleLevel(gridSampler, uv + float2(0.0, texel.y), 0.0).r;
 
     return float2(hRight - hLeft, hUp - hDown) / (texelWorld * 2.0);
+}
+
+float3 terrainNormal(float3 p)
+{
+    float2 gradient = terrainGradient(p.xy);
+    return normalize(float3(-gradient.x, -gradient.y, 1.0));
 }
 
 float lineDistance(float2 p, float cell)
@@ -307,148 +302,66 @@ float gridSurfaceDistanceAt(float3 origin, float3 direction, float travel)
     return p.z - terrainHeight(p.xy);
 }
 
-bool bracketGridSurfaceInterval(float3 origin, float3 direction, float startTravel, float endTravel, out float bracketStart, out float bracketEnd)
+bool traceGridSurfaceDirect(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float3 hitPosition, out float travel)
 {
-    bracketStart = startTravel;
-    bracketEnd = endTravel;
-    float midTravel = (startTravel + endTravel) * 0.5;
-    float startDistance = gridSurfaceDistanceAt(origin, direction, startTravel);
-    float midDistance = gridSurfaceDistanceAt(origin, direction, midTravel);
-    float endDistance = gridSurfaceDistanceAt(origin, direction, endTravel);
-    float epsilon = 0.002;
+    travel = max(intervalStart, 0.0);
+    float previousTravel = travel;
+    hitPosition = origin + direction * travel;
+    float previousGap = hitPosition.z - terrainHeight(hitPosition.xy);
+    float radius = max(gridRadius, 0.001);
 
-    if (abs(startDistance) <= epsilon)
+    [loop]
+    for (int stepIndex = 0; stepIndex < 96; stepIndex++)
     {
-        bracketEnd = midTravel;
-        return true;
-    }
+        hitPosition = origin + direction * travel;
+        float2 local = (hitPosition.xy - gridCenter) / radius;
+        if (length(local) > 1.08 && hitPosition.z < 4.0)
+        {
+            return false;
+        }
 
-    if (startDistance * midDistance <= 0.0)
-    {
-        bracketEnd = midTravel;
-        return true;
-    }
+        float gap = hitPosition.z - terrainHeight(hitPosition.xy);
+        float hitEpsilon = max(0.002, travel * 0.00035);
+        if (length(local) <= 1.0 && (abs(gap) <= hitEpsilon || (previousGap > 0.0 && gap <= 0.0)))
+        {
+            float alpha = previousGap / max(previousGap - gap, 0.0001);
+            travel = lerp(previousTravel, travel, saturate(alpha));
+            hitPosition = origin + direction * travel;
+            return travel > intervalStart && travel < intervalEnd && travel < farDistance;
+        }
 
-    if (abs(midDistance) <= epsilon)
-    {
-        bracketStart = midTravel;
-        bracketEnd = endTravel;
-        return true;
-    }
-
-    if (midDistance * endDistance <= 0.0)
-    {
-        bracketStart = midTravel;
-        return true;
+        float2 slope = terrainGradient(hitPosition.xy);
+        float terrainRate = abs(direction.z - dot(slope, direction.xy));
+        float terrainStep = gap > 0.0 ? gap / max(terrainRate, 0.22) : 0.026;
+        terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
+        previousTravel = travel;
+        previousGap = gap;
+        travel += max(terrainStep, 0.026);
+        if (travel > intervalEnd || travel > farDistance)
+        {
+            return false;
+        }
     }
 
     return false;
 }
 
-bool traceGridSurface(float3 origin, float3 direction, float intervalStart, float intervalEnd, TransparentSurface surface, out float travel)
-{
-    travel = farDistance + 1.0;
-    if (intervalEnd <= intervalStart || intervalStart >= farDistance)
-    {
-        return false;
-    }
-
-    float bracketStart;
-    float bracketEnd;
-    if (!bracketGridSurfaceInterval(origin, direction, max(intervalStart, 0.0), min(intervalEnd, farDistance), bracketStart, bracketEnd))
-    {
-        return false;
-    }
-
-    float t = (bracketStart + bracketEnd) * 0.5;
-    [unroll]
-    for (int i = 0; i < 6; i++)
-    {
-        float mid = (bracketStart + bracketEnd) * 0.5;
-        float startDistance = gridSurfaceDistanceAt(origin, direction, bracketStart);
-        float midDistance = gridSurfaceDistanceAt(origin, direction, mid);
-        if (startDistance * midDistance <= 0.0)
-        {
-            bracketEnd = mid;
-        }
-        else
-        {
-            bracketStart = mid;
-        }
-
-        t = (bracketStart + bracketEnd) * 0.5;
-    }
-
-    float3 p = origin + direction * t;
-    float radius = max(surface.centerRadius.w, 0.001);
-    float2 local = (p.xy - surface.centerRadius.xy) / radius;
-    if (t <= intervalStart || t >= intervalEnd || t >= farDistance || length(local) > 1.0)
-    {
-        return false;
-    }
-
-    travel = t;
-    return true;
-}
-
-float3 gridEventColor(float3 p, TransparentSurface surface, out float alpha)
+float3 gridEventColor(float3 p, out float alpha)
 {
     float height = terrainHeight(p.xy);
     float2 gradient = terrainGradient(p.xy);
     float2 footprint = max(abs(ddx(p.xy)), abs(ddy(p.xy)));
     float pixelWidth = max(max(footprint.x, footprint.y), 0.006);
-    float minor = lineMaskFromDistance(lineDistance(p.xy, surface.lineParams.x), pixelWidth * 0.56, pixelWidth * 1.35);
-    float major = lineMaskFromDistance(lineDistance(p.xy, surface.lineParams.y), pixelWidth * 0.88, pixelWidth * 1.60);
+    float minor = lineMaskFromDistance(lineDistance(p.xy, GRID_MINOR_CELL), pixelWidth * 0.56, pixelWidth * 1.35);
+    float major = lineMaskFromDistance(lineDistance(p.xy, GRID_MAJOR_CELL), pixelWidth * 0.88, pixelWidth * 1.60);
     float contour = isolineMask(height, max(pixelWidth * 0.52, 0.010)) * smoothstep(0.025, 0.25, length(gradient));
     float fieldLine = fieldLineMask(gradient, max(pixelWidth * 0.90, 0.016));
     float support = saturate(minor * 0.38 + major * 0.92 + contour * 0.28 + fieldLine * 0.18);
-    float3 color = surface.colorScatter.rgb * (minor * 0.30 + major * 0.74);
+    float3 color = GRID_COLOR * (minor * 0.30 + major * 0.74);
     color += float3(0.98, 1.0, 0.78) * contour * 0.16;
     color += float3(0.36, 0.92, 1.0) * fieldLine * 0.12;
-    alpha = saturate(support * surface.colorScatter.w);
+    alpha = saturate(support * GRID_ALPHA_SCALE);
     return color;
-}
-
-void considerTransparentSurfaceEvent(float3 origin, float3 direction, int surfaceId, uint consumedSurfaceMask, float intervalStart, float intervalEnd, inout TransparentEvent nearest)
-{
-    if (surfaceId < 0)
-    {
-        return;
-    }
-
-    uint surfaceBit = 1u << (uint)min(surfaceId, 31);
-    if ((consumedSurfaceMask & surfaceBit) != 0u)
-    {
-        return;
-    }
-
-    TransparentSurface surface = transparentSurfaces[surfaceId];
-    float travel;
-    if (!traceGridSurface(origin, direction, intervalStart, min(intervalEnd, nearest.travel), surface, travel))
-    {
-        return;
-    }
-
-    nearest.hit = true;
-    nearest.travel = travel;
-    nearest.color = 0.0;
-    nearest.alpha = 1.0;
-    nearest.coverage = 1.0;
-    nearest.surfaceId = surfaceId;
-}
-
-void considerFroxelTransparentEvents(float3 origin, float3 direction, int froxelIndex, uint consumedSurfaceMask, float intervalStart, float intervalEnd, inout TransparentEvent nearest)
-{
-    if (froxelIndex < 0)
-    {
-        return;
-    }
-
-    int4 ids = transparentSurfaceIds[froxelIndex];
-    considerTransparentSurfaceEvent(origin, direction, ids.x, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    considerTransparentSurfaceEvent(origin, direction, ids.y, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    considerTransparentSurfaceEvent(origin, direction, ids.z, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    considerTransparentSurfaceEvent(origin, direction, ids.w, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
 }
 
 float2 mediumAtlasUv(float2 uv, int sliceIndex)
@@ -480,26 +393,6 @@ int viewFroxelIndexForUvSlice(float2 uv, int sliceIndex)
     int height = max((int)(resolution.y / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
     int2 cell = clamp((int2)floor(uv * float2(width, height)), int2(0, 0), int2(width - 1, height - 1));
     return cell.x + cell.y * width + sliceIndex * width * height;
-}
-
-TransparentEvent nearestViewFroxelTransparentEvent(float2 uv, float3 origin, float3 direction, int sliceIndex, uint consumedSurfaceMask)
-{
-    float intervalStart = mediumSliceStartTravel(sliceIndex);
-    float intervalEnd = min(mediumSliceEndTravel(sliceIndex), farDistance);
-    TransparentEvent nearest;
-    nearest.hit = false;
-    nearest.travel = intervalEnd;
-    nearest.color = 0.0;
-    nearest.alpha = 0.0;
-    nearest.coverage = 0.0;
-    nearest.surfaceId = -1;
-
-    int4 ids = transparentSurfaceIds[viewFroxelIndexForUvSlice(uv, sliceIndex)];
-    considerTransparentSurfaceEvent(origin, direction, ids.x, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    considerTransparentSurfaceEvent(origin, direction, ids.y, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    considerTransparentSurfaceEvent(origin, direction, ids.z, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    considerTransparentSurfaceEvent(origin, direction, ids.w, consumedSurfaceMask, intervalStart, intervalEnd, nearest);
-    return nearest;
 }
 
 SolidHit nearestViewFroxelSolidHit(float2 uv, float3 origin, float3 direction, int sliceIndex)
@@ -585,7 +478,7 @@ void integrateMediumRange(
     }
 }
 
-RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
+RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
 {
     RayMarchResult result;
     result.color = float3(0.001, 0.003, 0.004);
@@ -600,8 +493,6 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
     float3 inScattering = 0.0;
     float densityTravelSum = 0.0;
     float densitySum = 0.0;
-    float eventTravelSum = 0.0;
-    float eventSupportSum = 0.0;
     float densityAccumulation = 0.0;
 
     SolidHit nearestSolid;
@@ -610,13 +501,6 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
     nearestSolid.normal = 0.0;
     nearestSolid.fieldId = 0.0;
     nearestSolid.primitiveId = -1;
-    TransparentEvent nearestTransparent;
-    nearestTransparent.hit = false;
-    nearestTransparent.travel = farDistance;
-    nearestTransparent.color = 0.0;
-    nearestTransparent.alpha = 0.0;
-    nearestTransparent.coverage = 0.0;
-    nearestTransparent.surfaceId = -1;
     [loop]
     for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
     {
@@ -625,44 +509,52 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
         {
             nearestSolid = cellSolid;
         }
-
-        TransparentEvent cellTransparent = nearestViewFroxelTransparentEvent(uv, origin, direction, sliceIndex, 0u);
-        if (cellTransparent.hit && cellTransparent.travel < nearestTransparent.travel)
-        {
-            nearestTransparent = cellTransparent;
-        }
-    }
-
-    if (nearestTransparent.hit)
-    {
-        float3 transparentPosition = origin + direction * nearestTransparent.travel;
-        float transparentAlpha;
-        float3 transparentColor = gridEventColor(transparentPosition, transparentSurfaces[nearestTransparent.surfaceId], transparentAlpha);
-        if (transparentAlpha <= 0.001)
-        {
-            nearestTransparent.hit = false;
-        }
-        else
-        {
-            nearestTransparent.color = transparentColor;
-            nearestTransparent.alpha = transparentAlpha;
-            nearestTransparent.coverage = transparentAlpha;
-        }
     }
 
     float stopTravel = nearestSolid.hit ? nearestSolid.travel : farDistance;
-    if (nearestTransparent.hit && nearestTransparent.travel < stopTravel)
+    float3 gridPosition;
+    float gridTravel;
+    bool gridHit = traceGridSurfaceDirect(origin, direction, 0.0, stopTravel, gridPosition, gridTravel);
+    float gridAlpha = 0.0;
+    float3 gridColor = 0.0;
+    if (gridHit)
     {
-        integrateMediumRange(uv, 0.0, nearestTransparent.travel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
-        inScattering += transmittance * nearestTransparent.color * nearestTransparent.alpha;
-        transmittance *= 1.0 - nearestTransparent.alpha;
-        eventTravelSum += nearestTransparent.coverage * nearestTransparent.travel;
-        eventSupportSum += nearestTransparent.coverage;
-        integrateMediumRange(uv, nearestTransparent.travel, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
+        gridColor = gridEventColor(gridPosition, gridAlpha);
+        gridHit = gridAlpha > 0.001;
     }
-    else
+
+    float gridTransmittance = 1.0;
+    float3 gridInScattering = 0.0;
+    float gridDensityAccumulation = 0.0;
+    float gridDensityTravelSum = 0.0;
+    float gridDensitySum = 0.0;
+    if (gridHit)
     {
-        integrateMediumRange(uv, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
+        integrateMediumRange(uv, 0.0, gridTravel, gridTransmittance, gridInScattering, gridDensityAccumulation, gridDensityTravelSum, gridDensitySum);
+    }
+
+    integrateMediumRange(uv, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
+
+    if (gridHit && stochasticTransparency(screenUv, gridAlpha) > 0.0)
+    {
+        result.color = gridColor * gridTransmittance + gridInScattering;
+        result.travel = gridTravel;
+        result.fieldId = FIELD_ID_GRID;
+        result.normal = terrainNormal(gridPosition);
+        result.coverage = gridAlpha;
+        result.mediumOpacity = saturate(1.0 - gridTransmittance);
+        result.densityMean = saturate(gridDensityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+        return result;
+    }
+
+    if (gridHit)
+    {
+        result.travel = gridTravel;
+        result.fieldId = FIELD_ID_GRID;
+        result.normal = terrainNormal(gridPosition);
+        result.coverage = gridAlpha;
+        result.mediumOpacity = saturate(1.0 - gridTransmittance);
+        result.densityMean = saturate(gridDensityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
     }
 
     if (nearestSolid.hit)
@@ -670,32 +562,30 @@ RayMarchResult traverseRay(float2 uv, float3 origin, float3 direction)
         float3 p = origin + direction * nearestSolid.travel;
         float3 bodyColor = shadeBody(p, nearestSolid.normal, nearestSolid.primitiveId);
         result.color = bodyColor * transmittance + inScattering;
-        result.travel = nearestSolid.travel;
-        result.fieldId = nearestSolid.fieldId;
-        result.normal = nearestSolid.normal;
-        result.coverage = 1.0;
-        result.mediumOpacity = saturate(1.0 - transmittance);
-        result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+        if (!gridHit)
+        {
+            result.travel = nearestSolid.travel;
+            result.fieldId = nearestSolid.fieldId;
+            result.normal = nearestSolid.normal;
+            result.coverage = 1.0;
+            result.mediumOpacity = saturate(1.0 - transmittance);
+            result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+        }
         return result;
     }
 
     result.color = result.color * transmittance + inScattering;
-    result.mediumOpacity = saturate(1.0 - transmittance);
-    result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
-    float transparentEventSupport = saturate(eventSupportSum / (float)MEDIUM_FROXEL_SLICE_COUNT * 4.0);
-    if (transparentEventSupport > 0.010)
+    if (!gridHit)
     {
-        result.fieldId = FIELD_ID_TRANSPARENT_EVENT;
-        result.normal = -direction;
-        result.coverage = transparentEventSupport;
-        result.travel = eventSupportSum > 0.0001 ? min(eventTravelSum / eventSupportSum, farDistance) : farDistance;
-    }
-    else if (result.mediumOpacity > 0.015)
-    {
-        result.fieldId = FIELD_ID_MEDIUM;
-        result.normal = -direction;
-        result.coverage = saturate(max(result.mediumOpacity, result.densityMean * 4.0));
-        result.travel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, farDistance) : farDistance;
+        result.mediumOpacity = saturate(1.0 - transmittance);
+        result.densityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
+        if (result.mediumOpacity > 0.015)
+        {
+            result.fieldId = FIELD_ID_MEDIUM;
+            result.normal = -direction;
+            result.coverage = saturate(max(result.mediumOpacity, result.densityMean * 4.0));
+            result.travel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, farDistance) : farDistance;
+        }
     }
 
     return result;
@@ -722,7 +612,7 @@ SceneOut D3D12ScenePS(VertexOut input)
     float2 pixel = screenUv * resolution;
     float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
 
-    RayMarchResult result = traverseRay(input.uv, cameraPosition, rayDirection);
+    RayMarchResult result = traverseRay(input.uv, screenUv, cameraPosition, rayDirection);
 
     if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
     {

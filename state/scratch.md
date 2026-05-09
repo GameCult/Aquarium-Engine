@@ -4,24 +4,20 @@
 
 D3D12 parity push. The host now defaults to D3D12 unless `--renderer` or
 `AQUARIUM_RENDERER` says otherwise. D3D12 owns the visible scene path:
-Grid-height brushes, field/froxel uploads, medium diagnostic/transport/event
+Grid-height brushes, field/froxel uploads, medium diagnostic/transport
 atlases, scene HDR, bloom, temporal resolve/history, debug modes, and
 DirectWrite debug UI through a narrow D3D11On12 overlay bridge. D3D11 remains
 selectable only as temporary reference ballast until visible D3D12 use survives
 the cut.
 
-Current renderer correction: D3D12 scene candidates now live in the view-froxel
-volume. The repeated horizontal-strip failure was a CPU/GPU row-contract bug:
-the scene shader flips screen Y before ray generation, while CPU binning used
-raw top-left pixel Y. CPU binning now mirrors the shader's screen-ray pixel
-convention. Solid spheres use projected screen bounds plus travel slice ranges
-instead of brute-force testing every froxel. The Grid no longer guesses sparse
-depth residency: if a low-res screen tube may see the Grid radius, the Grid
-candidate is written to every depth slice for that tube and the shader's exact
-height-sheet intersection decides the visible event. The scene shader looks up
-solid and transparent candidate ids by `(lowX, lowY, slice)` before doing exact
-intersection for that slice interval. Next steel-plate step is replacing the
-CPU-filled candidate buffers with GPU/raster binning passes.
+Current renderer correction: the D3D12 Grid has been removed from the
+transparent/froxel candidate experiment. The Grid now traces directly in the
+scene shader as a stochastic surface before the nearest solid, writes Grid
+identity/travel/normal/coverage for temporal support, and relies on TAA to
+accumulate coverage noise. Solid spheres still use view-froxel projected bounds
+for empty-space skipping; transparent surface candidate buffers, descriptors,
+root parameters, shader structs, and event traversal were cut rather than left
+as dead scaffolding.
 
 ## Hot Context
 

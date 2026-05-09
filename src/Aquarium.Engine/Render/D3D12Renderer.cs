@@ -33,7 +33,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int PlanetCount = 5;
     private const int GridHeightBrushCount = PlanetCount + 1;
     private const int FieldInstanceCount = PlanetCount + 5;
-    private const int TransparentSurfaceCount = 1;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -101,12 +100,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private D3D12StructuredBuffer froxelPrimitiveBuffer;
     private readonly D3D12StructuredBuffer fieldInstanceBuffer;
-    private D3D12StructuredBuffer transparentSurfaceIndexBuffer;
-    private readonly D3D12StructuredBuffer transparentSurfaceBuffer;
     private Int4[] froxelPrimitiveIds = [];
     private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
-    private Int4[] transparentSurfaceIds = [];
-    private readonly TransparentSurfaceGpu[] transparentSurfaces = new TransparentSurfaceGpu[TransparentSurfaceCount];
     private readonly GridHeightBrushCpu[] gridHeightBrushes = new GridHeightBrushCpu[GridHeightBrushCount];
     private Viewport viewport;
     private RawRect scissorRect;
@@ -200,12 +195,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateBloomRenderTargets();
         froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
         fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
-        transparentSurfaceIndexBuffer = CreateTransparentSurfaceIndexBuffer();
-        transparentSurfaceBuffer = new D3D12StructuredBuffer(device, TransparentSurfaceCount, Marshal.SizeOf<TransparentSurfaceGpu>(), "Aquarium D3D12 Transparent Surface Buffer");
         resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
         resourceRegistry.Add("field-instance-buffer", fieldInstanceBuffer);
-        resourceRegistry.Add("transparent-surface-index-buffer", transparentSurfaceIndexBuffer);
-        resourceRegistry.Add("transparent-surface-buffer", transparentSurfaceBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
         commandList.Close();
@@ -302,7 +293,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         BuildGridHeightBrushes(frame);
         BuildFroxelPrimitiveTable(frame);
         BuildFieldInstanceTable(frame);
-        BuildTransparentSurfaceTable(frame);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -344,10 +334,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumTargetsDescriptor);
         frameResources.MediumTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumTransportDescriptor);
-        frameResources.TransparentSurfaceIndexDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        transparentSurfaceIndexBuffer.CreateShaderResourceView(device, frameResources.TransparentSurfaceIndexDescriptor);
-        frameResources.TransparentSurfaceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        transparentSurfaceBuffer.CreateShaderResourceView(device, frameResources.TransparentSurfaceDescriptor);
         frameResources.SceneDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneRenderTarget.CreateShaderResourceView(device, frameResources.SceneDescriptor);
         frameResources.SceneMetadataDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -482,8 +468,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fullscreenRootSignature.Dispose();
         fieldInstanceBuffer.Dispose();
         froxelPrimitiveBuffer.Dispose();
-        transparentSurfaceBuffer.Dispose();
-        transparentSurfaceIndexBuffer.Dispose();
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
@@ -591,8 +575,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private int ViewFroxelCount => mediumFroxelWidth * mediumFroxelHeight * MediumFroxelSliceCount;
 
-    private int TransparentSurfaceBufferElementCount => ViewFroxelCount;
-
     private D3D12StructuredBuffer CreateViewFroxelPrimitiveBuffer()
     {
         froxelPrimitiveIds = new Int4[ViewFroxelCount * ViewFroxelPrimitiveSlotCount];
@@ -601,16 +583,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             froxelPrimitiveIds.Length,
             Marshal.SizeOf<Int4>(),
             "Aquarium D3D12 View-Froxel Primitive Buffer");
-    }
-
-    private D3D12StructuredBuffer CreateTransparentSurfaceIndexBuffer()
-    {
-        transparentSurfaceIds = new Int4[TransparentSurfaceBufferElementCount];
-        return new D3D12StructuredBuffer(
-            device,
-            TransparentSurfaceBufferElementCount,
-            Marshal.SizeOf<Int4>(),
-            "Aquarium D3D12 View-Froxel Transparent Surface Index Buffer");
     }
 
     private D3D12PipelineSet CreatePipelineSet(D3D12ShaderPaths paths)
@@ -670,7 +642,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("medium-volume-target");
         resourceRegistry.RemoveRenderTarget("grid-height-target");
         resourceRegistry.RemoveStructuredBuffer("froxel-primitive-buffer");
-        resourceRegistry.RemoveStructuredBuffer("transparent-surface-index-buffer");
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
@@ -680,7 +651,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
         froxelPrimitiveBuffer.Dispose();
-        transparentSurfaceIndexBuffer.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
             resourceRegistry.RemoveResource($"backbuffer-{index}");
@@ -703,9 +673,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
         froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
-        transparentSurfaceIndexBuffer = CreateTransparentSurfaceIndexBuffer();
         resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
-        resourceRegistry.Add("transparent-surface-index-buffer", transparentSurfaceIndexBuffer);
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
@@ -882,7 +850,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.FroxelPrimitiveDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(5, frameResources.MediumTargetsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(6, frameResources.TransparentSurfaceIndexDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -1015,12 +982,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.SceneDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.BloomPresentationDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.SceneMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.SceneControlDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(10, frameResources.HistoryDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(11, frameResources.HistoryMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(12, frameResources.HistoryControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(6, frameResources.BloomPresentationDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.SceneMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.SceneControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.HistoryDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(10, frameResources.HistoryMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(11, frameResources.HistoryControlDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
@@ -1048,8 +1015,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             froxelPrimitiveBuffer.Upload(activeCommandList, frameResources.UploadRing, froxelPrimitiveIds);
             fieldInstanceBuffer.Upload(activeCommandList, frameResources.UploadRing, fieldInstances);
-            transparentSurfaceIndexBuffer.Upload(activeCommandList, frameResources.UploadRing, transparentSurfaceIds);
-            transparentSurfaceBuffer.Upload(activeCommandList, frameResources.UploadRing, transparentSurfaces);
         }
         finally
         {
@@ -1290,74 +1255,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumId: 1.0f,
             color: new Vector3(0.30f, 0.50f, 0.68f),
             medium: new Vector4(0.190f, 0.130f, 0.0f, 1.20f));
-    }
-
-    private void BuildTransparentSurfaceTable(AquariumFrame frame)
-    {
-        for (var i = 0; i < transparentSurfaceIds.Length; i++)
-        {
-            transparentSurfaceIds[i] = new Int4(-1, -1, -1, -1);
-        }
-
-        transparentSurfaces[0] = new TransparentSurfaceGpu(
-            new Vector4(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f, MathF.Max(frame.Grid.Radius, 0.001f)),
-            new Vector4(1.0f, 0.42f, 0.24f, 0.075f),
-            new Vector4(2.0f, 10.0f, 0.055f, 0.090f),
-            new Vector4(0.30f, 0.90f, 0.82f, 0.24f));
-
-        BinGridSurfaceIntoViewFroxels(frame, FrameFarDistance(frame), 0);
-    }
-
-    private void AddTransparentSurfaceToViewFroxel(int viewFroxelIndex, int surfaceId)
-    {
-        AddIdToInt4Slots(transparentSurfaceIds, viewFroxelIndex, 1, surfaceId);
-    }
-
-    private void BinGridSurfaceIntoViewFroxels(AquariumFrame frame, float farDistance, int surfaceId)
-    {
-        for (var y = 0; y < mediumFroxelHeight; y++)
-        {
-            for (var x = 0; x < mediumFroxelWidth; x++)
-            {
-                if (!ViewFroxelTubeMaySeeGrid(frame, x, y, farDistance))
-                {
-                    continue;
-                }
-
-                for (var slice = 0; slice < MediumFroxelSliceCount; slice++)
-                {
-                    AddTransparentSurfaceToViewFroxel(ViewFroxelIndex(x, y, slice), surfaceId);
-                }
-            }
-        }
-    }
-
-    private bool ViewFroxelTubeMaySeeGrid(AquariumFrame frame, int x, int y, float farDistance)
-    {
-        var gridCenter = new Vector2(frame.Grid.Center.X, frame.Grid.Center.Y);
-        var expandedRadius = frame.Grid.Radius + MediumFroxelDownscale * 0.1f;
-        Span<Vector3> corners = stackalloc Vector3[8];
-        FillViewFroxelCorners(frame, x, y, 0, farDistance, corners);
-        if (AnyCornerInsideGridRadius(corners, gridCenter, expandedRadius))
-        {
-            return true;
-        }
-
-        FillViewFroxelCorners(frame, x, y, MediumFroxelSliceCount - 1, farDistance, corners);
-        return AnyCornerInsideGridRadius(corners, gridCenter, expandedRadius);
-    }
-
-    private static bool AnyCornerInsideGridRadius(ReadOnlySpan<Vector3> corners, Vector2 gridCenter, float radius)
-    {
-        foreach (var corner in corners)
-        {
-            if (Vector2.Distance(new Vector2(corner.X, corner.Y), gridCenter) <= radius)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private bool TryProjectSphereToViewFroxelBounds(
@@ -1852,12 +1749,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             13,
             0,
             D3D12.DescriptorRangeOffsetAppend);
-        var transparentSurfaceRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            2,
-            15,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
         var bloomRange = new DescriptorRange(
             DescriptorRangeType.ShaderResourceView,
             BloomLevelCount,
@@ -1902,7 +1793,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([froxelPrimitiveRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([fieldInstanceRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([mediumTargetRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([transparentSurfaceRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([bloomRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneControlRange]), ShaderVisibility.Pixel),
@@ -2254,13 +2144,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct TransparentSurfaceGpu(
-        Vector4 CenterRadius,
-        Vector4 KindDensity,
-        Vector4 LineParams,
-        Vector4 ColorScatter);
-
     private sealed record D3D12ShaderPaths(
         string Grid,
         string Smoke,
@@ -2332,10 +2215,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot MediumTargetsDescriptor { get; set; }
 
         public D3D12DescriptorSlot MediumTransportDescriptor { get; set; }
-
-        public D3D12DescriptorSlot TransparentSurfaceIndexDescriptor { get; set; }
-
-        public D3D12DescriptorSlot TransparentSurfaceDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneDescriptor { get; set; }
 
