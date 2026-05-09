@@ -31,9 +31,10 @@ resource graph beyond smoke-pass scaffolding.
   transient descriptor, static descriptor, and RTV usage.
 - Render targets may create SRVs, and the smoke path now samples its offscreen
   target in a second fullscreen pass instead of copying it as an opaque resource.
-- D3D12 compiles the real `GridHeightPS` from `Aquarium.hlsl`, uploads the
-  Aquarium frame constants, renders a fixed 128x128 float Grid height target,
-  and exposes that target through render debug mode `11`.
+- D3D12 renders the Grid height target as a proper brush pass: frame constants
+  plus a fixed body brush table feed a base field draw followed by one additive
+  up-facing gravity quad per body. The target is `R16G16B16A16_Float` so the
+  additive pass uses supported render-target blending, and mode `11` exposes it.
 - Renderer calls receive current window dimensions, and the D3D12 backend can
   recreate swapchain buffers plus dependent smoke resources on resize.
 - Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds

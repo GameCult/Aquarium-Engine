@@ -15,7 +15,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
 {
     private const int BackBufferCount = 2;
     private const int GridHeightTextureSize = 128;
-    private const string AquariumShaderRelativePath = "Render/Shaders/Aquarium.hlsl";
+    private const int PlanetCount = 5;
+    private const int GridHeightBrushCount = PlanetCount + 1;
+    private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";
 
     private readonly IDXGIFactory4 factory;
@@ -28,7 +30,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly FrameResources[] frames = new FrameResources[BackBufferCount];
     private readonly ID3D12GraphicsCommandList commandList;
     private readonly ID3D12RootSignature fullscreenRootSignature;
-    private readonly ID3D12PipelineState gridHeightPipelineState;
+    private readonly ID3D12PipelineState gridHeightBasePipelineState;
+    private readonly ID3D12PipelineState gridHeightBrushPipelineState;
     private readonly ID3D12PipelineState smokePipelineState;
     private readonly ID3D12PipelineState copyPipelineState;
     private readonly ID3D12PipelineState gridHeightDebugPipelineState;
@@ -48,6 +51,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private Vector2 previousGridCenter;
     private float previousGridRadius = 0.001f;
     private float previousTimeSeconds;
+    private GridHeightBrushConstants gridHeightBrushConstants;
     private GraphicsSettings settings = GraphicsSettings.Default;
     private bool debugUiVisible = true;
 
@@ -103,10 +107,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ReportStartupProgress(startupProgress, "Creating D3D12 fullscreen smoke pipeline");
         fullscreenRootSignature = CreateFullscreenRootSignature();
         fullscreenRootSignature.Name = "Aquarium D3D12 Fullscreen Root Signature";
-        var aquariumShaderPath = Path.Combine(AppContext.BaseDirectory, AquariumShaderRelativePath);
+        var gridShaderPath = Path.Combine(AppContext.BaseDirectory, GridShaderRelativePath);
         var smokeShaderPath = Path.Combine(AppContext.BaseDirectory, SmokeShaderRelativePath);
-        gridHeightPipelineState = CreateGridHeightPipelineState(aquariumShaderPath);
-        gridHeightPipelineState.Name = "Aquarium D3D12 Grid Height Pipeline";
+        gridHeightBasePipelineState = CreateGridHeightBasePipelineState(gridShaderPath);
+        gridHeightBasePipelineState.Name = "Aquarium D3D12 Grid Height Base Pipeline";
+        gridHeightBrushPipelineState = CreateGridHeightBrushPipelineState(gridShaderPath);
+        gridHeightBrushPipelineState.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
         smokePipelineState = CreateSmokePipelineState(smokeShaderPath);
         smokePipelineState.Name = "Aquarium D3D12 Smoke Pipeline";
         copyPipelineState = CreateCopyPipelineState(smokeShaderPath);
@@ -170,6 +176,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             previousTimeSeconds = frame.TimeSeconds;
         }
 
+        BuildGridHeightBrushes(frame);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -195,6 +202,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
             frameResources.FrameConstantsDescriptor.Cpu);
+        var gridBrushConstants = frameResources.UploadRing.WriteConstant(gridHeightBrushConstants);
+        frameResources.GridBrushConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        device.CreateConstantBufferView(
+            new ConstantBufferViewDescription(gridBrushConstants.GpuVirtualAddress, gridBrushConstants.SizeInBytes),
+            frameResources.GridBrushConstantsDescriptor.Cpu);
 
         var smokeConstants = frameResources.UploadRing.WriteConstant(new SmokeConstants(
             new Vector4(
@@ -239,7 +251,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightDebugPipelineState.Dispose();
         copyPipelineState.Dispose();
         smokePipelineState.Dispose();
-        gridHeightPipelineState.Dispose();
+        gridHeightBrushPipelineState.Dispose();
+        gridHeightBasePipelineState.Dispose();
         fullscreenRootSignature.Dispose();
         diagnosticUavTarget.Dispose();
         smokeRenderTarget.Dispose();
@@ -332,7 +345,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             device,
             GridHeightTextureSize,
             GridHeightTextureSize,
-            Format.R32G32B32A32_Float,
+            Format.R16G16B16A16_Float,
             renderTargetViewArena.Allocate(),
             staticShaderDescriptorArena.Allocate(),
             null,
@@ -430,7 +443,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gridHeightRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(gridHeightRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
-            activeCommandList.SetPipelineState(gridHeightPipelineState);
+            activeCommandList.SetPipelineState(gridHeightBasePipelineState);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             activeCommandList.RSSetViewports(viewport);
@@ -438,11 +451,58 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.OMSetRenderTargets(gridHeightRenderTarget.RenderTargetView.Cpu, null);
             activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             activeCommandList.DrawInstanced(3, 1, 0, 0);
+            activeCommandList.SetPipelineState(gridHeightBrushPipelineState);
+            activeCommandList.SetGraphicsRootDescriptorTable(3, frameResources.GridBrushConstantsDescriptor.Gpu);
+            activeCommandList.DrawInstanced(6, GridHeightBrushCount, 0, 0);
         }
         finally
         {
             activeCommandList.EndEvent();
         }
+    }
+
+    private void BuildGridHeightBrushes(AquariumFrame frame)
+    {
+        SetGridHeightBrush(
+            0,
+            new Vector2(0.0f, 0.0f),
+            8.5f,
+            2.85f,
+            -1.34f,
+            0.055f,
+            1.2f,
+            0.74f);
+
+        for (var index = 0; index < PlanetCount; index++)
+        {
+            var radius = PlanetRadius(index);
+            var center = PlanetCenter(index, frame.TimeSeconds, radius);
+            SetGridHeightBrush(
+                index + 1,
+                new Vector2(center.X, center.Y),
+                3.8f + radius * 2.5f,
+                2.1f,
+                -0.42f,
+                0.022f,
+                2.4f,
+                1.35f);
+        }
+    }
+
+    private void SetGridHeightBrush(
+        int index,
+        Vector2 center,
+        float radius,
+        float power,
+        float amplitude,
+        float waveAmplitude,
+        float waveFrequency,
+        float waveSpeed)
+    {
+        var centerRadius = new Vector4(center, radius, 0.0f);
+        var shape = new Vector4(power, amplitude, 0.0f, 0.0f);
+        var wave = new Vector4(waveAmplitude, waveFrequency, waveSpeed, 0.0f);
+        gridHeightBrushConstants.Set(index, centerRadius, shape, wave);
     }
 
     private void SignalFrame(FrameResources frameResources)
@@ -532,11 +592,18 @@ public sealed class D3D12Renderer : IAquariumRenderer
             1,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var gridBrushRange = new DescriptorRange(
+            DescriptorRangeType.ConstantBufferView,
+            1,
+            1,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
-            new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([sourceTextureRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([diagnosticUavRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([gridBrushRange]), ShaderVisibility.All),
         };
         var staticSamplers = new[]
         {
@@ -579,12 +646,27 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12GridHeightDebugPS", Format.B8G8R8A8_UNorm);
     }
 
-    private ID3D12PipelineState CreateGridHeightPipelineState(string path)
+    private ID3D12PipelineState CreateGridHeightBasePipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "GridHeightPS", Format.R32G32B32A32_Float);
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12GridHeightBasePS", Format.R16G16B16A16_Float);
     }
 
-    private ID3D12PipelineState CreateFullscreenPipelineState(string path, string vertexEntryPoint, string pixelEntryPoint, Format renderTargetFormat)
+    private ID3D12PipelineState CreateGridHeightBrushPipelineState(string path)
+    {
+        return CreateFullscreenPipelineState(
+            path,
+            "D3D12GridHeightBrushVS",
+            "D3D12GridHeightBrushPS",
+            Format.R16G16B16A16_Float,
+            new BlendDescription(Blend.One, Blend.One, Blend.One, Blend.One));
+    }
+
+    private ID3D12PipelineState CreateFullscreenPipelineState(
+        string path,
+        string vertexEntryPoint,
+        string pixelEntryPoint,
+        Format renderTargetFormat,
+        BlendDescription? blendDescription = null)
     {
         var vertexShader = CompileShader(path, vertexEntryPoint, "vs_5_0");
         var pixelShader = CompileShader(path, pixelEntryPoint, "ps_5_0");
@@ -593,7 +675,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             RootSignature = fullscreenRootSignature,
             VertexShader = vertexShader,
             PixelShader = pixelShader,
-            BlendState = BlendDescription.Opaque,
+            BlendState = blendDescription ?? BlendDescription.Opaque,
             RasterizerState = RasterizerDescription.CullNone,
             DepthStencilState = DepthStencilDescription.None,
             SampleMask = uint.MaxValue,
@@ -613,6 +695,42 @@ public sealed class D3D12Renderer : IAquariumRenderer
 #endif
 
         return Compiler.CompileFromFile(path, entryPoint, profile, shaderFlags, EffectFlags.None);
+    }
+
+    private static float PlanetRadius(int index)
+    {
+        return Lerp(0.34f, 0.62f, Hash21(index, 19.7f));
+    }
+
+    private static Vector3 PlanetCenter(int index, float timeSeconds, float radius)
+    {
+        var f = (float)index;
+        var angle = f * 0.8975979f + timeSeconds * (0.08f + 0.011f * f);
+        var orbitRadius = 4.1f + f * 0.77f;
+        return new Vector3(
+            MathF.Cos(angle) * orbitRadius,
+            MathF.Sin(angle) * orbitRadius,
+            1.15f + radius * 0.72f);
+    }
+
+    private static float Hash21(float x, float y)
+    {
+        x = Frac(x * 123.34f);
+        y = Frac(y * 456.21f);
+        var d = x * (x + 45.32f) + y * (y + 45.32f);
+        x += d;
+        y += d;
+        return Frac(x * y);
+    }
+
+    private static float Frac(float value)
+    {
+        return value - MathF.Floor(value);
+    }
+
+    private static float Lerp(float a, float b, float t)
+    {
+        return a + (b - a) * t;
     }
 
     private readonly record struct D3D12PassContext(
@@ -646,6 +764,67 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float MediumDebugStep,
         Vector3 PresentationPadding);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private record struct GridHeightBrushConstants(
+        Vector4 CenterRadius0,
+        Vector4 CenterRadius1,
+        Vector4 CenterRadius2,
+        Vector4 CenterRadius3,
+        Vector4 CenterRadius4,
+        Vector4 CenterRadius5,
+        Vector4 Shape0,
+        Vector4 Shape1,
+        Vector4 Shape2,
+        Vector4 Shape3,
+        Vector4 Shape4,
+        Vector4 Shape5,
+        Vector4 Wave0,
+        Vector4 Wave1,
+        Vector4 Wave2,
+        Vector4 Wave3,
+        Vector4 Wave4,
+        Vector4 Wave5)
+    {
+        public void Set(int index, Vector4 centerRadius, Vector4 shape, Vector4 wave)
+        {
+            switch (index)
+            {
+                case 0:
+                    CenterRadius0 = centerRadius;
+                    Shape0 = shape;
+                    Wave0 = wave;
+                    break;
+                case 1:
+                    CenterRadius1 = centerRadius;
+                    Shape1 = shape;
+                    Wave1 = wave;
+                    break;
+                case 2:
+                    CenterRadius2 = centerRadius;
+                    Shape2 = shape;
+                    Wave2 = wave;
+                    break;
+                case 3:
+                    CenterRadius3 = centerRadius;
+                    Shape3 = shape;
+                    Wave3 = wave;
+                    break;
+                case 4:
+                    CenterRadius4 = centerRadius;
+                    Shape4 = shape;
+                    Wave4 = wave;
+                    break;
+                case 5:
+                    CenterRadius5 = centerRadius;
+                    Shape5 = shape;
+                    Wave5 = wave;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(index), index, "Grid height brush index is outside the fixed brush table.");
+            }
+        }
+    }
+
     private sealed class FrameResources(
         ID3D12CommandAllocator commandAllocator,
         D3D12UploadRing uploadRing,
@@ -658,6 +837,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorArena TransientShaderDescriptors { get; } = transientShaderDescriptors;
 
         public D3D12DescriptorSlot FrameConstantsDescriptor { get; set; }
+
+        public D3D12DescriptorSlot GridBrushConstantsDescriptor { get; set; }
 
         public D3D12DescriptorSlot SmokeConstantsDescriptor { get; set; }
 

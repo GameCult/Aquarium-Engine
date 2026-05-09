@@ -269,10 +269,12 @@ can start porting real passes while keeping D3D11 as the visual reference.
   `D3D12Smoke.hlsl`. Resize now waits for the GPU, releases swapchain-dependent
   resources, rebuilds static shader/RTV descriptor arenas, and recreates
   backbuffer/smoke/diagnostic resources from a clean descriptor state.
-- D3D12 Grid height migration pass: the backend now compiles `GridHeightPS`
-  from `Aquarium.hlsl`, uploads the Aquarium frame constants through the
-  per-frame upload ring, renders a 128x128 `R32G32B32A32_Float` Grid height
-  target, and displays it in render debug mode `11`. Temporal previous
-  camera/Grid/time state is renderer-level state, not swapchain-frame-resource
-  state; swapchain image index is not frame history. Next D3D12 migration step
-  is the froxel/field resource upload path.
+- D3D12 Grid height migration correction: the first version still did a
+  fullscreen per-texel body loop. That was the wrong architecture. The D3D12
+  Grid height pass now behaves like Aetheria's gravity layer: a base Grid field
+  draw, then one additive up-facing quad per body, driven by a small uploaded
+  brush table. The target is `R16G16B16A16_Float` because additive blending is
+  not the right bet on `R32G32B32A32_Float`. Render debug mode `11` displays the
+  height target. Temporal previous camera/Grid/time state is renderer-level
+  state, not swapchain-frame-resource state; swapchain image index is not frame
+  history. Next D3D12 migration step is the froxel/field resource upload path.

@@ -19,10 +19,11 @@ has feature parity.
   render-target-to-swapchain copy, UAV binding from a transient descriptor,
   named objects, command-list events, and draw submission before real scene
   passes migrate.
-- The first real migrated pass is the Grid height pass. D3D12 compiles
-  `GridHeightPS` from `Aquarium.hlsl`, uploads the Aquarium frame constants,
-  renders a 128x128 `R32G32B32A32_Float` Grid height target, and can display it
-  through render debug mode `11`.
+- The first real migrated pass is the Grid height pass. D3D12 uploads Aquarium
+  frame constants plus a fixed body brush table, renders a base Grid field, then
+  draws one additive up-facing gravity quad per body into a 128x128
+  `R16G16B16A16_Float` Grid height target. Render debug mode `11` displays that
+  target.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a
