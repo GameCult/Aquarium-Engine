@@ -7,7 +7,7 @@ public readonly record struct GraphicsSettings(
     float BloomVeilIntensity)
 {
     public const int MinRenderDebugMode = 0;
-    public const int MaxRenderDebugMode = 8;
+    public const int MaxRenderDebugMode = 10;
     public const float MinSceneExposure = 0.02f;
     public const float MaxSceneExposure = 1.2f;
     public const float MinBloomIntensity = 0.0f;

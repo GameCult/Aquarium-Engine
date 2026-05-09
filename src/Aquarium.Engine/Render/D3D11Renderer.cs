@@ -28,6 +28,7 @@ public sealed class D3D11Renderer : IDisposable
     private const int FroxelSlotCount = 2;
     private const int FroxelBufferElementCount = FroxelCountX * FroxelCountY * FroxelCountZ * FroxelSlotCount;
     private const int PlanetCount = 5;
+    private const int FieldInstanceCount = PlanetCount + 5;
     private const float SunRadius = 1.12f;
     private const float FroxelMinZ = -2.0f;
     private const float FroxelMaxZ = 6.0f;
@@ -82,6 +83,9 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11Buffer froxelPrimitiveBuffer;
     private readonly ID3D11ShaderResourceView froxelPrimitiveShaderResourceView;
     private readonly Int4[] froxelPrimitiveIds = new Int4[FroxelBufferElementCount];
+    private readonly ID3D11Buffer fieldInstanceBuffer;
+    private readonly ID3D11ShaderResourceView fieldInstanceShaderResourceView;
+    private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
     private readonly int width;
     private readonly int height;
     private readonly string shaderPath;
@@ -243,6 +247,17 @@ public sealed class D3D11Renderer : IDisposable
         froxelPrimitiveShaderResourceView = device.CreateShaderResourceView(
             froxelPrimitiveBuffer,
             new ShaderResourceViewDescription(froxelPrimitiveBuffer, Format.Unknown, 0, FroxelBufferElementCount));
+        fieldInstanceBuffer = device.CreateBuffer(
+            fieldInstances,
+            BindFlags.ShaderResource,
+            ResourceUsage.Default,
+            CpuAccessFlags.None,
+            ResourceOptionFlags.BufferStructured,
+            0,
+            (uint)Marshal.SizeOf<FieldInstanceGpu>());
+        fieldInstanceShaderResourceView = device.CreateShaderResourceView(
+            fieldInstanceBuffer,
+            new ShaderResourceViewDescription(fieldInstanceBuffer, Format.Unknown, 0, FieldInstanceCount));
         previousCameraPosition = Vector3.Zero;
         previousGridCenter = Vector2.Zero;
         previousGridRadius = 0.001f;
@@ -285,8 +300,10 @@ public sealed class D3D11Renderer : IDisposable
             (float2)Vector2.Zero);
 
         BuildFroxelPrimitiveTable(frame);
+        BuildFieldInstanceTable(frame);
         context.UpdateSubresource(in constants, frameConstantBuffer);
         context.UpdateSubresource(froxelPrimitiveIds, froxelPrimitiveBuffer);
+        context.UpdateSubresource(fieldInstances, fieldInstanceBuffer);
         RenderGridHeight();
         RenderScene();
         RenderBloom();
@@ -356,6 +373,8 @@ public sealed class D3D11Renderer : IDisposable
     public void Dispose()
     {
         overlay.Dispose();
+        fieldInstanceShaderResourceView.Dispose();
+        fieldInstanceBuffer.Dispose();
         froxelPrimitiveShaderResourceView.Dispose();
         froxelPrimitiveBuffer.Dispose();
         frameConstantBuffer.Dispose();
@@ -489,6 +508,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(9);
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
+        context.PSUnsetShaderResource(12);
         context.OMSetRenderTargets(gridHeightRenderTargetView);
         context.RSSetViewport(0.0f, 0.0f, GridHeightTextureSize, GridHeightTextureSize, 0.0f, 1.0f);
         context.ClearRenderTargetView(gridHeightRenderTargetView, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -524,6 +544,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSSetShaderResource(0, gridHeightShaderResourceView);
         context.PSSetShaderResource(1, froxelPrimitiveShaderResourceView);
         context.PSSetShaderResource(2, ditherShaderResourceView);
+        context.PSSetShaderResource(12, fieldInstanceShaderResourceView);
         context.PSSetSampler(0, gridSampler);
         context.PSSetSampler(1, ditherSampler);
         context.Draw(3, 0);
@@ -534,6 +555,7 @@ public sealed class D3D11Renderer : IDisposable
         context.PSUnsetShaderResource(9);
         context.PSUnsetShaderResource(10);
         context.PSUnsetShaderResource(11);
+        context.PSUnsetShaderResource(12);
 
         for (var level = 0; level < BloomLevelCount; level++)
         {
@@ -826,6 +848,70 @@ public sealed class D3D11Renderer : IDisposable
         return a + (b - a) * t;
     }
 
+    private void BuildFieldInstanceTable(AquariumFrame frame)
+    {
+        fieldInstances[0] = FieldInstanceGpu.Sphere(
+            fieldId: 2.0f,
+            flags: FieldFlags.Solid | FieldFlags.Emitter,
+            center: new Vector3(0.0f, 0.0f, 2.2f),
+            radius: SunRadius,
+            materialId: 1.0f,
+            mediumId: 0.0f,
+            color: new Vector3(10.0f, 8.7f, 4.2f),
+            medium: Vector4.Zero);
+
+        for (var i = 0; i < PlanetCount; i++)
+        {
+            var radius = PlanetRadius(i);
+            fieldInstances[i + 1] = FieldInstanceGpu.Sphere(
+                fieldId: 10.0f + i,
+                flags: FieldFlags.Solid | FieldFlags.ShadowCaster | FieldFlags.Receiver,
+                center: PlanetCenter(i, frame.TimeSeconds, radius),
+                radius: radius,
+                materialId: 10.0f + i,
+                mediumId: 0.0f,
+                color: Vector3.One,
+                medium: Vector4.Zero);
+        }
+
+        fieldInstances[6] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 32.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X - 3.8f, frame.Grid.Center.Y + 1.8f, 1.15f),
+            radius: new Vector3(3.4f, 1.25f, 0.92f),
+            angle: frame.TimeSeconds * 0.055f,
+            mediumId: 1.0f,
+            color: new Vector3(0.50f, 0.72f, 0.86f),
+            medium: new Vector4(0.030f, 0.018f, 0.0f, 0.45f));
+        fieldInstances[7] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 33.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X + 4.1f, frame.Grid.Center.Y - 1.4f, -0.45f),
+            radius: new Vector3(4.5f, 1.55f, 0.78f),
+            angle: -0.62f + frame.TimeSeconds * 0.033f,
+            mediumId: 1.0f,
+            color: new Vector3(0.34f, 0.58f, 0.72f),
+            medium: new Vector4(0.024f, 0.015f, 0.0f, 0.38f));
+        fieldInstances[8] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 34.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X + 0.8f, frame.Grid.Center.Y + 3.7f, 2.7f),
+            radius: new Vector3(2.2f, 1.1f, 0.62f),
+            angle: 1.15f,
+            mediumId: 1.0f,
+            color: new Vector3(0.75f, 0.70f, 0.52f),
+            medium: new Vector4(0.020f, 0.014f, 0.0f, 0.32f));
+        fieldInstances[9] = FieldInstanceGpu.Ellipsoid(
+            fieldId: 35.0f,
+            flags: FieldFlags.Cloud | FieldFlags.Receiver,
+            center: new Vector3(frame.Grid.Center.X - 0.4f, frame.Grid.Center.Y - 3.9f, -1.35f),
+            radius: new Vector3(5.2f, 1.8f, 0.88f),
+            angle: 0.46f,
+            mediumId: 1.0f,
+            color: new Vector3(0.30f, 0.50f, 0.68f),
+            medium: new Vector4(0.018f, 0.012f, 0.0f, 0.35f));
+    }
+
     private static Vector2 HaltonJitter(int index)
     {
         return new Vector2(Halton(index & 1023, 2) - 0.5f, Halton(index & 1023, 3) - 0.5f) * TemporalJitterScale;
@@ -901,6 +987,65 @@ public sealed class D3D11Renderer : IDisposable
 
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct Int4(int X, int Y, int Z, int W);
+
+    [Flags]
+    private enum FieldFlags
+    {
+        Solid = 1,
+        Cloud = 2,
+        Hybrid = 4,
+        Emitter = 8,
+        ShadowCaster = 16,
+        Receiver = 32,
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct FieldInstanceGpu(
+        Vector4 CenterRadius,
+        Vector4 RadiusAngle,
+        Vector4 FieldFlags,
+        Vector4 MaterialMedium,
+        Vector4 ColorIntensity,
+        Vector4 MediumTerms)
+    {
+        public static FieldInstanceGpu Sphere(
+            float fieldId,
+            FieldFlags flags,
+            Vector3 center,
+            float radius,
+            float materialId,
+            float mediumId,
+            Vector3 color,
+            Vector4 medium)
+        {
+            return new FieldInstanceGpu(
+                new Vector4(center, radius),
+                new Vector4(radius, radius, radius, 0.0f),
+                new Vector4(fieldId, (float)flags, 1.0f, 0.0f),
+                new Vector4(materialId, mediumId, 0.0f, 0.0f),
+                new Vector4(color, 1.0f),
+                medium);
+        }
+
+        public static FieldInstanceGpu Ellipsoid(
+            float fieldId,
+            FieldFlags flags,
+            Vector3 center,
+            Vector3 radius,
+            float angle,
+            float mediumId,
+            Vector3 color,
+            Vector4 medium)
+        {
+            return new FieldInstanceGpu(
+                new Vector4(center, MathF.Max(MathF.Max(radius.X, radius.Y), radius.Z)),
+                new Vector4(radius, angle),
+                new Vector4(fieldId, (float)flags, 2.0f, 0.0f),
+                new Vector4(0.0f, mediumId, 0.0f, 0.0f),
+                new Vector4(color, 1.0f),
+                medium);
+        }
+    }
 
     private readonly record struct ShaderSet(
         ID3D11VertexShader VertexShader,

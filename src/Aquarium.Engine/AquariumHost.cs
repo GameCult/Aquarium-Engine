@@ -195,5 +195,9 @@ public static class AquariumHost
         {
             renderer.RenderDebugMode = 8;
         }
+        else if (input.IsKeyPressed(KeyCode.Digit9))
+        {
+            renderer.RenderDebugMode = 9;
+        }
     }
 }

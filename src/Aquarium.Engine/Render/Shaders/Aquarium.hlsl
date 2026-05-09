@@ -32,6 +32,19 @@ Texture2D<float4> historyControlTexture : register(t8);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
+
+struct FieldInstance
+{
+    float4 centerRadius;
+    float4 radiusAngle;
+    float4 fieldFlags;
+    float4 materialMedium;
+    float4 colorIntensity;
+    float4 mediumTerms;
+};
+
+StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+
 SamplerState gridSampler : register(s0);
 SamplerState ditherSampler : register(s1);
 
@@ -49,6 +62,8 @@ static const float TERRAIN_ISOLINE_SPACING = 0.12;
 static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const int CLOUD_FIELD_COUNT = 4;
+static const int FIELD_INSTANCE_COUNT = 10;
+static const int FIELD_FLAG_CLOUD = 2;
 static const float CLOUD_MIN_STEP = 0.085;
 static const float CLOUD_MAX_STEP = 0.46;
 static const float CLOUD_EMPTY_STEP_SCALE = 0.42;
@@ -357,6 +372,88 @@ float ellipsoidSdf(float3 p, float3 radius)
     float3 safeRadius = max(radius, 0.001);
     float normalizedDistance = length(p / safeRadius) - 1.0;
     return normalizedDistance * min(safeRadius.x, min(safeRadius.y, safeRadius.z));
+}
+
+float2 rotate2(float2 value, float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+    return float2(value.x * c - value.y * s, value.x * s + value.y * c);
+}
+
+float fieldDistance(float3 p, FieldInstance field)
+{
+    float3 local = p - field.centerRadius.xyz;
+    local.xy = rotate2(local.xy, -field.radiusAngle.w);
+    return ellipsoidSdf(local, max(field.radiusAngle.xyz, 0.001));
+}
+
+float registeredMediumDensity(float3 p, out float3 scattering)
+{
+    float density = 0.0;
+    scattering = 0.0;
+
+    [unroll]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    {
+        FieldInstance field = fieldInstances[i];
+        if (((int)(field.fieldFlags.y + 0.5) & FIELD_FLAG_CLOUD) == 0)
+        {
+            continue;
+        }
+
+        float distanceToField = fieldDistance(p, field);
+        float shell = smoothstep(0.0, 0.42, -distanceToField);
+        if (shell <= 0.0)
+        {
+            continue;
+        }
+
+        float3 local = p - field.centerRadius.xyz;
+        local.xy = rotate2(local.xy, -field.radiusAngle.w);
+        local /= max(field.radiusAngle.xyz, 0.001);
+        float erosion = saturate(0.62 + fbm3(local * 3.4 + float3(0.0, 0.0, timeSeconds * 0.018)) * 0.38);
+        float core = 1.0 - smoothstep(0.80, 1.05, length(local));
+        float fieldDensity = shell * core * erosion * field.mediumTerms.w;
+        density += fieldDensity;
+        scattering += field.colorIntensity.rgb * fieldDensity * field.mediumTerms.y;
+    }
+
+    return saturate(density);
+}
+
+void integrateRegisteredMedium(float3 rayOrigin, float3 rayDirection, float maxTravel, out float densityIntegral, out float transmittance, out float3 inScattering)
+{
+    densityIntegral = 0.0;
+    transmittance = 1.0;
+    inScattering = 0.0;
+
+    float marchEnd = min(maxTravel, farDistance);
+    float stepLength = max(marchEnd / 40.0, 0.08);
+    float travel = stepLength * 0.5;
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < 48; stepIndex++)
+    {
+        if (travel >= marchEnd || transmittance < 0.02)
+        {
+            break;
+        }
+
+        float3 p = rayOrigin + rayDirection * travel;
+        float3 scattering;
+        float density = registeredMediumDensity(p, scattering);
+        if (density > 0.001)
+        {
+            float extinction = density * 0.16;
+            float segmentTransmittance = exp(-extinction * stepLength);
+            densityIntegral += density * stepLength;
+            inScattering += transmittance * scattering * (1.0 - segmentTransmittance) / max(extinction, 0.001);
+            transmittance *= segmentTransmittance;
+        }
+
+        travel += stepLength;
+    }
 }
 
 void cloudFieldInfo(int index, out float3 center, out float3 radius, out float3 tint, out float densityScale)
@@ -1359,6 +1456,7 @@ SceneOut AquariumScenePS(VertexOut input)
     float outputReactive = 0.0;
     float outputCoverage = 0.0;
     float outputMediumOpacity = 0.0;
+    float outputMediumDensity = 0.0;
 
     if (raymarchBodies(cameraPosition, rayDirection, hitPosition, materialId, primitiveId, travel))
     {
@@ -1390,12 +1488,19 @@ SceneOut AquariumScenePS(VertexOut input)
         }
     }
 
+    float mediumDensityIntegral;
+    float mediumTransmittance;
+    float3 mediumInScattering;
+    integrateRegisteredMedium(cameraPosition, rayDirection, min(outputTravel, farDistance), mediumDensityIntegral, mediumTransmittance, mediumInScattering);
+    outputMediumOpacity = saturate(1.0 - mediumTransmittance);
+    outputMediumDensity = saturate(mediumDensityIntegral * 0.18);
+
     color += float3(0.001, 0.003, 0.004);
 
     SceneOut output;
     output.colorTravel = float4(color, min(outputTravel, farDistance + 1.0));
     output.metadata = float4(outputMaterialId, outputNormal);
-    output.control = float4(outputReactive, outputCoverage, outputMediumOpacity, 0.0);
+    output.control = float4(outputReactive, outputCoverage, outputMediumOpacity, outputMediumDensity);
     return output;
 }
 
@@ -1517,6 +1622,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     float currentReactive = saturate(currentControl.x);
     float currentCoverage = saturate(currentControl.y);
     float currentMediumOpacity = saturate(currentControl.z);
+    float currentMediumDensity = saturate(currentControl.w);
     bool currentIsGrid = abs(currentFieldId - FIELD_ID_GRID) < 0.25;
 
     if (currentIsGrid && currentTravel <= farDistance)
@@ -1625,6 +1731,15 @@ ResolveOut AquariumResolvePS(VertexOut input)
     {
         float ev = log2(max(luminance(exposedColor), 0.0001));
         finalColor = lerp(float3(0.02, 0.08, 0.20), float3(1.0, 0.82, 0.22), saturate((ev + 7.0) / 10.0));
+    }
+    else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
+    {
+        finalColor = lerp(float3(0.01, 0.025, 0.04), float3(0.28, 0.78, 1.0), currentMediumDensity);
+    }
+    else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
+    {
+        float transmittance = saturate(1.0 - currentMediumOpacity);
+        finalColor = lerp(float3(0.10, 0.02, 0.01), float3(0.72, 1.0, 0.86), transmittance);
     }
 
     ResolveOut output;

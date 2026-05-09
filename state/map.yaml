@@ -63,8 +63,10 @@ renderer_state:
     - DirectWrite overlay text after scene rendering.
     - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
+    - First field instance structured buffer feeding registered medium diagnostics.
     - Splash screen with bundled app icon and GameCult typefaces.
   next:
+    - Promote field instances from fixed renderer table to a CPU-owned registry with per-field debug controls.
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.

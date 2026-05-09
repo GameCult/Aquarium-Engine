@@ -218,12 +218,18 @@ fit. This is not a thresholded glow pass; bright energy spreads without turning
 the frame into a 2000s bloom accident.
 
 Temporal debug modes are available in the running window: `F1` cycles modes and
-number keys `0` through `8` select them directly. Mode `0` is final resolve,
+number keys `0` through `9` select the first ten modes directly. Mode `0` is final resolve,
 `1` is raw current scene, `2` is the reprojected history sample, `3` is history
 age, `4` is history weight, `5` is current temporal control, `6` is current
 field identity, `7` is bloom contribution, and `8` is exposed luminance. The
 startup mode can still be set with `--render-debug` or
 `AQUARIUM_RENDER_DEBUG_MODE`.
+
+Fog work has started behind diagnostics rather than final-frame haze. The host
+packs stable field instances into a structured buffer shared with HLSL. Modes
+`9` and `10` show registered medium density and transmittance from that field
+contract; the signals are deliberately debug-only until the explicit low-res
+volume pass and composition path exist.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:

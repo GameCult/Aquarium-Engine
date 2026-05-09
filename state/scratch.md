@@ -130,6 +130,11 @@ prototype integrated along the camera ray before surface composition.
   host syncs changed renderer settings back to the live runtime, and the runtime
   flushes dirty settings on the normal state interval, shutdown, and before live
   assembly reload.
+- Fog-land Gate 1 foothold: renderer now packs a fixed field instance structured
+  buffer for Self, planets, and local medium ellipsoids. HLSL consumes the buffer
+  for registered medium density/transmittance diagnostics. Debug mode 9 shows
+  medium density, mode 10 shows transmittance. Final scene composition is still
+  untouched until the explicit low-res volume pass exists.
 - Dev watcher correction: live runtime reload now waits for the host stdout log
   to acknowledge the exact new live DLL path before declaring success. A pointer
   write alone is not proof. `dev-watch.ps1 -ReopenWhenClosed` reopens the last

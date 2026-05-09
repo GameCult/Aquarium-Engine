@@ -98,6 +98,11 @@ Define the field instance ABI before adding more visual tricks:
 Hard-coded shader field loops are temporary scaffolding only. Do not extend them
 except to replace them.
 
+Current status: the renderer now packs a first fixed-size field instance buffer
+for Self, planets, and local cloud/medium ellipsoids. HLSL consumes that buffer
+for medium diagnostics, while final scene color remains unchanged. This is the
+contract foothold, not the final volume renderer.
+
 ### Gate 2: Broad Phase
 
 Move field selection out of brute-force pixel loops:

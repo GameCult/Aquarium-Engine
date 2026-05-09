@@ -105,6 +105,7 @@ public enum KeyCode
     Digit6,
     Digit7,
     Digit8,
+    Digit9,
     RenderDebugCycle,
     DebugUiToggle,
 }
