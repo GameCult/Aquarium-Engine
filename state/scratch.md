@@ -376,8 +376,14 @@ history rejection for Grid pixels. Raw debug remains the stochastic stream.
   query timings.
 - D3D12 async shader pipeline pass: initial D3D12 shader/PSO construction is no
   longer on the startup/main-thread path. The renderer starts a background
-  pipeline build from the editable shader source directory and presents a cheap
-  loading clear while it compiles. D3D12 shader files are polled directly for
+  pipeline build from the editable shader source directory, but does not present
+  the swapchain until the first pipeline set is ready. The host repaints the
+  original Win32 splash with "Compiling renderer pipelines" while waiting. This
+  currently flickers a bit, likely because GDI splash repaint is fighting normal
+  window invalidation, but it is better than handing the user a black render
+  target or stale DirectWrite loading text written into a live backbuffer.
+  Future polish: throttle/repaint only when invalidated or build a proper
+  pre-renderer splash state/window. D3D12 shader files are polled directly for
   hot reload; replacements compile on a background task, swap on the render
   thread after a GPU wait, and failures preserve the previous pipeline set.
   Headless smoke now waits for a ready rendered frame and uses a separate
