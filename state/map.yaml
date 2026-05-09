@@ -13,6 +13,7 @@ current_model:
     renderer: src/Aquarium.Engine/Render/D3D11Renderer.cs
     shader: src/Aquarium.Engine/Render/Shaders/Aquarium.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
+    debug_ui: src/Aquarium.Engine/Render/Ui/DebugUi.cs
     runtime_loader: src/Aquarium.Engine/Live/LiveRuntimeLoader.cs
     dev_reload: scripts/dev-reload.ps1
     dev_watch: scripts/dev-watch.ps1
@@ -58,14 +59,15 @@ renderer_state:
     - Primitive froxel/bin table for body broad phase.
     - Stable planet-local displaced SDF domains.
     - DirectWrite overlay text after scene rendering.
+    - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
     - Splash screen with bundled app icon and GameCult typefaces.
   next:
-    - Add explicit renderer debug modes for hits, normals, depth, bins, and lighting.
+    - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
     - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.
-    - Promote exposure and HDR presentation controls into typed CultCache renderer state.
+    - Promote exposure and HDR presentation controls from process-local debug UI into typed CultCache renderer state.
     - Move Grid gradients into the Grid target for cheaper terrain normals.
     - Rebuild lighting as an Aquarium-owned field before adding richer fog.
     - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
@@ -73,7 +75,7 @@ renderer_state:
 next_actions:
   - Keep main as the live development branch.
   - Verify publish output after every packaging-affecting change.
-  - Add renderer debug controls through the DirectWrite overlay path.
+  - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
   - Use research/volumetrics/synthesis.md before designing fog, atmospheric scattering, clouds, or sparse volume storage.
   - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
   - Check research/volumetrics/transcript-addendum.md before relying on slide decks as evidence; video transcripts can change the renderer lesson.

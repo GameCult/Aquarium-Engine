@@ -9,8 +9,8 @@ Aquarium now has a first shader-owned image path.
 - The renderer draws one fullscreen triangle.
 - The pixel shader raymarches the Grid heightfield, Self sun, and orbiting
   planets.
-- C# feeds only frame constants: resolution, time, Grid radius, and camera
-  position.
+- C# feeds only explicit frame constants: resolution, time, Grid radius, camera
+  position, presentation controls, temporal state, and debug mode.
 - CultMath is referenced as the CPU-side math grammar. Vortice math stays at the
   graphics API membrane.
 
@@ -225,6 +225,13 @@ field identity, `7` is bloom contribution, and `8` is exposed luminance. The
 startup mode can still be set with `--render-debug` or
 `AQUARIUM_RENDER_DEBUG_MODE`.
 
+The running window also has a Direct2D debug panel toggled with `F2`. It follows
+the CultLib code-first composition style rather than an immediate-mode toolkit:
+controls are retained rows bound to `Func<T>`/`Action<T>` pairs. The first panel
+drives render debug mode, exposure, bloom intensity, and bloom veil. Those HDR
+controls feed the shader constant buffer directly; they are not cosmetic labels
+painted over hardcoded renderer state.
+
 It deliberately does not pretend to solve general non-rigid field velocity,
 volumetric history, or history resurrection yet.
 
@@ -236,6 +243,13 @@ font layout/rasterization and Direct2D for the final draw. The D3D swapchain use
 format drama. This path is for debug UI, terminal text, inspectors, and future
 CultUI overlay surfaces. Diegetic labels that live in the scene still belong in
 the renderer as MSDF/SDF billboards.
+
+The debug controls live in `Render/Ui/DebugUi.cs`. The intended grammar is a
+native version of CultLib's generator API: panels, sections, sliders, toggles,
+and buttons are declared in code and bound to engine state with explicit read
+and write delegates. The visual language is flat and compact: dark panel,
+slab rows, thin dividers, orange accent, and pale values. It is debug UI, but it
+does not have permission to be ugly by default.
 
 The overlay owns a private DirectWrite font collection built from bundled Google
 Fonts files in `Assets/Fonts`: Montserrat for thin small-cap display text and

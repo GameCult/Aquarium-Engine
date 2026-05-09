@@ -6,6 +6,8 @@ public sealed class InputState
 {
     private readonly HashSet<KeyCode> downKeys = [];
     private readonly HashSet<KeyCode> pressedKeys = [];
+    private readonly HashSet<MouseButton> downMouseButtons = [];
+    private readonly HashSet<MouseButton> pressedMouseButtons = [];
 
     public Vector2 MousePosition { get; private set; }
 
@@ -13,19 +15,26 @@ public sealed class InputState
 
     public float WheelDelta { get; private set; }
 
-    public bool MiddleMouseDown { get; private set; }
+    public bool LeftMouseDown => IsMouseDown(MouseButton.Left);
 
-    public bool RightMouseDown { get; private set; }
+    public bool MiddleMouseDown => IsMouseDown(MouseButton.Middle);
+
+    public bool RightMouseDown => IsMouseDown(MouseButton.Right);
 
     public bool IsKeyDown(KeyCode key) => downKeys.Contains(key);
 
     public bool IsKeyPressed(KeyCode key) => pressedKeys.Contains(key);
+
+    public bool IsMouseDown(MouseButton button) => downMouseButtons.Contains(button);
+
+    public bool IsMousePressed(MouseButton button) => pressedMouseButtons.Contains(button);
 
     public void BeginFrame()
     {
         MouseDelta = Vector2.Zero;
         WheelDelta = 0.0f;
         pressedKeys.Clear();
+        pressedMouseButtons.Clear();
     }
 
     public void SetMousePosition(Vector2 position)
@@ -41,14 +50,18 @@ public sealed class InputState
 
     public void SetMouseButton(MouseButton button, bool isDown)
     {
-        switch (button)
+        if (isDown)
         {
-            case MouseButton.Middle:
-                MiddleMouseDown = isDown;
-                break;
-            case MouseButton.Right:
-                RightMouseDown = isDown;
-                break;
+            if (!downMouseButtons.Contains(button))
+            {
+                pressedMouseButtons.Add(button);
+            }
+
+            downMouseButtons.Add(button);
+        }
+        else
+        {
+            downMouseButtons.Remove(button);
         }
     }
 
@@ -72,6 +85,7 @@ public sealed class InputState
 
 public enum MouseButton
 {
+    Left,
     Middle,
     Right,
 }
@@ -92,4 +106,5 @@ public enum KeyCode
     Digit7,
     Digit8,
     RenderDebugCycle,
+    DebugUiToggle,
 }

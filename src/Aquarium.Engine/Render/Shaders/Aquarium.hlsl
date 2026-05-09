@@ -15,6 +15,9 @@ cbuffer AquariumFrame : register(b0)
     float2 previousJitterPixels;
     float renderDebugMode;
     float exposure;
+    float bloomIntensity;
+    float bloomVeilIntensity;
+    float2 presentationPadding;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -55,8 +58,6 @@ static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
-static const float BLOOM_INTENSITY = 0.072;
-static const float BLOOM_VEIL_INTENSITY = 0.014;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int FROXEL_COUNT_X = 8;
 static const int FROXEL_COUNT_Y = 8;
@@ -1590,7 +1591,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
         bloomTexture0.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.42 +
         bloomTexture1.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.34 +
         bloomTexture2.SampleLevel(gridSampler, input.uv, 0.0).rgb * 0.24;
-    float3 presentedColor = exposedColor + bloomColor * BLOOM_INTENSITY + luminance(bloomColor) * BLOOM_VEIL_INTENSITY;
+    float3 presentedColor = exposedColor + bloomColor * bloomIntensity + luminance(bloomColor) * bloomVeilIntensity;
     float3 finalColor = aces(presentedColor);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
@@ -1618,7 +1619,7 @@ ResolveOut AquariumResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
     {
-        finalColor = aces(bloomColor * BLOOM_INTENSITY + luminance(bloomColor) * BLOOM_VEIL_INTENSITY);
+        finalColor = aces(bloomColor * bloomIntensity + luminance(bloomColor) * bloomVeilIntensity);
     }
     else if (renderDebugMode >= 7.5 && renderDebugMode < 8.5)
     {

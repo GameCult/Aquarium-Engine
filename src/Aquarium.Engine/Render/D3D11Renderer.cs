@@ -3,6 +3,8 @@ using Vortice.D3DCompiler;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using Aquarium.Engine.Input;
+using Aquarium.Engine.Render.Ui;
 using CultMath;
 using System.Diagnostics;
 using System.Numerics;
@@ -17,7 +19,9 @@ public sealed class D3D11Renderer : IDisposable
     private static readonly TimeSpan ShaderReloadPollInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ShaderReloadWriteSettleTime = TimeSpan.FromMilliseconds(150);
     private const float TemporalJitterScale = 0.0f;
-    private const float SceneExposure = 0.16f;
+    private const float DefaultSceneExposure = 0.16f;
+    private const float DefaultBloomIntensity = 0.072f;
+    private const float DefaultBloomVeilIntensity = 0.014f;
     private const int GridHeightTextureSize = 128;
     private const int DitherTextureSize = 512;
     private const int BloomLevelCount = 3;
@@ -36,6 +40,7 @@ public sealed class D3D11Renderer : IDisposable
     private readonly ID3D11DeviceContext context;
     private readonly ID3D11RenderTargetView renderTargetView;
     private readonly DirectWriteOverlay overlay;
+    private readonly DebugUi debugUi;
     private readonly ID3D11Texture2D gridHeightTexture;
     private readonly ID3D11RenderTargetView gridHeightRenderTargetView;
     private readonly ID3D11ShaderResourceView gridHeightShaderResourceView;
@@ -143,6 +148,7 @@ public sealed class D3D11Renderer : IDisposable
         renderTargetView = device.CreateRenderTargetView(backBuffer);
         using var backBufferSurface = swapChain.GetBuffer<IDXGISurface>(0);
         overlay = new DirectWriteOverlay(backBufferSurface, width, height);
+        debugUi = CreateDebugUi();
 
         startupProgress?.Invoke("Compiling aquarium shaders");
         var initialShaders = CompileShaderSet(this.shaderPath);
@@ -223,7 +229,7 @@ public sealed class D3D11Renderer : IDisposable
             MaxLOD = float.MaxValue,
         });
         frameConstantBuffer = device.CreateBuffer(
-            96,
+            112,
             BindFlags.ConstantBuffer,
             ResourceUsage.Default,
             CpuAccessFlags.None,
@@ -276,7 +282,10 @@ public sealed class D3D11Renderer : IDisposable
             (float2)jitter,
             (float2)previousJitter,
             RenderDebugMode,
-            SceneExposure);
+            SceneExposure,
+            BloomIntensity,
+            BloomVeilIntensity,
+            (float2)Vector2.Zero);
 
         BuildFroxelPrimitiveTable(frame);
         context.UpdateSubresource(in constants, frameConstantBuffer);
@@ -286,7 +295,7 @@ public sealed class D3D11Renderer : IDisposable
         RenderBloom();
         ResolveTemporal();
         context.Flush();
-        overlay.Render(frame, RenderDebugMode);
+        overlay.Render(frame, RenderDebugMode, debugUi);
         swapChain.Present(1, PresentFlags.None);
 
         previousCameraPosition = frame.CameraPosition;
@@ -298,9 +307,41 @@ public sealed class D3D11Renderer : IDisposable
 
     public int RenderDebugMode { get; set; }
 
+    public float SceneExposure { get; set; } = DefaultSceneExposure;
+
+    public float BloomIntensity { get; set; } = DefaultBloomIntensity;
+
+    public float BloomVeilIntensity { get; set; } = DefaultBloomVeilIntensity;
+
+    public bool DebugUiVisible
+    {
+        get => debugUi.IsVisible;
+        set => debugUi.IsVisible = value;
+    }
+
+    public void UpdateDebugUi(InputState input)
+    {
+        debugUi.Update(input);
+    }
+
     public void CycleRenderDebugMode()
     {
         RenderDebugMode = (RenderDebugMode + 1) % 9;
+    }
+
+    private DebugUi CreateDebugUi()
+    {
+        return new DebugUi("Aetheric Field Tester")
+            .Panel(panel => panel
+                .Section("View")
+                .Slider("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, 0, 8), 0, 8)
+                .Button("Reset View", () => RenderDebugMode = 0)
+                .Section("HDR")
+                .Slider("Exposure", () => SceneExposure, value => SceneExposure = Math.Clamp(value, 0.02f, 1.2f), 0.02f, 1.2f, "0.###")
+                .Slider("Bloom Intensity", () => BloomIntensity, value => BloomIntensity = Math.Clamp(value, 0.0f, 0.24f), 0.0f, 0.24f, "0.###")
+                .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, 0.0f, 0.08f), 0.0f, 0.08f, "0.###")
+                .Section("Overlay")
+                .Toggle("Panel Visible", () => DebugUiVisible, value => DebugUiVisible = value));
     }
 
     public void Dispose()
@@ -842,7 +883,10 @@ public sealed class D3D11Renderer : IDisposable
         float2 JitterPixels,
         float2 PreviousJitterPixels,
         float RenderDebugMode,
-        float Exposure);
+        float Exposure,
+        float BloomIntensity,
+        float BloomVeilIntensity,
+        float2 Padding);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 

@@ -3,6 +3,7 @@ using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using Aquarium.Engine.Render.Ui;
 using D2DFactoryType = Vortice.Direct2D1.FactoryType;
 using DWriteFactoryType = Vortice.DirectWrite.FactoryType;
 
@@ -17,6 +18,11 @@ internal sealed class DirectWriteOverlay : IDisposable
     private readonly ID2D1RenderTarget renderTarget;
     private readonly ID2D1SolidColorBrush primaryTextBrush;
     private readonly ID2D1SolidColorBrush quietTextBrush;
+    private readonly ID2D1SolidColorBrush panelBrush;
+    private readonly ID2D1SolidColorBrush rowBrush;
+    private readonly ID2D1SolidColorBrush outlineBrush;
+    private readonly ID2D1SolidColorBrush accentBrush;
+    private readonly ID2D1SolidColorBrush dimAccentBrush;
     private readonly IDWriteTextFormat titleFormat;
     private readonly IDWriteTextFormat smallFormat;
     private readonly int width;
@@ -55,11 +61,16 @@ internal sealed class DirectWriteOverlay : IDisposable
 
         primaryTextBrush = renderTarget.CreateSolidColorBrush(new Color4(0.88f, 0.96f, 1.0f, 0.92f));
         quietTextBrush = renderTarget.CreateSolidColorBrush(new Color4(0.54f, 0.68f, 0.72f, 0.72f));
+        panelBrush = renderTarget.CreateSolidColorBrush(new Color4(0.018f, 0.022f, 0.032f, 0.96f));
+        rowBrush = renderTarget.CreateSolidColorBrush(new Color4(0.085f, 0.084f, 0.12f, 0.96f));
+        outlineBrush = renderTarget.CreateSolidColorBrush(new Color4(0.28f, 0.34f, 0.36f, 0.72f));
+        accentBrush = renderTarget.CreateSolidColorBrush(new Color4(1.0f, 0.38f, 0.055f, 0.96f));
+        dimAccentBrush = renderTarget.CreateSolidColorBrush(new Color4(0.20f, 0.20f, 0.22f, 0.95f));
         titleFormat = CreateTextFormat("Montserrat", 18.0f, FontWeight.Thin);
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
     }
 
-    public void Render(AquariumFrame frame, int renderDebugMode)
+    public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi)
     {
         renderTarget.BeginDraw();
         DrawHeader(
@@ -88,6 +99,17 @@ internal sealed class DirectWriteOverlay : IDisposable
             new Rect(18, Math.Max(64, height - 36), Math.Min(width - 18, 420), height - 12),
             quietTextBrush,
             DrawTextOptions.Clip);
+        debugUi?.Draw(
+            renderTarget,
+            titleFormat,
+            smallFormat,
+            panelBrush,
+            rowBrush,
+            outlineBrush,
+            primaryTextBrush,
+            quietTextBrush,
+            accentBrush,
+            dimAccentBrush);
         renderTarget.EndDraw();
     }
 
@@ -97,6 +119,11 @@ internal sealed class DirectWriteOverlay : IDisposable
         titleFormat.Dispose();
         smallCapsTypography.Dispose();
         fontCollection.Dispose();
+        dimAccentBrush.Dispose();
+        accentBrush.Dispose();
+        outlineBrush.Dispose();
+        rowBrush.Dispose();
+        panelBrush.Dispose();
         quietTextBrush.Dispose();
         primaryTextBrush.Dispose();
         renderTarget.Dispose();

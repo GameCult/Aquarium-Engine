@@ -72,6 +72,7 @@
     ],
     "text_and_ui": [
       "Overlay text uses DirectWrite/Direct2D after scene rendering. It is crisp final-pixel UI for debug surfaces, terminals, inspectors, and splash/status text.",
+      "Aquarium debug controls should follow the CultLib code-first binding style without importing Unity prefab assumptions: panels, sections, sliders, toggles, and buttons bound by explicit read/write delegates, drawn as flat Direct2D/DirectWrite overlay UI.",
       "Bundled fonts are Montserrat for thin small-cap display text and Ubuntu Sans for body/debug copy. Runtime must not depend on fonts installed in Windows.",
       "Scene/diegetic labels should use renderer-owned MSDF/SDF billboards when they live in world space. Overlay text should not be shoved into HDR just because it is convenient.",
       "Debug UI is allowed as an explicit escape hatch. Object-owned radial surfaces remain the target interaction grammar."

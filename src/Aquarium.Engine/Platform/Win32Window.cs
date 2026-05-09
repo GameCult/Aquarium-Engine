@@ -12,6 +12,8 @@ public sealed class Win32Window : IDisposable
     private const uint WM_KEYDOWN = 0x0100;
     private const uint WM_KEYUP = 0x0101;
     private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_LBUTTONDOWN = 0x0201;
+    private const uint WM_LBUTTONUP = 0x0202;
     private const uint WM_RBUTTONDOWN = 0x0204;
     private const uint WM_RBUTTONUP = 0x0205;
     private const uint WM_MBUTTONDOWN = 0x0207;
@@ -58,6 +60,7 @@ public sealed class Win32Window : IDisposable
     private const int VK_7 = 0x37;
     private const int VK_8 = 0x38;
     private const int VK_F1 = 0x70;
+    private const int VK_F2 = 0x71;
     private const int WHEEL_DELTA = 120;
 
     private readonly WndProc windowProcedure;
@@ -124,6 +127,14 @@ public sealed class Win32Window : IDisposable
                         return IntPtr.Zero;
                     case WM_MOUSEWHEEL:
                         input.AddWheelDelta(GetSignedHighWord(wParam) / (float)WHEEL_DELTA);
+                        return IntPtr.Zero;
+                    case WM_LBUTTONDOWN:
+                        input.SetMouseButton(MouseButton.Left, true);
+                        SetCapture(handle);
+                        return IntPtr.Zero;
+                    case WM_LBUTTONUP:
+                        input.SetMouseButton(MouseButton.Left, false);
+                        ReleaseCapture();
                         return IntPtr.Zero;
                     case WM_MBUTTONDOWN:
                         input.SetMouseButton(MouseButton.Middle, true);
@@ -652,6 +663,9 @@ public sealed class Win32Window : IDisposable
                 break;
             case VK_F1:
                 input.SetKey(KeyCode.RenderDebugCycle, isDown);
+                break;
+            case VK_F2:
+                input.SetKey(KeyCode.DebugUiToggle, isDown);
                 break;
         }
     }
