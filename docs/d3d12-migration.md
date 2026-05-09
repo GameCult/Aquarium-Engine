@@ -22,13 +22,16 @@ has feature parity.
 - The first real migrated pass is the Grid height pass. D3D12 uploads Aquarium
   frame constants plus a fixed body brush table, renders a base Grid field, then
   draws one additive up-facing gravity quad per body into a 128x128
-  scalar `R16_Float` Grid height target. Render debug mode `11` displays that
-  target.
+  scalar `R16_Float` Grid height target.
 - D3D12 now owns the first field-resource upload path: CPU-built froxel
   primitive ids and field instances upload through the per-frame upload ring,
   copy into default-heap structured buffers, and bind as transient SRVs for the
   diagnostic shader. This proves the backend can feed real Aquarium field data
   without reading directly from upload memory.
+- The D3D12 medium pass renders a packed frustum froxel atlas into diagnostic
+  and transport render targets from the field instance buffer. Render debug mode
+  `11` now displays D3D12 froxel density, matching the future renderer path
+  rather than the temporary Grid-height bring-up view.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   static shader/RTV descriptor arenas, then recreates backbuffer views and
   dependent render targets. Descriptor exhaustion on resize is no longer a
@@ -40,7 +43,7 @@ has feature parity.
 
 ## Migration Order
 
-1. Keep D3D11 as the visual reference.
+1. Keep D3D11 as the visual reference only.
 2. Move shared renderer contracts behind explicit backend-neutral types.
 3. Port the Grid height pass after preserving D3D11 as the reference output.
 4. Keep capacity diagnostics loud while the backend is still small enough to

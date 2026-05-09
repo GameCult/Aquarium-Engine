@@ -35,11 +35,15 @@ resource graph beyond smoke-pass scaffolding.
   plus a fixed body brush table feed a base field draw followed by one additive
   up-facing gravity quad per body. The target is scalar `R16_Float`: height is
   one value, and the format still supports the additive render-target blending
-  the brush pass needs. Mode `11` exposes it.
+  the brush pass needs.
 - D3D12 uploads the live froxel primitive table and field instance table into
   default-heap structured buffers each frame, using the upload ring only as the
   copy source. Their SRVs are created in the transient descriptor heap used by
   the consuming pass, avoiding impossible static+transient heap co-binding.
+- D3D12 renders the first medium froxel atlas from the field instance buffer
+  into diagnostic and transport render targets. Mode `11` exposes froxel
+  density, so the debug path now follows the renderer being built rather than a
+  Grid-height bring-up convenience.
 - Renderer calls receive current window dimensions, and the D3D12 backend can
   recreate swapchain buffers plus dependent smoke resources on resize.
 - Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds
@@ -67,9 +71,9 @@ resource graph beyond smoke-pass scaffolding.
 - The offscreen smoke target copies to the swapchain. Keep this only if the real
   post-process graph needs it; otherwise present from the final render target
   path with no ornamental copy.
-- The D3D11 and D3D12 field table builders are temporarily duplicated. Extract
-  them into one shared field ABI owner before the second backend starts to
-  drift.
+- D3D11 and D3D12 field table builders are temporarily duplicated by design.
+  D3D11 is reference-only and will be removed after migration; do not pay DRY
+  tax merely to preserve it.
 
 ## Required Before Real Pass Migration
 

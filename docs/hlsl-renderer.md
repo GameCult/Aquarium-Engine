@@ -79,16 +79,14 @@ The D3D12 backend has begun migrating this order with a proper brush-based Grid
 height pass. It uploads the Aquarium frame constant buffer plus a fixed body
 brush table through the D3D12 upload ring, renders the base Grid field, then
 draws one additive up-facing gravity quad per body into a 128x128
-scalar `R16_Float` Grid height target. D3D12 render debug mode `11` displays
-that target. D3D11 remains the visual reference until the full pass chain
-reaches parity.
+scalar `R16_Float` Grid height target. D3D11 remains the visual reference until
+the full pass chain reaches parity.
 
 D3D12 also uploads the current froxel primitive id table and field instance
-table into default-heap structured buffers every frame. The diagnostic smoke
-shader reads both SRVs through the transient descriptor heap; this is only a
-resource-path proof, not the migrated scene or medium pass yet. The D3D11 and
-D3D12 table builders should be collapsed into one shared field ABI before more
-field consumers are ported.
+table into default-heap structured buffers every frame. The D3D12 medium pass
+renders a packed frustum froxel atlas into diagnostic and transport render
+targets from those field instances, and mode `11` displays the froxel density
+target. The scene and resolve passes have not been migrated yet.
 
 The shader far distance is frame-derived, not a fixed constant. C# sends the
 distance from the camera to the Grid origin plus the Grid radius, which matches

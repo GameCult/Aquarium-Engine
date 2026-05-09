@@ -283,6 +283,10 @@ can start porting real passes while keeping D3D11 as the visual reference.
   and field instance table, uploads them through the per-frame upload ring,
   copies them into default-heap structured buffers, and binds transient SRVs to
   the diagnostic shader. This proves the real field data path without forcing
-  shaders to read directly from upload heap memory. The table-building code is
-  duplicated from D3D11 for this slice; extract it into one shared field ABI
-  owner before porting the next field consumer.
+  shaders to read directly from upload heap memory. The table-building code can
+  duplicate D3D11 during migration because D3D11 is reference-only and will be
+  removed after the D3D12 path owns the renderer.
+- D3D12 medium froxel pass: D3D12 now renders diagnostic and transport froxel
+  atlases from the D3D12 field instance buffer. Render debug mode `11` displays
+  D3D12 froxel density; the temporary Grid-height debug view was cut rather
+  than left as stale bring-up scaffolding.
