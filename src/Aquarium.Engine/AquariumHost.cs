@@ -58,6 +58,10 @@ public static class AquariumHost
             }
 
             renderer.Render(runtimeLoader.Runtime.Frame, window.ClientWidth, window.ClientHeight);
+            if (!runtime.Options.Headless && !renderer.HasPresentedReadyFrame)
+            {
+                window.PaintSplash("Aquarium", "Compiling renderer pipelines");
+            }
 
             frames++;
             if (renderer.HasPresentedReadyFrame)
