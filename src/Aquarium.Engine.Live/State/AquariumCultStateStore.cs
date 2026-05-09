@@ -2,6 +2,7 @@ using System.Numerics;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using GameCult.Networking;
+using MessagePack;
 
 namespace Aquarium.Engine.State;
 
@@ -21,7 +22,15 @@ public sealed class AquariumCultStateStore : IDisposable
         cache = new CultCache();
         backingStore = new SingleFileMessagePackBackingStore(CachePath);
         cache.AddBackingStore(backingStore);
-        cache.PullAllBackingStoresAsync().GetAwaiter().GetResult();
+        try
+        {
+            cache.PullAllBackingStoresAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception error) when (IsRecoverableBackingStoreFailure(error))
+        {
+            QuarantineUnreadableCache(CachePath, error);
+        }
+
         Hello = CreateHello(cache.Registry);
     }
 
@@ -86,5 +95,40 @@ public sealed class AquariumCultStateStore : IDisposable
                 CultNetSchemaVersions.SchemaCatalogResponse
             ]
         };
+    }
+
+    private static bool IsRecoverableBackingStoreFailure(Exception error)
+    {
+        return error is EndOfStreamException
+            or InvalidDataException
+            or MessagePackSerializationException;
+    }
+
+    private static void QuarantineUnreadableCache(string cachePath, Exception error)
+    {
+        if (!File.Exists(cachePath))
+        {
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(cachePath)!;
+        var fileName = Path.GetFileName(cachePath);
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
+        var quarantinePath = Path.Combine(directory, $"{fileName}.corrupt-{stamp}");
+
+        try
+        {
+            File.Move(cachePath, quarantinePath);
+            Console.Error.WriteLine(
+                $"CultCache snapshot was unreadable and has been quarantined: {quarantinePath}. {error.GetType().Name}: {error.Message}");
+        }
+        catch (Exception quarantineError)
+        {
+            var fallbackPath = Path.Combine(directory, $"{fileName}.corrupt-{stamp}-{Guid.NewGuid():N}");
+            File.Move(cachePath, fallbackPath);
+            Console.Error.WriteLine(
+                $"CultCache snapshot was unreadable and quarantine path was busy; moved it to {fallbackPath}. "
+                + $"{error.GetType().Name}: {error.Message}; quarantine retry after {quarantineError.GetType().Name}: {quarantineError.Message}");
+        }
     }
 }

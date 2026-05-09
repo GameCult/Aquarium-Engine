@@ -12,6 +12,15 @@ it to a `CultCache`. The dev scripts pass:
 ```
 
 Direct runs can also use `--cache <path>` or `AQUARIUM_CULTCACHE_PATH`.
+If the single-file MessagePack snapshot is unreadable at startup, Aquarium
+quarantines it beside the live file with a `.corrupt-<timestamp>` suffix and
+boots a fresh typed state. Schema guardrails protect valid persisted documents
+whose shape has changed; they cannot rescue a truncated backing file with no
+complete MessagePack envelope.
+
+CultLib's single-file backing store writes snapshots through a same-directory
+temporary file and atomic replace. That prevents process death during save from
+turning the live cache path into a zero-byte startup trap.
 
 ## Live State
 

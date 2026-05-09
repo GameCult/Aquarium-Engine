@@ -126,3 +126,9 @@ prototype integrated along the camera ray before surface composition.
   `dev-reload.ps1` could block after the app launched, leaving the watcher stuck
   at initial launch and never polling. The watcher now invokes dev-reload
   synchronously and leaves long-lived process ownership inside dev-reload.
+- CultCache startup failure found: dev cache
+  `artifacts/dev-reload/cultcache/aquarium-client.msgpack` was zero bytes, so
+  MessagePack threw `EndOfStreamException` before schema guardrails could run.
+  Aquarium now quarantines unreadable snapshots with a `.corrupt-<timestamp>`
+  suffix and boots fresh state; CultLib single-file stores now write through a
+  temp file and atomic replace to avoid future zero-byte live snapshots.
