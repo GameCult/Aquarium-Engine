@@ -24,7 +24,11 @@ internal sealed class DirectWriteOverlay : IDisposable
     private readonly ID2D1SolidColorBrush activeRowBrush;
     private readonly ID2D1SolidColorBrush outlineBrush;
     private readonly ID2D1SolidColorBrush accentBrush;
+    private readonly ID2D1SolidColorBrush accentHoverBrush;
+    private readonly ID2D1SolidColorBrush accentActiveBrush;
     private readonly ID2D1SolidColorBrush dimAccentBrush;
+    private readonly ID2D1SolidColorBrush trackHoverBrush;
+    private readonly ID2D1SolidColorBrush trackActiveBrush;
     private readonly IDWriteTextFormat titleFormat;
     private readonly IDWriteTextFormat smallFormat;
     private readonly int width;
@@ -69,7 +73,11 @@ internal sealed class DirectWriteOverlay : IDisposable
         activeRowBrush = renderTarget.CreateSolidColorBrush(new Color4(0.19f, 0.18f, 0.24f, 0.99f));
         outlineBrush = renderTarget.CreateSolidColorBrush(new Color4(0.28f, 0.34f, 0.36f, 0.72f));
         accentBrush = renderTarget.CreateSolidColorBrush(new Color4(1.0f, 0.38f, 0.055f, 0.96f));
+        accentHoverBrush = renderTarget.CreateSolidColorBrush(new Color4(1.0f, 0.58f, 0.30f, 0.98f));
+        accentActiveBrush = renderTarget.CreateSolidColorBrush(new Color4(1.0f, 0.78f, 0.58f, 1.0f));
         dimAccentBrush = renderTarget.CreateSolidColorBrush(new Color4(0.20f, 0.20f, 0.22f, 0.95f));
+        trackHoverBrush = renderTarget.CreateSolidColorBrush(new Color4(0.32f, 0.29f, 0.29f, 0.98f));
+        trackActiveBrush = renderTarget.CreateSolidColorBrush(new Color4(0.45f, 0.38f, 0.34f, 1.0f));
         titleFormat = CreateTextFormat("Montserrat", 18.0f, FontWeight.Thin);
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
     }
@@ -115,7 +123,11 @@ internal sealed class DirectWriteOverlay : IDisposable
             primaryTextBrush,
             quietTextBrush,
             accentBrush,
+            accentHoverBrush,
+            accentActiveBrush,
             dimAccentBrush,
+            trackHoverBrush,
+            trackActiveBrush,
             width,
             height);
         renderTarget.EndDraw();
@@ -128,6 +140,10 @@ internal sealed class DirectWriteOverlay : IDisposable
         smallCapsTypography.Dispose();
         fontCollection.Dispose();
         dimAccentBrush.Dispose();
+        trackActiveBrush.Dispose();
+        trackHoverBrush.Dispose();
+        accentActiveBrush.Dispose();
+        accentHoverBrush.Dispose();
         accentBrush.Dispose();
         outlineBrush.Dispose();
         activeRowBrush.Dispose();
