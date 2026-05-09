@@ -3,9 +3,10 @@
 ## Current Slice
 
 D3D12 migration foothold. D3D11 remains the visual reference renderer; the host
-now talks through `IAquariumRenderer`, and `--renderer d3d12` selects a new
-D3D12 shell that creates device/queue/swapchain/RTV heap/command list/fence and
-clears/presents headlessly. Next renderer work should port pass/resource
+now talks through `IAquariumRenderer`, and `--renderer d3d12` selects a D3D12
+backend with device/queue/swapchain/RTV heap/per-frame command allocators/fence,
+plus a fullscreen root signature and smoke-test PSO that draws a diagnostic
+fullscreen triangle. Next renderer work should port descriptor/upload/resource
 ownership into D3D12 before building the stochastic transparent surface pipe.
 
 ## Hot Context
@@ -213,3 +214,9 @@ ownership into D3D12 before building the stochastic transparent surface pipe.
   graphics command list, fence wait, clear, and present. Do not build the
   transparent candidate pipe on D3D11 debt; port explicit D3D12 resource/pass
   ownership first.
+- D3D12 pass spine pass: the backend now uses one command allocator per
+  swapchain buffer instead of stalling a single allocator each frame. It also
+  compiles `D3D12Smoke.hlsl`, creates a fullscreen root signature and graphics
+  PSO, binds viewport/scissor/RTV, and draws a fullscreen triangle. This proves
+  shader, root signature, PSO, and draw submission before real Aquarium passes
+  migrate.

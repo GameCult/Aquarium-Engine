@@ -8,9 +8,12 @@ has feature parity.
 
 - `--renderer d3d11` is the default renderer and owns the live scene.
 - `--renderer d3d12` creates a D3D12 device, command queue, flip-discard
-  swapchain, RTV heap, command allocator/list, and fence-backed present loop.
-- The D3D12 path currently clears and presents only. It exists to prove the
-  backend lifecycle before shader, resource, and pass migration starts.
+  swapchain, RTV heap, per-backbuffer command allocators, command list,
+  fence-backed present loop, fullscreen root signature, and a smoke-test PSO.
+- The D3D12 path currently draws a diagnostic fullscreen pass. It exists to
+  prove backend lifecycle, shader compilation, root signature creation, PSO
+  creation, render target binding, and draw submission before real scene passes
+  migrate.
 - `IAquariumRenderer` is the host boundary. The host should not learn backend
   internals as the D3D12 renderer grows teeth.
 
@@ -18,7 +21,7 @@ has feature parity.
 
 1. Keep D3D11 as the visual reference.
 2. Move shared renderer contracts behind explicit backend-neutral types.
-3. Port root signatures, descriptor heaps, upload/ring buffers, and pass
+3. Port descriptor heaps, upload/ring buffers, and pass
    resource lifetime.
 4. Port the existing passes in visible order: grid height, froxel volume, scene,
    bloom, resolve, overlay/debug.

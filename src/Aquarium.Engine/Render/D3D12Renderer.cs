@@ -1,5 +1,7 @@
 using Aquarium.Engine.Input;
 using SharpGen.Runtime;
+using Vortice;
+using Vortice.D3DCompiler;
 using Vortice.Direct3D;
 using Vortice.Direct3D12;
 using Vortice.DXGI;
@@ -10,18 +12,22 @@ namespace Aquarium.Engine.Render;
 public sealed class D3D12Renderer : IAquariumRenderer
 {
     private const int BackBufferCount = 2;
+    private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";
 
     private readonly IDXGIFactory4 factory;
     private readonly ID3D12Device device;
     private readonly ID3D12CommandQueue commandQueue;
     private readonly IDXGISwapChain3 swapChain;
     private readonly ID3D12DescriptorHeap renderTargetViewHeap;
-    private readonly ID3D12Resource[] renderTargets = new ID3D12Resource[BackBufferCount];
-    private readonly ID3D12CommandAllocator commandAllocator;
+    private readonly FrameResources[] frames = new FrameResources[BackBufferCount];
     private readonly ID3D12GraphicsCommandList commandList;
+    private readonly ID3D12RootSignature fullscreenRootSignature;
+    private readonly ID3D12PipelineState smokePipelineState;
     private readonly ID3D12Fence fence;
     private readonly AutoResetEvent fenceEvent = new(false);
     private readonly int renderTargetViewDescriptorSize;
+    private readonly Viewport viewport;
+    private readonly RawRect scissorRect;
     private ulong fenceValue;
     private int frameIndex;
     private GraphicsSettings settings = GraphicsSettings.Default;
@@ -60,11 +66,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         renderTargetViewHeap = device.CreateDescriptorHeap(new DescriptorHeapDescription(DescriptorHeapType.RenderTargetView, BackBufferCount));
         renderTargetViewDescriptorSize = (int)device.GetDescriptorHandleIncrementSize(DescriptorHeapType.RenderTargetView);
-        CreateRenderTargetViews();
+        for (var index = 0; index < frames.Length; index++)
+        {
+            frames[index] = new FrameResources(device.CreateCommandAllocator(CommandListType.Direct));
+        }
 
-        commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
-        commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, commandAllocator, null);
+        CreateRenderTargetViews();
+        commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Close();
+        ReportStartupProgress(startupProgress, "Creating D3D12 fullscreen smoke pipeline");
+        fullscreenRootSignature = CreateFullscreenRootSignature();
+        smokePipelineState = CreateSmokePipelineState(shaderPath ?? Path.Combine(AppContext.BaseDirectory, SmokeShaderRelativePath));
+        viewport = new Viewport(0.0f, 0.0f, width, height);
+        scissorRect = new RawRect(0, 0, width, height);
         fence = device.CreateFence(0);
         Console.WriteLine("D3D12 device and swapchain created.");
     }
@@ -103,25 +117,18 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public void Render(AquariumFrame frame)
     {
-        var clearColor = new Color4(
-            0.006f + settings.SceneExposure * 0.02f,
-            0.014f + settings.BloomIntensity * 0.2f,
-            0.022f + settings.BloomVeilIntensity * 0.8f,
-            1.0f);
+        var frameResources = frames[frameIndex];
+        WaitForFrame(frameResources);
+        frameResources.CommandAllocator.Reset();
+        commandList.Reset(frameResources.CommandAllocator, null);
 
-        commandAllocator.Reset();
-        commandList.Reset(commandAllocator, null);
-
-        var renderTarget = renderTargets[frameIndex];
-        commandList.ResourceBarrier(ResourceBarrier.BarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget));
-        var renderTargetView = GetRenderTargetViewHandle(frameIndex);
-        commandList.ClearRenderTargetView(renderTargetView, clearColor);
-        commandList.ResourceBarrier(ResourceBarrier.BarrierTransition(renderTarget, ResourceStates.RenderTarget, ResourceStates.Present));
+        ClearBackBuffer(new D3D12PassContext(commandList, frameResources.BackBuffer, GetRenderTargetViewHandle(frameIndex)), frame);
         commandList.Close();
 
         commandQueue.ExecuteCommandList(commandList);
         swapChain.Present(1, PresentFlags.None);
-        MoveToNextFrame();
+        SignalFrame(frameResources);
+        frameIndex = (int)swapChain.CurrentBackBufferIndex;
     }
 
     public void Dispose()
@@ -130,10 +137,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fenceEvent.Dispose();
         fence.Dispose();
         commandList.Dispose();
-        commandAllocator.Dispose();
-        for (var index = 0; index < renderTargets.Length; index++)
+        for (var index = 0; index < frames.Length; index++)
         {
-            renderTargets[index].Dispose();
+            frames[index].Dispose();
         }
         renderTargetViewHeap.Dispose();
         swapChain.Dispose();
@@ -144,11 +150,32 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private void CreateRenderTargetViews()
     {
-        for (var index = 0; index < renderTargets.Length; index++)
+        for (var index = 0; index < frames.Length; index++)
         {
-            renderTargets[index] = swapChain.GetBuffer<ID3D12Resource>((uint)index);
-            device.CreateRenderTargetView(renderTargets[index], null, GetRenderTargetViewHandle(index));
+            frames[index].BackBuffer = swapChain.GetBuffer<ID3D12Resource>((uint)index);
+            device.CreateRenderTargetView(frames[index].BackBuffer, null, GetRenderTargetViewHandle(index));
         }
+    }
+
+    private void ClearBackBuffer(D3D12PassContext context, AquariumFrame frame)
+    {
+        _ = frame;
+        var clearColor = new Color4(
+            0.006f + settings.SceneExposure * 0.02f,
+            0.014f + settings.BloomIntensity * 0.2f,
+            0.022f + settings.BloomVeilIntensity * 0.8f,
+            1.0f);
+
+        context.CommandList.ResourceBarrier(ResourceBarrier.BarrierTransition(context.BackBuffer, ResourceStates.Present, ResourceStates.RenderTarget));
+        context.CommandList.ClearRenderTargetView(context.RenderTargetView, clearColor);
+        context.CommandList.SetPipelineState(smokePipelineState);
+        context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
+        context.CommandList.RSSetViewports(viewport);
+        context.CommandList.RSSetScissorRects(scissorRect);
+        context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
+        context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.CommandList.DrawInstanced(3, 1, 0, 0);
+        context.CommandList.ResourceBarrier(ResourceBarrier.BarrierTransition(context.BackBuffer, ResourceStates.RenderTarget, ResourceStates.Present));
     }
 
     private CpuDescriptorHandle GetRenderTargetViewHandle(int index)
@@ -156,15 +183,18 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return renderTargetViewHeap.GetCPUDescriptorHandleForHeapStart() + (index * renderTargetViewDescriptorSize);
     }
 
-    private void MoveToNextFrame()
+    private void SignalFrame(FrameResources frameResources)
     {
         var signalValue = ++fenceValue;
         commandQueue.Signal(fence, signalValue).CheckError();
-        frameIndex = (int)swapChain.CurrentBackBufferIndex;
+        frameResources.FenceValue = signalValue;
+    }
 
-        if (fence.CompletedValue < signalValue)
+    private void WaitForFrame(FrameResources frameResources)
+    {
+        if (frameResources.FenceValue != 0 && fence.CompletedValue < frameResources.FenceValue)
         {
-            fence.SetEventOnCompletion(signalValue, fenceEvent.SafeWaitHandle.DangerousGetHandle()).CheckError();
+            fence.SetEventOnCompletion(frameResources.FenceValue, fenceEvent.SafeWaitHandle.DangerousGetHandle()).CheckError();
             fenceEvent.WaitOne();
         }
     }
@@ -181,5 +211,65 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         startupProgress?.Invoke(message);
         Console.WriteLine(message);
+    }
+
+    private ID3D12RootSignature CreateFullscreenRootSignature()
+    {
+        var description = new RootSignatureDescription(
+            RootSignatureFlags.AllowInputAssemblerInputLayout,
+            [],
+            []);
+        return device.CreateRootSignature(0, in description, RootSignatureVersion.Version1);
+    }
+
+    private ID3D12PipelineState CreateSmokePipelineState(string path)
+    {
+        var vertexShader = CompileShader(path, "FullscreenTriangleVS", "vs_5_0");
+        var pixelShader = CompileShader(path, "D3D12SmokePS", "ps_5_0");
+        var description = new GraphicsPipelineStateDescription
+        {
+            RootSignature = fullscreenRootSignature,
+            VertexShader = vertexShader,
+            PixelShader = pixelShader,
+            BlendState = BlendDescription.Opaque,
+            RasterizerState = RasterizerDescription.CullNone,
+            DepthStencilState = DepthStencilDescription.None,
+            SampleMask = uint.MaxValue,
+            PrimitiveTopologyType = PrimitiveTopologyType.Triangle,
+            RenderTargetFormats = [Format.B8G8R8A8_UNorm],
+            SampleDescription = new SampleDescription(1, 0),
+        };
+
+        return device.CreateGraphicsPipelineState(description);
+    }
+
+    private static ReadOnlyMemory<byte> CompileShader(string path, string entryPoint, string profile)
+    {
+        var shaderFlags = ShaderFlags.EnableStrictness;
+#if DEBUG
+        shaderFlags |= ShaderFlags.Debug | ShaderFlags.SkipOptimization;
+#endif
+
+        return Compiler.CompileFromFile(path, entryPoint, profile, shaderFlags, EffectFlags.None);
+    }
+
+    private readonly record struct D3D12PassContext(
+        ID3D12GraphicsCommandList CommandList,
+        ID3D12Resource BackBuffer,
+        CpuDescriptorHandle RenderTargetView);
+
+    private sealed class FrameResources(ID3D12CommandAllocator commandAllocator) : IDisposable
+    {
+        public ID3D12CommandAllocator CommandAllocator { get; } = commandAllocator;
+
+        public ID3D12Resource BackBuffer { get; set; } = null!;
+
+        public ulong FenceValue { get; set; }
+
+        public void Dispose()
+        {
+            BackBuffer.Dispose();
+            CommandAllocator.Dispose();
+        }
     }
 }
