@@ -76,12 +76,12 @@ internal sealed class DirectWriteOverlay : IDisposable
         DrawHeader(
             "directwrite overlay",
             titleFormat,
-            new Rect(18, 14, Math.Min(width - 18, 340), 42),
+            RectFromEdges(18, 14, Math.Min(width - 18, 340), 42),
             primaryTextBrush);
         renderTarget.DrawText(
             $"grid r {frame.Grid.Radius:0.00}  cam z {frame.CameraPosition.Z:0.00}",
             smallFormat,
-            new Rect(18, 38, Math.Min(width - 18, 420), 62),
+            RectFromEdges(18, 38, Math.Min(width - 18, 420), 62),
             quietTextBrush,
             DrawTextOptions.Clip);
         if (renderDebugMode > 0)
@@ -89,14 +89,14 @@ internal sealed class DirectWriteOverlay : IDisposable
             renderTarget.DrawText(
                 $"render debug {renderDebugMode}  F1 cycle  0-8 select",
                 smallFormat,
-                new Rect(18, 56, Math.Min(width - 18, 420), 80),
+                RectFromEdges(18, 56, Math.Min(width - 18, 420), 80),
                 quietTextBrush,
                 DrawTextOptions.Clip);
         }
         renderTarget.DrawText(
             "crisp text belongs after tonemapping",
             smallFormat,
-            new Rect(18, Math.Max(64, height - 36), Math.Min(width - 18, 420), height - 12),
+            RectFromEdges(18, Math.Max(64, height - 36), Math.Min(width - 18, 420), height - 12),
             quietTextBrush,
             DrawTextOptions.Clip);
         debugUi?.Draw(
@@ -165,5 +165,10 @@ internal sealed class DirectWriteOverlay : IDisposable
     private static string FontAssetPath(string fileName)
     {
         return Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", fileName);
+    }
+
+    private static Rect RectFromEdges(float left, float top, float right, float bottom)
+    {
+        return new Rect(left, top, Math.Max(0.0f, right - left), Math.Max(0.0f, bottom - top));
     }
 }

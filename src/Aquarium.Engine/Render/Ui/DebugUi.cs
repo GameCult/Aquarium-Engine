@@ -129,7 +129,7 @@ internal sealed class DebugUi
         target.DrawText(
             Title,
             titleFormat,
-            new Rect(panelBounds.Left + 12.0f, panelBounds.Top + 8.0f, panelBounds.Right - 12.0f, panelBounds.Top + HeaderHeight - 4.0f),
+            RectFromEdges(panelBounds.Left + 12.0f, panelBounds.Top + 8.0f, panelBounds.Right - 12.0f, panelBounds.Top + HeaderHeight - 4.0f),
             primaryBrush,
             DrawTextOptions.Clip);
 
@@ -141,7 +141,7 @@ internal sealed class DebugUi
         target.DrawText(
             "F2 hide",
             smallFormat,
-            new Rect(panelBounds.Left + 12.0f, panelBounds.Bottom - 26.0f, panelBounds.Right - 12.0f, panelBounds.Bottom - 8.0f),
+            RectFromEdges(panelBounds.Left + 12.0f, panelBounds.Bottom - 26.0f, panelBounds.Right - 12.0f, panelBounds.Bottom - 8.0f),
             quietBrush,
             DrawTextOptions.Clip);
     }
@@ -152,11 +152,11 @@ internal sealed class DebugUi
         foreach (var control in controls)
         {
             var height = control is SectionControl ? SectionHeight : RowHeight;
-            control.Bounds = new Rect(PanelLeft + 10.0f, y, PanelLeft + PanelWidth - 10.0f, y + height);
+            control.Bounds = RectFromEdges(PanelLeft + 10.0f, y, PanelLeft + PanelWidth - 10.0f, y + height);
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
 
-        panelBounds = new Rect(PanelLeft, PanelTop, PanelLeft + PanelWidth, y + 30.0f);
+        panelBounds = RectFromEdges(PanelLeft, PanelTop, PanelLeft + PanelWidth, y + 30.0f);
     }
 
     private static bool Contains(Rect bounds, Vector2 point)
@@ -165,6 +165,11 @@ internal sealed class DebugUi
             && point.X <= bounds.Right
             && point.Y >= bounds.Top
             && point.Y <= bounds.Bottom;
+    }
+
+    private static Rect RectFromEdges(float left, float top, float right, float bottom)
+    {
+        return new Rect(left, top, Math.Max(0.0f, right - left), Math.Max(0.0f, bottom - top));
     }
 
     public sealed class DebugUiPanel
@@ -245,12 +250,12 @@ internal sealed class DebugUi
 
         protected Rect LabelBounds()
         {
-            return new Rect(Bounds.Left + 8.0f, Bounds.Top + 6.0f, Bounds.Left + LabelWidth, Bounds.Bottom);
+            return RectFromEdges(Bounds.Left + 8.0f, Bounds.Top + 6.0f, Bounds.Left + LabelWidth, Bounds.Bottom);
         }
 
         protected Rect ValueBounds()
         {
-            return new Rect(Bounds.Left + LabelWidth + 10.0f, Bounds.Top + 6.0f, Bounds.Right - TrackWidth - 20.0f, Bounds.Bottom);
+            return RectFromEdges(Bounds.Left + LabelWidth + 10.0f, Bounds.Top + 6.0f, Bounds.Right - TrackWidth - 20.0f, Bounds.Bottom);
         }
     }
 
@@ -314,7 +319,7 @@ internal sealed class DebugUi
             DrawRow(target, rowBrush, outlineBrush);
             target.DrawText(Label.ToUpperInvariant(), format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
 
-            var box = new Rect(Bounds.Right - 28.0f, Bounds.Top + 8.0f, Bounds.Right - 13.0f, Bounds.Bottom - 8.0f);
+            var box = RectFromEdges(Bounds.Right - 28.0f, Bounds.Top + 8.0f, Bounds.Right - 13.0f, Bounds.Bottom - 8.0f);
             target.DrawRectangle(box, read() ? accentBrush : outlineBrush, 1.0f);
             if (read())
             {
@@ -365,11 +370,11 @@ internal sealed class DebugUi
 
             var track = TrackBounds();
             var t = ReadNormalized();
-            var fill = new Rect(track.Left, track.Top, track.Left + (track.Right - track.Left) * t, track.Bottom);
+            var fill = RectFromEdges(track.Left, track.Top, track.Left + (track.Right - track.Left) * t, track.Bottom);
             target.FillRectangle(track, dimAccentBrush);
             target.FillRectangle(fill, accentBrush);
             var thumbX = fill.Right;
-            target.FillRectangle(new Rect(thumbX - 4.0f, track.Top - 4.0f, thumbX + 4.0f, track.Bottom + 4.0f), accentBrush);
+            target.FillRectangle(RectFromEdges(thumbX - 4.0f, track.Top - 4.0f, thumbX + 4.0f, track.Bottom + 4.0f), accentBrush);
         }
 
         private Rect TrackBounds()
@@ -377,7 +382,7 @@ internal sealed class DebugUi
             var right = Bounds.Right - 12.0f;
             var left = right - TrackWidth;
             var centerY = (Bounds.Top + Bounds.Bottom) * 0.5f;
-            return new Rect(left, centerY - TrackHeight * 0.5f, right, centerY + TrackHeight * 0.5f);
+            return RectFromEdges(left, centerY - TrackHeight * 0.5f, right, centerY + TrackHeight * 0.5f);
         }
     }
 
