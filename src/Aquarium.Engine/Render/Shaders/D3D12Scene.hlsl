@@ -25,6 +25,7 @@ cbuffer AquariumFrame : register(b0)
 Texture2D<float4> gridHeightTexture : register(t0);
 Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumTransportTexture : register(t14);
+Texture2D<float4> mediumEventTexture : register(t17);
 SamplerState gridSampler : register(s0);
 
 static const int PLANET_COUNT = 5;
@@ -32,6 +33,7 @@ static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_GRID = 1.0;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
+static const float FIELD_ID_TRANSPARENT_EVENT = 4.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
@@ -177,14 +179,26 @@ float mediumSliceTravel(int sliceIndex)
     return t * farDistance;
 }
 
-void integrateMedium(float2 uv, float maxTravel, out float densityMean, out float transmittance, out float3 inScattering, out float representativeTravel)
+void integrateMedium(
+    float2 uv,
+    float maxTravel,
+    out float densityMean,
+    out float transmittance,
+    out float3 inScattering,
+    out float representativeTravel,
+    out float transparentEventSupport,
+    out float transparentEventTravel)
 {
     densityMean = 0.0;
     transmittance = 1.0;
     inScattering = 0.0;
     representativeTravel = maxTravel;
+    transparentEventSupport = 0.0;
+    transparentEventTravel = maxTravel;
     float densityTravelSum = 0.0;
     float densitySum = 0.0;
+    float eventTravelSum = 0.0;
+    float eventSupportSum = 0.0;
 
     [loop]
     for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
@@ -198,17 +212,27 @@ void integrateMedium(float2 uv, float maxTravel, out float densityMean, out floa
         float2 atlasUv = mediumAtlasUv(uv, sliceIndex);
         float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
         float4 transport = mediumTransportTexture.SampleLevel(gridSampler, atlasUv, 0.0);
+        float4 eventSummary = mediumEventTexture.SampleLevel(gridSampler, atlasUv, 0.0);
+        float eventSupport = saturate(eventSummary.x);
         densityMean += diagnostic.x;
         densityTravelSum += diagnostic.x * sliceTravel;
         densitySum += diagnostic.x;
+        eventTravelSum += eventSupport * sliceTravel;
+        eventSupportSum += eventSupport;
         inScattering += transmittance * transport.rgb;
         transmittance *= saturate(transport.a);
     }
 
     densityMean = saturate(densityMean / (float)MEDIUM_FROXEL_SLICE_COUNT);
+    transparentEventSupport = saturate(eventSupportSum / (float)MEDIUM_FROXEL_SLICE_COUNT * 4.0);
     if (densitySum > 0.0001)
     {
         representativeTravel = densityTravelSum / densitySum;
+    }
+
+    if (eventSupportSum > 0.0001)
+    {
+        transparentEventTravel = eventTravelSum / eventSupportSum;
     }
 }
 
@@ -269,11 +293,28 @@ SceneOut D3D12ScenePS(VertexOut input)
     float transmittance;
     float3 inScattering;
     float mediumRepresentativeTravel;
+    float transparentEventSupport;
+    float transparentEventTravel;
     float mediumTravel = travel <= farDistance ? travel : farDistance;
-    integrateMedium(input.uv, mediumTravel, densityMean, transmittance, inScattering, mediumRepresentativeTravel);
+    integrateMedium(
+        input.uv,
+        mediumTravel,
+        densityMean,
+        transmittance,
+        inScattering,
+        mediumRepresentativeTravel,
+        transparentEventSupport,
+        transparentEventTravel);
     color = color * transmittance + inScattering;
     float mediumOpacity = saturate(1.0 - transmittance);
-    if (outputFieldId < 0.5 && mediumOpacity > 0.015)
+    if (outputFieldId < 0.5 && transparentEventSupport > 0.010)
+    {
+        outputFieldId = FIELD_ID_TRANSPARENT_EVENT;
+        outputNormal = -rayDirection;
+        outputCoverage = transparentEventSupport;
+        travel = min(transparentEventTravel, farDistance);
+    }
+    else if (outputFieldId < 0.5 && mediumOpacity > 0.015)
     {
         outputFieldId = FIELD_ID_MEDIUM;
         outputNormal = -rayDirection;

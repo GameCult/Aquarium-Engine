@@ -71,6 +71,7 @@ struct MediumVolumeOut
 {
     float4 diagnostic : SV_Target0;
     float4 transport : SV_Target1;
+    float4 eventSummary : SV_Target2;
 };
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -294,9 +295,10 @@ int froxelIndexForPosition(float3 p)
     return x + y * FROXEL_COUNT_X + z * FROXEL_COUNT_X * FROXEL_COUNT_Y;
 }
 
-float transparentSurfaceDensity(float3 p, TransparentSurface surface, out float3 scattering)
+float transparentSurfaceDensity(float3 p, TransparentSurface surface, out float3 scattering, out float eventSupport)
 {
     scattering = 0.0;
+    eventSupport = 0.0;
     float radius = max(surface.centerRadius.w, 0.001);
     float2 local = (p.xy - surface.centerRadius.xy) / radius;
     float radiusMask = 1.0 - smoothstep(0.92, 1.0, length(local));
@@ -318,12 +320,14 @@ float transparentSurfaceDensity(float3 p, TransparentSurface surface, out float3
     gridColor += float3(0.98, 1.0, 0.78) * contour * 0.16;
     gridColor += float3(0.36, 0.92, 1.0) * fieldLine * 0.12;
     scattering = gridColor * density * surface.colorScatter.w;
+    eventSupport = saturate(density);
     return density * surface.kindDensity.y;
 }
 
-float registeredTransparentSurfaceDensity(float3 p, out float3 scattering)
+float registeredTransparentSurfaceDensity(float3 p, out float3 scattering, out float eventSupport)
 {
     scattering = 0.0;
+    eventSupport = 0.0;
     float density = 0.0;
     int froxelIndex = froxelIndexForPosition(p);
     if (froxelIndex < 0)
@@ -345,12 +349,15 @@ float registeredTransparentSurfaceDensity(float3 p, out float3 scattering)
             }
 
             float3 surfaceScattering;
-            float surfaceDensity = transparentSurfaceDensity(p, transparentSurfaces[id], surfaceScattering);
+            float surfaceSupport;
+            float surfaceDensity = transparentSurfaceDensity(p, transparentSurfaces[id], surfaceScattering, surfaceSupport);
             density += surfaceDensity;
             scattering += surfaceScattering;
+            eventSupport += surfaceSupport;
         }
     }
 
+    eventSupport = saturate(eventSupport);
     return saturate(density);
 }
 
@@ -379,7 +386,8 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     density *= mediumBlend;
     scattering *= mediumBlend;
     float3 gridScattering;
-    float gridDensity = registeredTransparentSurfaceDensity(p, gridScattering);
+    float transparentEventSupport;
+    float gridDensity = registeredTransparentSurfaceDensity(p, gridScattering, transparentEventSupport);
     density = saturate(density + gridDensity);
     scattering += gridScattering;
     float extinction = density * 0.16;
@@ -392,5 +400,6 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     MediumVolumeOut output;
     output.diagnostic = float4(saturate(density), saturate(transmittance), sourceDebug, 1.0);
     output.transport = float4(inScattering, saturate(transmittance));
+    output.eventSummary = float4(transparentEventSupport, gridDensity, saturate(dot(gridScattering, float3(0.2126, 0.7152, 0.0722))), 1.0);
     return output;
 }

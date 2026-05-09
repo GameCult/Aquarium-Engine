@@ -333,3 +333,10 @@ can start porting real passes while keeping D3D11 as the visual reference.
   implements direct ray-step registered-medium previews for modes 9 and 10.
   These are correctness probes independent of the froxel atlas; mode 11 remains
   the atlas density view.
+- D3D12 transparent event temporal pass: the medium pass now writes a third
+  froxel atlas target for generic transparent-event support. The scene pass
+  samples that summary, derives support-weighted event travel, and emits
+  `FIELD_ID_TRANSPARENT_EVENT` for Grid/particle-class contributions. Resolve
+  treats medium and transparent-event identities as distributed history, not
+  opaque surfaces, so Grid is not special-cased and future stochastic billboards
+  can join the same path.

@@ -246,7 +246,12 @@ contract from opaque solids. The Grid and future particles belong to the shared
 event-stream design in `docs/stochastic-transparent-surface-pipeline.md`, not to
 the scene first-hit surface path. A ray can encounter multiple transparent
 events; stochastic coverage may choose different events across frames; temporal
-validation must compare distribution summaries instead of one canonical travel.
+validation compares distribution summaries instead of one canonical travel. In
+D3D12 the medium pass writes a transparent-event summary target beside the
+diagnostic and transport atlases. The scene pass uses event support plus
+support-weighted travel to emit `FIELD_ID_TRANSPARENT_EVENT`, and the resolve
+treats that identity as distributed medium-like history rather than a surface
+normal/depth hit.
 
 The presentation path now applies an explicit exposure before display
 transformation and adds a low-gain pre-tonemap bloom/veil pyramid. The bloom

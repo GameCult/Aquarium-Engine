@@ -50,9 +50,11 @@ has feature parity.
   hits. Debug mode `3` shows history age and mode `4` shows history weight.
   Medium-only pixels use a density-weighted ray centroid as their temporal
   anchor and a `FIELD_ID_MEDIUM` identity, with continuity weighted by medium
-  opacity and coverage rather than surface normals. Grid/transparent
-  contributions therefore get history through the medium path without becoming
-  fake alpha surfaces.
+  opacity and coverage rather than surface normals. The medium pass also writes
+  a generic transparent-event summary target for binned stochastic surfaces.
+  Scene identity can now use `FIELD_ID_TRANSPARENT_EVENT` with event support and
+  support-weighted travel, so Grid and future particles share temporal support
+  without becoming fake alpha surfaces or opaque depth hits.
 - D3D12 debug modes `9` and `10` are direct ray-step medium previews, not
   repainted atlas views. The resolve shader samples the field instance buffer
   for the requested `MediumDebugStep`, so density/transmittance diagnostics can
