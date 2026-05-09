@@ -206,3 +206,8 @@ prototype integrated along the camera ray before surface composition.
   stops at Self/planet solids only; Grid pixels integrate medium to the visible
   far distance so the schematic overlay cannot cut holes through fog or occlude
   itself.
+- Transparent Grid event stream pass: the failed fixed-step band sampler was
+  reverted. The current pass traces repeated slope-aware `terrainGap` crossings,
+  refines each crossing through the existing heightfield marcher, and composites
+  up to eight Grid events front-to-back in resolve. The Grid no longer writes
+  scene depth/color; solids still bound the event stream.
