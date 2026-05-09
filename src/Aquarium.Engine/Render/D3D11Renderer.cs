@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 
 namespace Aquarium.Engine.Render;
 
-public sealed class D3D11Renderer : IDisposable
+public sealed class D3D11Renderer : IAquariumRenderer
 {
     private const string ShaderRelativePath = "Render/Shaders/Aquarium.hlsl";
     private const string DitherTextureRelativePath = "Assets/Textures/Aetheria-LDR_LLL1_0.r8";

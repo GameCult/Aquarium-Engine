@@ -19,7 +19,8 @@ public static class AquariumHost
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Aquarium-Engine-Icon.ico");
         using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath, visible: !runtime.Options.Headless);
         window.PaintSplash("Aquarium", "Preparing runtime state");
-        using var renderer = new D3D11Renderer(
+        using var renderer = CreateRenderer(
+            ParseRendererBackend(args),
             window.Handle,
             window.ClientWidth,
             window.ClientHeight,
@@ -144,7 +145,43 @@ public static class AquariumHost
             : null;
     }
 
-    private static void SyncRendererSettingsToRuntime(D3D11Renderer renderer, IAquariumRuntime runtime)
+    private static string ParseRendererBackend(IReadOnlyCollection<string> args)
+    {
+        var values = args.ToArray();
+        for (var index = 0; index < values.Length - 1; index++)
+        {
+            if (string.Equals(values[index], "--renderer", StringComparison.OrdinalIgnoreCase))
+            {
+                return values[index + 1];
+            }
+        }
+
+        return Environment.GetEnvironmentVariable("AQUARIUM_RENDERER") ?? "d3d11";
+    }
+
+    private static IAquariumRenderer CreateRenderer(
+        string rendererBackend,
+        IntPtr windowHandle,
+        int width,
+        int height,
+        string? shaderPath,
+        GraphicsSettings graphicsSettings,
+        Action<string>? startupProgress)
+    {
+        if (string.Equals(rendererBackend, "d3d12", StringComparison.OrdinalIgnoreCase))
+        {
+            return new D3D12Renderer(windowHandle, width, height, shaderPath, graphicsSettings, startupProgress);
+        }
+
+        if (!string.Equals(rendererBackend, "d3d11", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Unknown renderer backend '{rendererBackend}'. Expected d3d11 or d3d12.");
+        }
+
+        return new D3D11Renderer(windowHandle, width, height, shaderPath, graphicsSettings, startupProgress);
+    }
+
+    private static void SyncRendererSettingsToRuntime(IAquariumRenderer renderer, IAquariumRuntime runtime)
     {
         var settings = renderer.CaptureGraphicsSettings();
         if (settings != runtime.GraphicsSettings)
@@ -153,7 +190,7 @@ public static class AquariumHost
         }
     }
 
-    private static void ApplyRendererDebugInput(D3D11Renderer renderer, InputState input)
+    private static void ApplyRendererDebugInput(IAquariumRenderer renderer, InputState input)
     {
         if (input.IsKeyPressed(KeyCode.RenderDebugCycle))
         {

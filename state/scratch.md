@@ -2,11 +2,11 @@
 
 ## Current Slice
 
-Planning and first implementation for the SDF field renderer. The core rule:
-Aquarium/Aetheria clouds are local SDF media above, below, around, or enclosing
-the camera, never skybox-only decoration. `docs/sdf-field-renderer-plan.md`
-captures the architecture. `Aquarium.hlsl` now has a first analytic SDF cloud
-prototype integrated along the camera ray before surface composition.
+D3D12 migration foothold. D3D11 remains the visual reference renderer; the host
+now talks through `IAquariumRenderer`, and `--renderer d3d12` selects a new
+D3D12 shell that creates device/queue/swapchain/RTV heap/command list/fence and
+clears/presents headlessly. Next renderer work should port pass/resource
+ownership into D3D12 before building the stochastic transparent surface pipe.
 
 ## Hot Context
 
@@ -206,3 +206,10 @@ prototype integrated along the camera ray before surface composition.
   stops at Self/planet solids only; Grid pixels integrate medium to the visible
   far distance so the schematic overlay cannot cut holes through fog or occlude
   itself.
+- D3D12 migration foothold: D3D11 is frozen as the reference backend, and the
+  host now selects `d3d11` or `d3d12` through `--renderer` /
+  `AQUARIUM_RENDERER`. The D3D12 backend currently proves lifecycle only:
+  device, command queue, flip-discard swapchain, RTV heap, command allocator,
+  graphics command list, fence wait, clear, and present. Do not build the
+  transparent candidate pipe on D3D11 debt; port explicit D3D12 resource/pass
+  ownership first.

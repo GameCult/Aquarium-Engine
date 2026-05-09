@@ -64,7 +64,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
         Console.WriteLine($"Graphics settings: debug {graphicsSettings.RenderDebugMode}, exposure {graphicsSettings.SceneExposure:0.###}, bloom {graphicsSettings.BloomIntensity:0.###}, veil {graphicsSettings.BloomVeilIntensity:0.###}");
         Console.WriteLine($"CultCache: {stateStore.CachePath}");
         Console.WriteLine($"CultNet hello: {stateStore.Hello.RuntimeKind} / {stateStore.Hello.DisplayName}");
-        Console.WriteLine("Vortice D3D11 is present as the host shell; Aquarium owns the invariants.");
+        Console.WriteLine("Aquarium host renderer owns the visible frame invariants.");
     }
 
     public void Update(float deltaSeconds, InputState input)
