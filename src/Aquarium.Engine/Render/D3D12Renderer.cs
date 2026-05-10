@@ -27,6 +27,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MediumFroxelAtlasColumns = 8;
     private const int MediumFroxelAtlasRows = 4;
     private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
+    private const int MediumLightPropagationIterationCount = 4;
     private const int ViewFroxelPrimitiveSlotCount = 2;
     private const int CursorPrimitiveId = PlanetCount + 1;
     private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
@@ -100,6 +101,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget mediumTransportRenderTarget;
     private D3D12RenderTarget mediumLightInjectionRenderTarget;
     private D3D12RenderTarget mediumLightDirectionInjectionRenderTarget;
+    private D3D12RenderTarget mediumLightScratchRenderTarget;
+    private D3D12RenderTarget mediumLightDirectionScratchRenderTarget;
     private D3D12RenderTarget mediumLightRenderTarget;
     private D3D12RenderTarget mediumLightDirectionRenderTarget;
     private D3D12RenderTarget sceneRenderTarget;
@@ -218,6 +221,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
         mediumLightInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-injection-target", "Aquarium D3D12 Medium Light Injection Target");
         mediumLightDirectionInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-injection-target", "Aquarium D3D12 Medium Light Direction Injection Target");
+        mediumLightScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-scratch-target", "Aquarium D3D12 Medium Light Scratch Target");
+        mediumLightDirectionScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-scratch-target", "Aquarium D3D12 Medium Light Direction Scratch Target");
         mediumLightRenderTarget = CreateMediumVolumeRenderTarget("medium-light-target", "Aquarium D3D12 Propagated Medium Light Target");
         mediumLightDirectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-target", "Aquarium D3D12 Propagated Medium Light Direction Target");
         sceneRenderTarget = CreateSceneRenderTarget();
@@ -375,6 +380,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumLightInjectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionLightDescriptor);
         frameResources.MediumInjectionLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumLightDirectionInjectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionLightDirectionDescriptor);
+        frameResources.MediumScratchTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchTargetsDescriptor);
+        frameResources.MediumScratchTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchTransportDescriptor);
+        frameResources.MediumScratchLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumLightScratchRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchLightDescriptor);
+        frameResources.MediumScratchLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumLightDirectionScratchRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchLightDirectionDescriptor);
         frameResources.MediumTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumTargetsDescriptor);
         frameResources.MediumTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -533,6 +546,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneEventMetadataRenderTarget.Dispose();
         mediumLightDirectionRenderTarget.Dispose();
         mediumLightRenderTarget.Dispose();
+        mediumLightDirectionScratchRenderTarget.Dispose();
+        mediumLightScratchRenderTarget.Dispose();
         mediumLightDirectionInjectionRenderTarget.Dispose();
         mediumLightInjectionRenderTarget.Dispose();
         mediumTransportRenderTarget.Dispose();
@@ -715,6 +730,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("medium-transport-target");
         resourceRegistry.RemoveRenderTarget("medium-light-injection-target");
         resourceRegistry.RemoveRenderTarget("medium-light-direction-injection-target");
+        resourceRegistry.RemoveRenderTarget("medium-light-scratch-target");
+        resourceRegistry.RemoveRenderTarget("medium-light-direction-scratch-target");
         resourceRegistry.RemoveRenderTarget("medium-light-target");
         resourceRegistry.RemoveRenderTarget("medium-light-direction-target");
         resourceRegistry.RemoveRenderTarget("medium-volume-target");
@@ -731,6 +748,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneEventMetadataRenderTarget.Dispose();
         mediumLightDirectionRenderTarget.Dispose();
         mediumLightRenderTarget.Dispose();
+        mediumLightDirectionScratchRenderTarget.Dispose();
+        mediumLightScratchRenderTarget.Dispose();
         mediumLightDirectionInjectionRenderTarget.Dispose();
         mediumLightInjectionRenderTarget.Dispose();
         mediumTransportRenderTarget.Dispose();
@@ -760,6 +779,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
         mediumLightInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-injection-target", "Aquarium D3D12 Medium Light Injection Target");
         mediumLightDirectionInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-injection-target", "Aquarium D3D12 Medium Light Direction Injection Target");
+        mediumLightScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-scratch-target", "Aquarium D3D12 Medium Light Scratch Target");
+        mediumLightDirectionScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-scratch-target", "Aquarium D3D12 Medium Light Direction Scratch Target");
         mediumLightRenderTarget = CreateMediumVolumeRenderTarget("medium-light-target", "Aquarium D3D12 Propagated Medium Light Target");
         mediumLightDirectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-target", "Aquarium D3D12 Propagated Medium Light Direction Target");
         froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
@@ -1279,31 +1300,72 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-            mediumLightRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightDirectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            activeCommandList.ClearRenderTargetView(mediumLightRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightDirectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetPipelineState(mediumLightPropagationPipelineState!);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(5, frameResources.MediumInjectionTargetsDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(21, frameResources.MediumInjectionLightDirectionDescriptor.Gpu);
             activeCommandList.RSSetViewports(mediumViewport);
             activeCommandList.RSSetScissorRects(mediumScissorRect);
-            activeCommandList.OMSetRenderTargets(
-            [
-                mediumLightRenderTarget.RenderTargetView.Cpu,
-                mediumLightDirectionRenderTarget.RenderTargetView.Cpu,
-            ],
-            null);
             activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-            activeCommandList.DrawInstanced(3, 1, 0, 0);
+
+            DrawMediumLightPropagationIteration(
+                activeCommandList,
+                frameResources.MediumInjectionTargetsDescriptor,
+                frameResources.MediumInjectionLightDirectionDescriptor,
+                mediumLightScratchRenderTarget,
+                mediumLightDirectionScratchRenderTarget);
+
+            for (var iteration = 1; iteration < MediumLightPropagationIterationCount; iteration++)
+            {
+                var sourceTargets = (iteration & 1) == 1
+                    ? frameResources.MediumScratchTargetsDescriptor
+                    : frameResources.MediumTargetsDescriptor;
+                var sourceDirection = (iteration & 1) == 1
+                    ? frameResources.MediumScratchLightDirectionDescriptor
+                    : frameResources.MediumLightDirectionDescriptor;
+                var targetLight = (iteration & 1) == 1
+                    ? mediumLightRenderTarget
+                    : mediumLightScratchRenderTarget;
+                var targetDirection = (iteration & 1) == 1
+                    ? mediumLightDirectionRenderTarget
+                    : mediumLightDirectionScratchRenderTarget;
+
+                DrawMediumLightPropagationIteration(
+                    activeCommandList,
+                    sourceTargets,
+                    sourceDirection,
+                    targetLight,
+                    targetDirection);
+            }
         }
         finally
         {
             activeCommandList.EndEvent();
         }
+    }
+
+    private void DrawMediumLightPropagationIteration(
+        ID3D12GraphicsCommandList activeCommandList,
+        D3D12DescriptorSlot sourceTargetsDescriptor,
+        D3D12DescriptorSlot sourceLightDirectionDescriptor,
+        D3D12RenderTarget targetLight,
+        D3D12RenderTarget targetLightDirection)
+    {
+        targetLight.Transition(activeCommandList, ResourceStates.RenderTarget);
+        targetLightDirection.Transition(activeCommandList, ResourceStates.RenderTarget);
+        activeCommandList.ClearRenderTargetView(targetLight.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+        activeCommandList.ClearRenderTargetView(targetLightDirection.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+        activeCommandList.SetGraphicsRootDescriptorTable(5, sourceTargetsDescriptor.Gpu);
+        activeCommandList.SetGraphicsRootDescriptorTable(21, sourceLightDirectionDescriptor.Gpu);
+        activeCommandList.OMSetRenderTargets(
+        [
+            targetLight.RenderTargetView.Cpu,
+            targetLightDirection.RenderTargetView.Cpu,
+        ],
+        null);
+        activeCommandList.DrawInstanced(3, 1, 0, 0);
+        targetLight.Transition(activeCommandList, ResourceStates.PixelShaderResource);
+        targetLightDirection.Transition(activeCommandList, ResourceStates.PixelShaderResource);
     }
 
     private void ClearMediumVolume(ID3D12GraphicsCommandList activeCommandList)
@@ -1315,11 +1377,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
+            mediumLightScratchRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
+            mediumLightDirectionScratchRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightDirectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             activeCommandList.ClearRenderTargetView(mediumLightInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+            activeCommandList.ClearRenderTargetView(mediumLightScratchRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+            activeCommandList.ClearRenderTargetView(mediumLightDirectionScratchRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumLightRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumLightDirectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -2563,6 +2629,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot MediumInjectionLightDescriptor { get; set; }
 
         public D3D12DescriptorSlot MediumInjectionLightDirectionDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumScratchTargetsDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumScratchTransportDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumScratchLightDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumScratchLightDirectionDescriptor { get; set; }
 
         public D3D12DescriptorSlot MediumTargetsDescriptor { get; set; }
 

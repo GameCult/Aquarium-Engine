@@ -63,7 +63,7 @@ renderer_state:
     - DirectWrite overlay text after scene rendering.
     - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, bloom veil, and medium composite intensity.
-    - Field instance structured buffer feeding D3D12 medium density, transport, raw light injection, propagated froxel light, and propagated dominant-light direction passes.
+    - Field instance structured buffer feeding D3D12 medium density, transport, raw light injection, and four-iteration ping-ponged froxel propagation for irradiance plus dominant-light direction.
     - D3D12 default renderer behind IAquariumRenderer with device/queue/swapchain, per-frame command allocators, fences, static/transient descriptor arenas, upload ring constants, RTV/SRV/UAV render targets, structured field buffers, tracked barriers, command events, resize descriptor-arena rebuild, migrated Grid height brushes, view-froxel solid bins, HDR/bloom/present, temporal history lanes, and DirectWrite overlay bridge.
     - D3D12 Grid linework is direct-traced as a non-terminating stochastic event lane before the nearest solid; the failed transparent-froxel Grid bin experiment is dead and must stay out of live code.
     - Splash screen with bundled app icon and GameCult typefaces.

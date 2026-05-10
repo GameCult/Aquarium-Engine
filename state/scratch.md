@@ -518,3 +518,10 @@ reusing field identity/travel/control.
   isotropic scatter. Let that artistic smear stand for now; future proper
   transport should use multi-lobe/probe/reservoir direction storage when this
   becomes the limiting artifact.
+- D3D12 iterative medium propagation pass: the propagated medium light field no
+  longer comes from one neighbor spread. D3D12 now owns scratch light and
+  scratch direction targets and runs four ping-ponged low-resolution froxel
+  propagation iterations from injection through scratch/final targets. This is
+  still a compact diffusion-style approximation, not full multi-bounce
+  transport, but the cost and state are explicit and the scene consumes only the
+  final propagated irradiance/direction targets.
