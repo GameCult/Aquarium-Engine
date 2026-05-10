@@ -69,7 +69,7 @@ renderer_state:
     - Splash screen with bundled app icon and GameCult typefaces.
   next:
     - Replace CPU bootstrap view-froxel binning with GPU/raster binning before primitive/event counts scale.
-    - Evolve the dominant-light direction field into richer probe lighting once multiple emitters and glossy SDFs need more than one direction.
+    - Evolve the dominant-light direction field into richer probe lighting once multiple emitters, crossing beams, or glossy SDFs need more than one direction. Until then, the one-direction smear is accepted as an artistic approximation.
     - Promote field instances from fixed renderer table to a CPU-owned registry with per-field debug controls.
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.

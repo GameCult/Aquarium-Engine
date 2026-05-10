@@ -513,4 +513,8 @@ reusing field identity/travel/control.
   instead of pretending every froxel is isotropic. Planets and the cursor sample
   the same froxel light/direction field; the old cursor-only direct emitter
   specular loop has been cut. Debug mode `13` visualizes propagated froxel light
-  direction.
+  direction. This is deliberately lossy: two beams crossing in one froxel smear
+  into an averaged direction, and opposed beams can cancel toward low-confidence
+  isotropic scatter. Let that artistic smear stand for now; future proper
+  transport should use multi-lobe/probe/reservoir direction storage when this
+  becomes the limiting artifact.
