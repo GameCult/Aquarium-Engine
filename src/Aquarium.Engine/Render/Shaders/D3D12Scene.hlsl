@@ -269,7 +269,12 @@ float cursorLocatorProfileRadius(float z)
 
     float u = saturate((z - ContactZ) / (TipZ - ContactZ));
     float top = 1.0 - u;
-    return PeakRadius * Normalization * u * top * top;
+    float baseRadius = PeakRadius * Normalization * u * top * top;
+    float rippleEnvelope = smoothstep(0.10, 0.28, u) * (1.0 - smoothstep(0.82, 0.98, u));
+    float rippleWave = 0.5 + 0.5 * sin(z * 28.0 - timeSeconds * 4.0);
+    float rippleRidge = rippleWave * rippleWave * rippleWave;
+    float rippleRadius = min(0.026, baseRadius * 0.16) * rippleRidge * rippleEnvelope;
+    return baseRadius + rippleRadius;
 }
 
 float cursorLocatorSdf(float3 p)
@@ -718,9 +723,19 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
+        float3 cursorCenter = float3(cursorWorlds.xy, CURSOR_RADIUS);
+        float3 local = (p - cursorCenter) / CURSOR_RADIUS;
+        float height01 = saturate((local.z + 1.0) / 2.15);
+        float ripplePhase = local.z * 28.0 - timeSeconds * 4.0;
+        float rippleWave = 0.5 + 0.5 * sin(ripplePhase);
+        float rippleLine = pow(rippleWave, 18.0);
+        float envelope = smoothstep(0.04, 0.18, height01) * (1.0 - smoothstep(0.90, 1.0, height01));
+        float latitudinalGlow = rippleLine * envelope;
         float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.4);
         float light = 0.18 + saturate(dot(normal, lightDirection)) * 1.45;
-        return float3(0.38, 0.92, 1.0) * light + float3(0.90, 0.78, 1.0) * rim * 0.65;
+        float3 baseColor = lerp(float3(0.30, 0.78, 0.88), float3(0.56, 1.0, 1.0), latitudinalGlow * 0.45);
+        float3 rippleColor = float3(0.72, 1.0, 1.0) * latitudinalGlow * (0.35 + rim * 0.65);
+        return baseColor * light + float3(0.90, 0.78, 1.0) * rim * 0.65 + rippleColor;
     }
 
     float hue = hash21(float2(primitiveId, 6.3));

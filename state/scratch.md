@@ -80,9 +80,11 @@ reusing field identity/travel/control.
   cursor hits with object motion instead of camera-only motion. Keep heavy SDF
   evaluators outside generic packed-id hit helpers, and keep this profile
   analytic/cheap: sampled profile-segment distance, numeric slope probing, and
-  fractional `pow` all stalled D3D12 pipeline compilation. The earlier
-  spinning-top profile read as a space station or candle flame; keep it as
-  evidence, not live cursor doctrine.
+  fractional `pow` all stalled D3D12 pipeline compilation. Cursor juice is part
+  of the SDF: latitudinal ridges add a small animated radius offset using
+  `sin(localZ * 28 - time * 4)`, with matching surface glow only reinforcing
+  the same phase. The earlier spinning-top profile read as a space station or
+  candle flame; keep it as evidence, not live cursor doctrine.
 
 ## Hot Context
 
