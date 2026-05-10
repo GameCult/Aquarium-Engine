@@ -104,6 +104,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] historyEventMetadataRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] bloomRenderTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
+    private static readonly Vector3[] CloudCenters =
+    [
+        new(-3.8f, 1.8f, 1.15f),
+        new(4.1f, -1.4f, -0.45f),
+        new(0.8f, 3.7f, 2.7f),
+        new(-0.4f, -3.9f, -1.35f),
+    ];
     private D3D12StructuredBuffer froxelPrimitiveBuffer;
     private readonly D3D12StructuredBuffer fieldInstanceBuffer;
     private Int4[] froxelPrimitiveIds = [];
@@ -1278,7 +1285,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fieldInstances[6] = FieldInstanceGpu.Ellipsoid(
             fieldId: 32.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: new Vector3(frame.Grid.Center.X - 3.8f, frame.Grid.Center.Y + 1.8f, 1.15f),
+            center: CloudCenters[0],
             radius: new Vector3(3.4f, 1.25f, 0.92f),
             angle: frame.TimeSeconds * 0.055f,
             mediumId: 1.0f,
@@ -1287,7 +1294,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fieldInstances[7] = FieldInstanceGpu.Ellipsoid(
             fieldId: 33.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: new Vector3(frame.Grid.Center.X + 4.1f, frame.Grid.Center.Y - 1.4f, -0.45f),
+            center: CloudCenters[1],
             radius: new Vector3(4.5f, 1.55f, 0.78f),
             angle: -0.62f + frame.TimeSeconds * 0.033f,
             mediumId: 1.0f,
@@ -1296,7 +1303,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fieldInstances[8] = FieldInstanceGpu.Ellipsoid(
             fieldId: 34.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: new Vector3(frame.Grid.Center.X + 0.8f, frame.Grid.Center.Y + 3.7f, 2.7f),
+            center: CloudCenters[2],
             radius: new Vector3(2.2f, 1.1f, 0.62f),
             angle: 1.15f,
             mediumId: 1.0f,
@@ -1305,7 +1312,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fieldInstances[9] = FieldInstanceGpu.Ellipsoid(
             fieldId: 35.0f,
             flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: new Vector3(frame.Grid.Center.X - 0.4f, frame.Grid.Center.Y - 3.9f, -1.35f),
+            center: CloudCenters[3],
             radius: new Vector3(5.2f, 1.8f, 0.88f),
             angle: 0.46f,
             mediumId: 1.0f,

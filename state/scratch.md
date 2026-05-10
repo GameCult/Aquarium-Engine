@@ -64,6 +64,11 @@ reusing field identity/travel/control.
   samples compete and one representative event is selected for the temporal
   lane. D3D12 no longer binds/uploads the blue-noise texture until that chooser
   exists.
+- Medium anchor correction: registered cloud ellipsoids were incorrectly
+  centered relative to `frame.Grid.Center`, so they moved with camera/Grid
+  panning. D3D12 now stores fixed world-space `CloudCenters`; Grid can remain a
+  moving visibility window, but medium bodies must not ride it unless simulation
+  state explicitly moves them.
 
 ## Hot Context
 

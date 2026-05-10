@@ -30,6 +30,7 @@
     "camera_and_grid": [
       "The camera target is the Grid center on XY. Grid radius derives from zoom distance. Pitch, yaw, FOV, and screen aspect do not resize the Grid.",
       "Body anchors are world-space simulation state. Moving the Grid visibility window must not drag bodies with it.",
+      "Registered volumetric brush anchors are world-space simulation state too. Do not derive cloud/medium field centers from `frame.Grid.Center`; the Grid can pan under/through them, but the medium bodies must stay fixed unless simulation state moves them.",
       "Grid texture, weather, line, and future fog domains should sample world-space coordinates so panning reveals the field instead of sliding a texture under the camera.",
       "Aquarium/Aetheria clouds are local SDF media: above, below, around, and sometimes enclosing the camera. Do not build the core cloud path on skybox, hemisphere, paraboloid, or far-only assumptions.",
       "Cursor and camera interactions should project onto the same XY surface used by the Grid contract."
