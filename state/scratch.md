@@ -57,6 +57,13 @@ reusing field identity/travel/control.
   lines, leaving grain. Current D3D12 event lane uses 0.985 max retention with a
   stronger fresh-history floor. Debug mode 6 is named Lane Identity because it
   shows the winning diagnostic lane, not only the hard surface field id.
+- Event radiance correction: Grid is currently the only event candidate on its
+  ray, so the event lane should emit expected premultiplied radiance
+  (`color * coverage`) instead of a blue-noise hit/miss sample. Stochastic
+  selection belongs at the future multi-event chooser, where several transparent
+  samples compete and one representative event is selected for the temporal
+  lane. D3D12 no longer binds/uploads the blue-noise texture until that chooser
+  exists.
 
 ## Hot Context
 
