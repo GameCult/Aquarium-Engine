@@ -84,7 +84,7 @@
       "Grid temporal control coverage is the line/support signal. Do not mark the whole low-support Grid surface reactive; that turns debug control mode red everywhere and reintroduces stale history-murder logic.",
       "Temporal control background coverage must be zero. Opaque hits can write coverage 1, and Grid hits write line/support coverage; empty background must not appear as stable covered history in mode 5.",
       "Projection jitter is currently scaled to zero. If Self or planet surfaces visibly judder, the resolve is not hiding jitter and the correct live choice is no jitter until opaque and Grid paths both prove stable.",
-      "Temporal debug views are live keys: F1 cycles, 0 final, 1 raw current scene, 2 reprojected history, 3 history age, 4 history weight, 5 current temporal control, 6 current field identity. Use these before guessing whether TAA is sampling, validating, or presenting the wrong signal.",
+      "Temporal/debug views are live keys: F1 cycles; 0 final, 1 raw current scene, 2 reprojected history, 3 history age, 4 history weight, 5 current temporal control, 6 current field identity, 7 bloom, 8 exposed luminance, 9 medium ray density, 10 medium ray transmittance, 11 froxel density, 12 propagated froxel light. Use these before guessing whether TAA, medium, or lighting is sampling, validating, or presenting the wrong signal.",
       "Bruneton-style atmospheric scattering is the later sky/planet solution, not the first Grid fog pass. Use LUTs, explicit texture mappings, and unit-tested physical terms when Aquarium reaches ground-to-space atmosphere.",
       "GigaVoxels-style ray-guided sparse bricks are only for large sparse field/world storage. Do not turn early fog into a monolithic persistent volume cache."
     ],

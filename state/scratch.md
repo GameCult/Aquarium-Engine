@@ -119,8 +119,9 @@ reusing field identity/travel/control.
   density attenuation, into the propagated light target. Scene medium
   integration now uses density/transmittance plus propagated light instead of
   hard-baked transport color, and solid diffuse shading samples the same froxel
-  light field. Cursor brass specular still uses direct emitter loops until the
-  renderer owns directional/probe lighting for glossy surfaces.
+  light field. Debug mode `12` visualizes the propagated froxel light. Cursor
+  brass specular still uses direct emitter loops until the renderer owns
+  directional/probe lighting for glossy surfaces.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`

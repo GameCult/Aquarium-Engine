@@ -289,7 +289,8 @@ reconstructs a world position, samples registered medium density, and injects
 light from `FieldFlags.Emitter` surfaces using finite solid angle and cheap
 path transmittance. Mode `9` previews direct registered-medium density at the
 selected ray step, mode `10` previews direct ray transmittance to that step, and
-mode `11` shows integrated froxel density. Final composition uses density,
+mode `11` shows integrated froxel density. Mode `12` shows propagated froxel
+light. Final composition uses density,
 transmittance, and propagated light front-to-back; the persisted Medium
 Composite control still scales the visible medium while the light contract
 remains renderer-owned.

@@ -27,7 +27,8 @@ temporary visual reference until the old backend is deleted.
   transport, and light-injection render targets from the field instance buffer,
   then runs a propagation pass into the light texture consumed by fog integration
   and solid diffuse shading. Render debug mode `11` displays D3D12 froxel
-  density, matching the renderer path rather than a temporary bring-up view.
+  density and mode `12` displays propagated froxel light, matching the renderer
+  path rather than a temporary bring-up view.
 - The D3D12 scene pass now renders Self, planets, medium transport, and the
   first transparent candidate event through the D3D12 frame graph. Grid line
   transparency is no longer baked into the medium froxel atlas; the scene

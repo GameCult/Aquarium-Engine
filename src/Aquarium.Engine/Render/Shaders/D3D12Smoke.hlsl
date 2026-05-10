@@ -64,3 +64,13 @@ float4 D3D12MediumDensityDebugPS(VertexOut input) : SV_Target0
     fog *= lerp(0.45, 1.0, transmittance);
     return float4(max(clear, fog), 1.0);
 }
+
+float4 D3D12MediumLightDebugPS(VertexOut input) : SV_Target0
+{
+    float3 light = max(sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0).rgb, 0.0);
+    float luminance = dot(light, float3(0.2126, 0.7152, 0.0722));
+    float exposure = 1.0 - exp(-luminance * 0.85);
+    float3 chroma = light / max(luminance, 0.0001);
+    float3 color = saturate(chroma * exposure);
+    return float4(max(float3(0.004, 0.008, 0.012), color), 1.0);
+}

@@ -99,7 +99,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         if (renderDebugMode > 0)
         {
             renderTarget.DrawText(
-                $"render debug {renderDebugMode}  F1 cycle  0-9 select",
+                $"render debug {renderDebugMode}  F1 cycle  debug panel selects",
                 smallFormat,
                 RectFromEdges(18, 56, Math.Min(width - 18, 420), 80),
                 quietTextBrush,

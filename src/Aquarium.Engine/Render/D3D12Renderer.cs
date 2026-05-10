@@ -60,6 +60,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(9, "Medium Ray Density"),
         new(10, "Medium Ray Transmittance"),
         new(11, "Froxel Density"),
+        new(12, "Froxel Light"),
     ];
 
     private readonly IDXGIFactory4 factory;
@@ -81,6 +82,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? mediumVolumePipelineState;
     private ID3D12PipelineState? mediumLightPropagationPipelineState;
     private ID3D12PipelineState? mediumDensityDebugPipelineState;
+    private ID3D12PipelineState? mediumLightDebugPipelineState;
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
     private ID3D12PipelineState? bloomBlurHorizontalPipelineState;
@@ -470,6 +472,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         && mediumVolumePipelineState is not null
         && mediumLightPropagationPipelineState is not null
         && mediumDensityDebugPipelineState is not null
+        && mediumLightDebugPipelineState is not null
         && bloomPrefilterPipelineState is not null
         && bloomDownsamplePipelineState is not null
         && bloomBlurHorizontalPipelineState is not null
@@ -645,6 +648,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumLightPropagation.Name = "Aquarium D3D12 Medium Light Propagation Pipeline";
         var mediumDensityDebug = CreateMediumDensityDebugPipelineState(paths.Smoke);
         mediumDensityDebug.Name = "Aquarium D3D12 Medium Density Debug Pipeline";
+        var mediumLightDebug = CreateMediumLightDebugPipelineState(paths.Smoke);
+        mediumLightDebug.Name = "Aquarium D3D12 Medium Light Debug Pipeline";
         var bloomPrefilter = CreateBloomPrefilterPipelineState(paths.Post);
         bloomPrefilter.Name = "Aquarium D3D12 Bloom Prefilter Pipeline";
         var bloomDownsample = CreateBloomDownsamplePipelineState(paths.Post);
@@ -663,6 +668,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumVolume,
             mediumLightPropagation,
             mediumDensityDebug,
+            mediumLightDebug,
             bloomPrefilter,
             bloomDownsample,
             bloomBlurHorizontal,
@@ -1035,17 +1041,32 @@ public sealed class D3D12Renderer : IAquariumRenderer
         try
         {
             var showMediumDensity = RenderDebugMode == 11;
+            var showMediumLight = RenderDebugMode == 12;
             var historyReadIndex = temporalFrameIndex & 1;
             var historyWriteIndex = 1 - historyReadIndex;
 
-            if (showMediumDensity)
+            if (showMediumDensity || showMediumLight)
             {
-                mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+                var sourceDescriptor = showMediumDensity
+                    ? frameResources.MediumTargetsDescriptor
+                    : frameResources.MediumLightDescriptor;
+                var pipelineState = showMediumDensity
+                    ? mediumDensityDebugPipelineState!
+                    : mediumLightDebugPipelineState!;
+                if (showMediumDensity)
+                {
+                    mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+                }
+                else
+                {
+                    mediumLightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+                }
+
                 context.BackBuffer.Transition(context.CommandList, ResourceStates.RenderTarget);
                 context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
-                context.CommandList.SetPipelineState(mediumDensityDebugPipelineState!);
+                context.CommandList.SetPipelineState(pipelineState);
                 context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-                context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.MediumTargetsDescriptor.Gpu);
+                context.CommandList.SetGraphicsRootDescriptorTable(1, sourceDescriptor.Gpu);
                 context.CommandList.RSSetViewports(viewport);
                 context.CommandList.RSSetScissorRects(scissorRect);
                 context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
@@ -1802,6 +1823,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 mediumVolumePipelineState!,
                 mediumLightPropagationPipelineState!,
                 mediumDensityDebugPipelineState!,
+                mediumLightDebugPipelineState!,
                 bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
                 bloomBlurHorizontalPipelineState!,
@@ -1818,6 +1840,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumePipelineState = pipelines.MediumVolume;
         mediumLightPropagationPipelineState = pipelines.MediumLightPropagation;
         mediumDensityDebugPipelineState = pipelines.MediumDensityDebug;
+        mediumLightDebugPipelineState = pipelines.MediumLightDebug;
         bloomPrefilterPipelineState = pipelines.BloomPrefilter;
         bloomDownsamplePipelineState = pipelines.BloomDownsample;
         bloomBlurHorizontalPipelineState = pipelines.BloomBlurHorizontal;
@@ -1834,6 +1857,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumePipelineState = null;
         mediumLightPropagationPipelineState = null;
         mediumDensityDebugPipelineState = null;
+        mediumLightDebugPipelineState = null;
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
         bloomBlurHorizontalPipelineState = null;
@@ -2084,6 +2108,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState CreateMediumDensityDebugPipelineState(string path)
     {
         return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumDensityDebugPS", Format.B8G8R8A8_UNorm);
+    }
+
+    private ID3D12PipelineState CreateMediumLightDebugPipelineState(string path)
+    {
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumLightDebugPS", Format.B8G8R8A8_UNorm);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -2417,6 +2446,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState MediumVolume,
         ID3D12PipelineState MediumLightPropagation,
         ID3D12PipelineState MediumDensityDebug,
+        ID3D12PipelineState MediumLightDebug,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
         ID3D12PipelineState BloomBlurHorizontal,
@@ -2430,6 +2460,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
+            MediumLightDebug.Dispose();
             MediumDensityDebug.Dispose();
             MediumLightPropagation.Dispose();
             MediumVolume.Dispose();
