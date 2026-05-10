@@ -96,6 +96,13 @@ reusing field identity/travel/control.
   zero emission until a control turns it on; nebula/cloud fields can become
   emissive by setting the emitter flag and radiance instead of adding bespoke
   shader branches.
+- Medium temporal correction: fog color history is currently disabled in final
+  resolve. The previous path let medium-classified pixels use the main
+  surface-history lane, then separately blended previous full-frame color
+  through the medium packet. With emissive fog this produced obvious ghost
+  silhouettes. Until there is a proper light-volume/medium-history reprojection
+  contract, medium packets may track age/debug metadata but must not blend
+  previous resolved color into final presentation.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
