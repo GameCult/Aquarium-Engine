@@ -84,10 +84,11 @@ reusing field identity/travel/control.
   fractional `pow` all stalled D3D12 pipeline compilation. Cursor juice is part
   of the SDF: latitudinal ridges add a small animated radius offset using
   `sin(localZ * 28 - time * 4)`, with amplitude reduced so ripples do not form
-  shelves. The material is brass/metallic, non-emissive, has a sharper specular
-  core, and has no ambient diffuse floor; only Self-driven lighting/specular
-  terms should shape it. The earlier spinning-top profile read as a space
-  station or candle flame; keep it as evidence, not live cursor doctrine.
+  shelves. The material is brass/metallic GGX with brass-tinted F0, no diffuse
+  metal term, no emissive glow, and no ambient floor; it currently only has
+  Self as direct radiance until a reflection source exists. The earlier
+  spinning-top profile read as a space station or candle flame; keep it as
+  evidence, not live cursor doctrine.
 
 ## Hot Context
 

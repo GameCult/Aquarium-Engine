@@ -723,16 +723,29 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
+        static const float MinimumRoughness = 0.045;
+        static const float CursorRoughness = 0.22;
+        static const float SelfRadiance = 18.0;
+
         float3 viewDirection = normalize(cameraPosition - p);
         float3 halfVector = normalize(lightDirection + viewDirection);
-        float specularCore = pow(saturate(dot(normal, halfVector)), 180.0);
-        float specularShoulder = pow(saturate(dot(normal, halfVector)), 42.0);
-        float fresnel = pow(1.0 - saturate(dot(normal, viewDirection)), 5.0);
-        float3 brass = float3(0.92, 0.58, 0.20);
-        float3 darkBrass = float3(0.22, 0.13, 0.045);
-        float3 diffuse = brass * (ndl * 0.34);
-        float3 reflection = brass * (specularCore * 7.0 + specularShoulder * 0.85) + lerp(darkBrass, brass, 0.65) * fresnel * 1.05;
-        return diffuse + reflection;
+        float ndv = saturate(dot(normal, viewDirection));
+        float ndh = saturate(dot(normal, halfVector));
+        float vdh = saturate(dot(viewDirection, halfVector));
+        float roughness = max(CursorRoughness, MinimumRoughness);
+        float alpha = roughness * roughness;
+        float alpha2 = alpha * alpha;
+        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
+        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
+        float k = (roughness + 1.0);
+        k = (k * k) * 0.125;
+        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
+        float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
+        float geometry = geometryL * geometryV;
+        float3 f0 = float3(0.95, 0.62, 0.26);
+        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
+        float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
+        return specular * ndl * SelfRadiance;
     }
 
     float hue = hash21(float2(primitiveId, 6.3));
