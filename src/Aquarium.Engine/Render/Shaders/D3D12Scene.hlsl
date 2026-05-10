@@ -82,8 +82,9 @@ struct SceneOut
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
     float4 mediumPacket : SV_Target3;
-    float4 eventColor : SV_Target4;
-    float4 eventMetadata : SV_Target5;
+    float4 mediumColor : SV_Target4;
+    float4 eventColor : SV_Target5;
+    float4 eventMetadata : SV_Target6;
 };
 
 struct SolidHit
@@ -105,6 +106,7 @@ struct RayMarchResult
     float mediumOpacity;
     float densityMean;
     float mediumTravel;
+    float3 mediumColor;
     float eventTravel;
     float eventCoverage;
     float3 eventColor;
@@ -644,6 +646,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     result.mediumOpacity = 0.0;
     result.densityMean = 0.0;
     result.mediumTravel = farDistance + 1.0;
+    result.mediumColor = 0.0;
     result.eventTravel = farDistance + 1.0;
     result.eventCoverage = 0.0;
     result.eventColor = 0.0;
@@ -706,6 +709,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         result.mediumOpacity = mediumOpacity;
         result.densityMean = mediumDensityMean;
         result.mediumTravel = mediumTravel;
+        result.mediumColor = inScattering;
     }
     else
     {
@@ -713,6 +717,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         result.mediumOpacity = mediumOpacity;
         result.densityMean = mediumDensityMean;
         result.mediumTravel = mediumTravel;
+        result.mediumColor = inScattering;
         if (result.mediumOpacity > 0.015)
         {
             result.fieldId = FIELD_ID_MEDIUM;
@@ -863,6 +868,7 @@ SceneOut D3D12ScenePS(VertexOut input)
     output.metadata = float4(result.fieldId, result.normal);
     output.control = float4(0.0, result.coverage, result.mediumOpacity, result.densityMean);
     output.mediumPacket = float4(FIELD_ID_MEDIUM, result.mediumTravel, result.mediumOpacity, result.densityMean);
+    output.mediumColor = float4(result.mediumColor, result.mediumOpacity);
     output.eventColor = float4(result.eventColor, result.eventCoverage);
     output.eventMetadata = float4(FIELD_ID_GRID, result.eventTravel, result.eventCoverage, 0.0);
     return output;

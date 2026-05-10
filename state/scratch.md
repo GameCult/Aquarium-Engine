@@ -103,6 +103,15 @@ reusing field identity/travel/control.
   silhouettes. Until there is a proper light-volume/medium-history reprojection
   contract, medium packets may track age/debug metadata but must not blend
   previous resolved color into final presentation.
+- Medium propagation/reprojection lane: D3D12 now gives medium radiance its own
+  color lane. The scene pass emits `sceneMediumColor` alongside the medium
+  packet; resolve subtracts current medium radiance from the scene color so
+  surface history stores surface-only color, reprojects medium packet travel to
+  fetch `historyMediumColor`, validates by medium travel/opacity/density, and
+  composites resolved surface + resolved medium + resolved stochastic events.
+  This is direct froxel emitter propagation plus medium-color reprojection, not
+  full multi-bounce GI. A cold shader build for this wider scene/resolve shape
+  may exceed the 30s headless watchdog; warm/default verification passes.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
