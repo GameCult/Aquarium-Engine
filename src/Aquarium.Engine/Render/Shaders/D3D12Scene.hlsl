@@ -70,6 +70,7 @@ static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.56;
 static const int FIELD_INSTANCE_COUNT = 11;
 static const int FIELD_FLAG_EMITTER = 8;
+static const float INV_FOUR_PI = 0.07957747155;
 
 struct VertexOut
 {
@@ -590,13 +591,15 @@ void integrateMediumSlice(
     float3 propagatedLight = mediumLightTexture.SampleLevel(gridSampler, atlasUv, 0.0).rgb;
     float sliceTravel = mediumSliceTravel(sliceIndex);
     float fraction = saturate(intervalFraction);
+    float density = saturate(diagnostic.x);
+    float sigmaT = max(diagnostic.y, 0.0);
+    float sigmaS = min(max(diagnostic.z, 0.0), sigmaT);
     float fullSliceTransmittance = saturate(transport.a);
-    float sliceExtinction = -log(max(fullSliceTransmittance, 0.0001));
+    float sliceExtinction = max(-log(max(fullSliceTransmittance, 0.0001)), sigmaT * (mediumSliceEndTravel(sliceIndex) - mediumSliceStartTravel(sliceIndex)));
     float partialTransmittance = exp(-sliceExtinction * fraction);
-    float scatterDenominator = max(1.0 - fullSliceTransmittance, 0.0001);
-    float scatterFraction = (1.0 - partialTransmittance) / scatterDenominator;
-    float densityContribution = diagnostic.x * fraction;
-    float3 sliceInScattering = propagatedLight * diagnostic.x * scatterFraction * 0.14;
+    float scatterIntegral = sigmaT > 0.0001 ? sigmaS * (1.0 - partialTransmittance) / sigmaT : 0.0;
+    float densityContribution = density * fraction;
+    float3 sliceInScattering = propagatedLight * (INV_FOUR_PI * scatterIntegral);
 
     densityMean += densityContribution;
     densityTravelSum += densityContribution * sliceTravel;

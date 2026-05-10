@@ -278,15 +278,20 @@ packed froxel medium pass writes 32 frustum slices into diagnostic, transport,
 and light-injection textures; a follow-up propagation pass writes the propagated
 medium light texture consumed by both fog integration and solid diffuse shading.
 At 1280x720 the first volume is 160x90x32, packed as an 8x4 atlas. Each froxel
-reconstructs a world position, samples registered medium density, and injects
-light from `FieldFlags.Emitter` surfaces using finite solid angle and cheap
-path transmittance. Mode `9` previews direct registered-medium density at the
-selected ray step, mode `10` previews direct ray transmittance to that step, and
-mode `11` shows integrated froxel density. Mode `12` shows propagated froxel
-light. Final composition uses density,
-transmittance, and propagated light front-to-back; the persisted Medium
-Composite control still scales the visible medium while the light contract
-remains renderer-owned.
+reconstructs a world position and evaluates physical-ish medium coefficients:
+density for inspection, extinction `sigma_t`, scattering `sigma_s`, and
+single-scattering albedo. Field `mediumTerms` currently mean `x = extinction
+per density`, `y = scattering albedo`, `z = reserved phase/aniso`, and
+`w = density scale`. Grid fog uses the same coefficient path with renderer
+constants. Light injection comes from `FieldFlags.Emitter` surfaces using
+finite solid angle and cheap path transmittance. Mode `9` previews direct
+registered-medium density at the selected ray step, mode `10` previews direct
+ray transmittance to that step using the same coefficient policy, mode `11`
+shows froxel density/coefficient occupancy, and mode `12` shows propagated
+froxel light. Final composition integrates Beer-Lambert transmittance and
+single-scattering source `sigma_s * irradiance / 4pi` front-to-back; the
+persisted Medium Composite control scales the visible medium while the light
+contract remains renderer-owned.
 
 The D3D12 scene pass now keeps solid, medium, and event ownership separate while
 sharing one ray clock. Solid candidates come from the view-froxel table and are

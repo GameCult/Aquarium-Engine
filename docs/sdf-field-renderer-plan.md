@@ -100,12 +100,13 @@ except to replace them.
 
 Current status: the renderer now packs a first fixed-size field instance buffer
 for Self, planets, and local cloud/medium ellipsoids. HLSL consumes that buffer
-in a packed froxel medium pass that writes density, transmittance, and
-in-scattering transport. Density noise is evaluated in field-local/world
-coordinates, not animated screen space. Final composition uses the froxel
-transport behind a persisted intensity gate that defaults to zero, while direct
-ray debug modes remain the correctness reference. This is the first real volume
-pass, not the final sparse/cascaded volume renderer.
+in a packed froxel medium pass that writes density, extinction `sigma_t`,
+scattering `sigma_s`, albedo, slice transmittance, and raw emitter irradiance
+before light propagation. Density noise is evaluated in field-local/world
+coordinates, not animated screen space. Final composition uses Beer-Lambert
+transmittance and single-scattering integration behind a persisted intensity
+gate, while direct ray debug modes remain the correctness reference. This is the
+first real volume pass, not the final sparse/cascaded volume renderer.
 
 ### Gate 2: Broad Phase
 

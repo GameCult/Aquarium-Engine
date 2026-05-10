@@ -56,12 +56,13 @@ float4 D3D12MediumDensityDebugPS(VertexOut input) : SV_Target0
 {
     float4 diagnostic = sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0);
     float density = saturate(diagnostic.r);
-    float transmittance = saturate(diagnostic.g);
-    float source = saturate(diagnostic.b);
+    float sigmaT = max(diagnostic.g, 0.0);
+    float sigmaS = max(diagnostic.b, 0.0);
+    float albedo = saturate(diagnostic.a);
     float3 clear = float3(0.006, 0.014, 0.022);
     float3 fog = float3(0.18, 0.48, 0.68) * density;
-    fog += float3(0.95, 0.72, 0.36) * source;
-    fog *= lerp(0.45, 1.0, transmittance);
+    fog += float3(0.95, 0.72, 0.36) * saturate(sigmaS * 2.5);
+    fog *= lerp(0.55, 1.12, albedo) * (1.0 - exp(-sigmaT * 5.0));
     return float4(max(clear, fog), 1.0);
 }
 

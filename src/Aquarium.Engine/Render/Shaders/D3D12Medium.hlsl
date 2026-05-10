@@ -45,6 +45,9 @@ static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
 static const float PI = 3.14159265359;
+static const float INV_FOUR_PI = 0.07957747155;
+static const float GRID_FOG_EXTINCTION = 0.18;
+static const float GRID_FOG_SCATTERING_ALBEDO = 0.82;
 
 struct VertexOut
 {
@@ -248,9 +251,11 @@ float fieldDistance(float3 p, FieldInstance field)
     return ellipsoidSdf(local, max(field.radiusAngle.xyz, 0.001));
 }
 
-float registeredMediumDensityOnly(float3 p)
+void registeredMediumCoefficients(float3 p, out float density, out float sigmaT, out float sigmaS, out float albedo)
 {
-    float density = gridFogDensity(p);
+    density = gridFogDensity(p);
+    sigmaT = density * GRID_FOG_EXTINCTION;
+    sigmaS = sigmaT * GRID_FOG_SCATTERING_ALBEDO;
 
     [unroll]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
@@ -273,10 +278,19 @@ float registeredMediumDensityOnly(float3 p)
         local /= max(field.radiusAngle.xyz, 0.001);
         float erosion = saturate(0.86 + fbm3(local * 3.4) * 0.14);
         float core = 1.0 - smoothstep(0.80, 1.05, length(local));
-        density += shell * core * erosion * field.mediumTerms.w;
+        float fieldDensity = shell * core * erosion * field.mediumTerms.w;
+        float fieldSigmaT = fieldDensity * max(field.mediumTerms.x, 0.0);
+        float fieldAlbedo = saturate(field.mediumTerms.y);
+
+        density += fieldDensity;
+        sigmaT += fieldSigmaT;
+        sigmaS += fieldSigmaT * fieldAlbedo;
     }
 
-    return saturate(density);
+    density = saturate(density);
+    sigmaT = max(sigmaT, 0.0);
+    sigmaS = min(max(sigmaS, 0.0), sigmaT);
+    albedo = sigmaT > 0.0001 ? saturate(sigmaS / sigmaT) : 0.0;
 }
 
 float emissiveFieldSolidAngle(float3 p, FieldInstance emitter)
@@ -310,7 +324,7 @@ float emissiveSurfaceTransmittance(float3 p, FieldInstance emitter)
         opticalDepth += gridFogExtinctionApprox(p + lightDirection * travel);
     }
 
-    opticalDepth *= (pathLength / 4.0) * 0.16;
+    opticalDepth *= (pathLength / 4.0) * GRID_FOG_EXTINCTION;
     return exp(-opticalDepth);
 }
 
@@ -358,15 +372,20 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     float sliceLength = farDistance / (float)MEDIUM_FROXEL_SLICE_COUNT;
     float travel = mediumSliceTravel(sliceIndex);
     float3 p = cameraPosition + rayDirection * travel;
-    float density = registeredMediumDensityOnly(p);
+    float density;
+    float sigmaT;
+    float sigmaS;
+    float albedo;
+    registeredMediumCoefficients(p, density, sigmaT, sigmaS, albedo);
     float mediumBlend = saturate(mediumCompositeIntensity);
     density *= mediumBlend;
-    float extinction = density * 0.16;
-    float transmittance = exp(-extinction * sliceLength);
+    sigmaT *= mediumBlend;
+    sigmaS *= mediumBlend;
+    float transmittance = exp(-sigmaT * sliceLength);
     float3 injectedIrradiance = injectedEmitterIrradiance(p) * mediumBlend;
 
     MediumVolumeOut output;
-    output.diagnostic = float4(saturate(density), saturate(transmittance), saturate(dot(injectedIrradiance, float3(0.2126, 0.7152, 0.0722)) * 0.05), 1.0);
+    output.diagnostic = float4(saturate(density), sigmaT, sigmaS, albedo);
     output.transport = float4(0.0, 0.0, 0.0, saturate(transmittance));
     output.light = float4(injectedIrradiance, saturate(density));
     return output;
@@ -386,8 +405,8 @@ float3 propagatedNeighbor(int2 cell, int sliceIndex, float weight)
 {
     sliceIndex = clamp(sliceIndex, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
     float2 uv = atlasUvFromCell(cell, sliceIndex);
-    float density = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0).x;
-    float occlusion = exp(-density * 0.36);
+    float sigmaT = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0).y;
+    float occlusion = exp(-sigmaT * 0.55);
     return mediumLightTexture.SampleLevel(sourceSampler, uv, 0.0).rgb * weight * occlusion;
 }
 
@@ -401,7 +420,9 @@ float4 MediumLightPropagatePS(VertexOut input) : SV_Target0
     int sliceIndex = tile.x + tile.y * MEDIUM_FROXEL_ATLAS_COLUMNS;
     float2 uv = atlasUvFromCell(cell, sliceIndex);
 
-    float density = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0).x;
+    float4 medium = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0);
+    float density = medium.x;
+    float sigmaT = medium.y;
     float3 center = mediumLightTexture.SampleLevel(sourceSampler, uv, 0.0).rgb;
     float3 propagated = center * 0.58;
     propagated += propagatedNeighbor(cell + int2(1, 0), sliceIndex, 0.055);
@@ -411,7 +432,7 @@ float4 MediumLightPropagatePS(VertexOut input) : SV_Target0
     propagated += propagatedNeighbor(cell, sliceIndex + 1, 0.08);
     propagated += propagatedNeighbor(cell, sliceIndex - 1, 0.08);
 
-    float localRetention = lerp(0.72, 1.0, saturate(density * 1.4));
+    float localRetention = lerp(0.72, 1.0, saturate(sigmaT * 7.0 + density * 0.35));
     float3 light = max(center, propagated * localRetention);
     return float4(light, saturate(density));
 }

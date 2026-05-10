@@ -127,6 +127,15 @@ reusing field identity/travel/control.
   The medium pass now writes density/transmittance plus raw emitter irradiance
   only. The D3D12 scene solid search also exits the view-froxel slice loop once
   the nearest opaque hit is in front of all remaining slices.
+- Physically based medium math pass: D3D12 medium coefficients are now explicit.
+  `mediumVolume.rgba` stores density, extinction `sigma_t`, scattering
+  `sigma_s`, and single-scattering albedo. `mediumTerms` now means
+  `x = extinction per density`, `y = scattering albedo`,
+  `z = reserved phase/aniso`, `w = density scale`. Scene integration uses
+  Beer-Lambert transmittance and single-scattering source
+  `sigma_s * irradiance / 4pi`; ray transmittance debug uses the same
+  coefficient evaluator. This is still single scattering with propagated
+  irradiance, not directional phase-correct multiple scattering.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`

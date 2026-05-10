@@ -83,6 +83,8 @@ static const float MAX_HISTORY_AGE = 32.0;
 static const int FIELD_INSTANCE_COUNT = 11;
 static const int FIELD_FLAG_CLOUD = 2;
 static const int MEDIUM_RAY_PREVIEW_STEPS = 48;
+static const float GRID_FOG_EXTINCTION = 0.18;
+static const float GRID_FOG_SCATTERING_ALBEDO = 0.82;
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -473,9 +475,11 @@ float fieldDistance(float3 p, FieldInstance field)
     return ellipsoidSdf(local, max(field.radiusAngle.xyz, 0.001));
 }
 
-float registeredMediumDensity(float3 p)
+void registeredMediumCoefficients(float3 p, out float density, out float sigmaT, out float sigmaS, out float albedo)
 {
-    float density = gridFogDensity(p);
+    density = gridFogDensity(p);
+    sigmaT = density * GRID_FOG_EXTINCTION;
+    sigmaS = sigmaT * GRID_FOG_SCATTERING_ALBEDO;
 
     [unroll]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
@@ -498,10 +502,19 @@ float registeredMediumDensity(float3 p)
         local /= max(field.radiusAngle.xyz, 0.001);
         float erosion = saturate(0.86 + fbm3(local * 3.4) * 0.14);
         float core = 1.0 - smoothstep(0.80, 1.05, length(local));
-        density += shell * core * erosion * field.mediumTerms.w;
+        float fieldDensity = shell * core * erosion * field.mediumTerms.w;
+        float fieldSigmaT = fieldDensity * max(field.mediumTerms.x, 0.0);
+        float fieldAlbedo = saturate(field.mediumTerms.y);
+
+        density += fieldDensity;
+        sigmaT += fieldSigmaT;
+        sigmaS += fieldSigmaT * fieldAlbedo;
     }
 
-    return saturate(density);
+    density = saturate(density);
+    sigmaT = max(sigmaT, 0.0);
+    sigmaS = min(max(sigmaS, 0.0), sigmaT);
+    albedo = sigmaT > 0.0001 ? saturate(sigmaS / sigmaT) : 0.0;
 }
 
 void previewRegisteredMediumStep(float3 rayOrigin, float3 rayDirection, float maxTravel, float requestedStep, out float stepDensity, out float transmittance)
@@ -516,14 +529,18 @@ void previewRegisteredMediumStep(float3 rayOrigin, float3 rayDirection, float ma
     {
         float travel = ((float)stepIndex + 0.5) * stepLength;
         float3 p = rayOrigin + rayDirection * travel;
-        float density = registeredMediumDensity(p);
+        float density;
+        float sigmaT;
+        float sigmaS;
+        float albedo;
+        registeredMediumCoefficients(p, density, sigmaT, sigmaS, albedo);
         if (stepIndex == selectedStep)
         {
             stepDensity = density;
             return;
         }
 
-        transmittance *= exp(-density * 0.16 * stepLength);
+        transmittance *= exp(-sigmaT * stepLength);
     }
 }
 
