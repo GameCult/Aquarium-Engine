@@ -262,16 +262,16 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
 
 float cursorTopProfileRadius(float t)
 {
-    float x = pow(saturate(t), 2.8);
+    float x = pow(saturate(t), 2.25);
     return x * x * (3.0 - 2.0 * x);
 }
 
 float cursorTopProfileSlope(float t)
 {
     float safeT = max(saturate(t), 0.0001);
-    float x = pow(safeT, 2.8);
+    float x = pow(safeT, 2.25);
     float smoothstepSlope = 6.0 * x * (1.0 - x);
-    return smoothstepSlope * 2.8 * pow(safeT, 1.8);
+    return smoothstepSlope * 2.25 * pow(safeT, 1.25);
 }
 
 float cursorBottomProfileRadius(float t)
@@ -295,20 +295,21 @@ float cursorTopSdf(float3 p)
 {
     static const float BottomHeight = 0.625;
     static const float TopHeight = 1.25;
-    static const float WaistRadius = 0.78;
+    static const float WaistRadius = 0.70;
+    static const float SeamBlendHeight = 0.07;
 
     float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
     float3 local = (p - center) / CURSOR_RADIUS;
     float2 samplePoint = float2(length(local.xy), local.z);
     float topT = saturate((TopHeight - samplePoint.y) / TopHeight);
     float bottomT = saturate(-samplePoint.y / BottomHeight);
-    bool upperProfile = samplePoint.y >= 0.0;
-    float profileRadius = upperProfile
-        ? WaistRadius * cursorTopProfileRadius(topT)
-        : WaistRadius * cursorBottomProfileRadius(bottomT);
-    float profileSlope = upperProfile
-        ? -WaistRadius * cursorTopProfileSlope(topT) / TopHeight
-        : -WaistRadius * cursorBottomProfileSlope(bottomT) / BottomHeight;
+    float topRadius = WaistRadius * cursorTopProfileRadius(topT);
+    float bottomRadius = WaistRadius * cursorBottomProfileRadius(bottomT);
+    float topSlope = -WaistRadius * cursorTopProfileSlope(topT) / TopHeight;
+    float bottomSlope = -WaistRadius * cursorBottomProfileSlope(bottomT) / BottomHeight;
+    float seamBlend = smoothstep(-SeamBlendHeight, SeamBlendHeight, samplePoint.y);
+    float profileRadius = lerp(bottomRadius, topRadius, seamBlend);
+    float profileSlope = lerp(bottomSlope, topSlope, seamBlend);
     float radialDistance = samplePoint.x - profileRadius;
     float surfaceDistance = radialDistance * rsqrt(1.0 + min(profileSlope * profileSlope, 144.0));
     float topDistance = samplePoint.y - TopHeight;

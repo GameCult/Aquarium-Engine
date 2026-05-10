@@ -72,17 +72,18 @@ reusing field identity/travel/control.
 - Cursor spinning-top SDF: `AquariumFrame` now carries the mouse cursor
   projected onto the Grid XY plane. D3D12 bins a cursor primitive into the
   existing view-froxel solid table and traces it as a revolved 2D profile: the
-  upper two-thirds grows top-to-waist with `3x^2 - 2x^3`, and the lower third
-  shrinks waist-to-bottom with `1 - sqrt(x)`. Frame constants pack current and
-  previous cursor world anchors so the TAA resolve can reproject cursor hits
-  with object motion instead of camera-only motion. Keep heavy SDF evaluators
-  outside generic packed-id hit helpers, and keep this one analytic/cheap;
-  sampled profile-segment distance stalled D3D12 pipeline compilation. The
-  analytic profile field still must be conservative: `radial - radius(z)`
-  oversteps at grazing views, so the cursor evaluator scales radial distance by
-  the profile slope and marches with smaller steps. The bottom `1 - sqrt(x)`
-  profile is softened/renormalized near `x = 0` so the waist seam does not
-  inherit an infinite slope.
+  upper two-thirds grows top-to-waist with shaped smoothstep
+  `smoothstep(pow(x, 2.25))`, and the lower third shrinks waist-to-bottom with
+  softened `1 - sqrt(x)`. A narrow profile-space blend around the waist seam
+  keeps the object from reading as two perfect mathematical surfaces jammed
+  together. Frame constants pack current and previous cursor world anchors so
+  the TAA resolve can reproject cursor hits with object motion instead of
+  camera-only motion. Keep heavy SDF evaluators outside generic packed-id hit
+  helpers, and keep this one analytic/cheap; sampled profile-segment distance
+  stalled D3D12 pipeline compilation. The analytic profile field still must be
+  conservative: `radial - radius(z)` oversteps at grazing views, so the cursor
+  evaluator scales radial distance by the profile slope and marches with
+  smaller steps.
 
 ## Hot Context
 
