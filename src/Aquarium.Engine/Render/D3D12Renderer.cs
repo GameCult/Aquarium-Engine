@@ -39,7 +39,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int BloomLevelCount = 3;
     private const float SunRadius = 1.12f;
     private const float CursorBodyRadius = 0.56f;
-    private const float CursorBodyBoundRadius = 1.46f;
+    private const float CursorBodyBoundRadius = 0.72f;
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";

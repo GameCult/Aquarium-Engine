@@ -37,7 +37,7 @@ static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int CURSOR_PRIMITIVE_ID = PLANET_COUNT + 1;
 static const float CURSOR_RADIUS = 0.56;
-static const float CURSOR_BOUND_RADIUS = 1.46;
+static const float CURSOR_BOUND_RADIUS = 0.72;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_DOWNSCALE = 8;
@@ -260,76 +260,63 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
     return travel >= intervalStart && travel <= intervalEnd;
 }
 
-float cursorTopProfileRadius(float t)
+float smootherstep(float t)
 {
-    float u = saturate(t);
-    float x = u * u * (0.55 + 0.45 * u);
+    float x = saturate(t);
     return x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
 }
 
-float cursorTopProfileSlope(float t)
+float cursorLocatorProfileRadius(float z)
 {
-    float u = saturate(t);
-    float x = u * u * (0.55 + 0.45 * u);
-    float shapedSlope = 1.1 * u + 1.35 * u * u;
-    float smootherstepSlope = 30.0 * x * x * (1.0 - x) * (1.0 - x);
-    return smootherstepSlope * shapedSlope;
+    static const float ContactZ = -1.0;
+    static const float BellyZ = -0.42;
+    static const float NeckZ = 0.18;
+    static const float TipZ = 0.95;
+    static const float BellyRadius = 0.26;
+    static const float NeckRadius = 0.055;
+
+    if (z < BellyZ)
+    {
+        float t = (z - ContactZ) / (BellyZ - ContactZ);
+        return BellyRadius * smootherstep(t);
+    }
+
+    if (z < NeckZ)
+    {
+        float t = (z - BellyZ) / (NeckZ - BellyZ);
+        return lerp(BellyRadius, NeckRadius, smootherstep(t));
+    }
+
+    float t = (z - NeckZ) / (TipZ - NeckZ);
+    return NeckRadius * (1.0 - smootherstep(t));
 }
 
-float cursorBottomProfileRadius(float t)
+float cursorLocatorSdf(float3 p)
 {
-    static const float SqrtSoftening = 0.035;
-    float root0 = sqrt(SqrtSoftening);
-    float root1 = sqrt(1.0 + SqrtSoftening);
-    float x = (sqrt(saturate(t) + SqrtSoftening) - root0) / (root1 - root0);
-    return 1.0 - x;
-}
-
-float cursorBottomProfileSlope(float t)
-{
-    static const float SqrtSoftening = 0.035;
-    float root0 = sqrt(SqrtSoftening);
-    float root1 = sqrt(1.0 + SqrtSoftening);
-    return -0.5 * rsqrt(saturate(t) + SqrtSoftening) / (root1 - root0);
-}
-
-float cursorTopSdf(float3 p)
-{
-    static const float BottomHeight = 0.625;
-    static const float TopHeight = 2.50;
-    static const float WaistRadius = 0.70;
-    static const float SeamBlendHeight = 0.07;
+    static const float ContactZ = -1.0;
+    static const float TipZ = 0.95;
 
     float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
     float3 local = (p - center) / CURSOR_RADIUS;
     float2 samplePoint = float2(length(local.xy), local.z);
-    float topT = saturate((TopHeight - samplePoint.y) / TopHeight);
-    float bottomT = saturate(-samplePoint.y / BottomHeight);
-    float topRadius = WaistRadius * cursorTopProfileRadius(topT);
-    float bottomRadius = WaistRadius * cursorBottomProfileRadius(bottomT);
-    float topSlope = -WaistRadius * cursorTopProfileSlope(topT) / TopHeight;
-    float bottomSlope = -WaistRadius * cursorBottomProfileSlope(bottomT) / BottomHeight;
-    float seamBlend = smoothstep(-SeamBlendHeight, SeamBlendHeight, samplePoint.y);
-    float profileRadius = lerp(bottomRadius, topRadius, seamBlend);
-    float profileSlope = lerp(bottomSlope, topSlope, seamBlend);
+    float profileRadius = cursorLocatorProfileRadius(samplePoint.y);
     float radialDistance = samplePoint.x - profileRadius;
-    float surfaceDistance = radialDistance * rsqrt(1.0 + min(profileSlope * profileSlope, 144.0));
-    float topDistance = samplePoint.y - TopHeight;
-    float bottomDistance = -BottomHeight - samplePoint.y;
-    float boundedDistance = max(surfaceDistance, max(topDistance, bottomDistance));
+    float topDistance = samplePoint.y - TipZ;
+    float bottomDistance = ContactZ - samplePoint.y;
+    float boundedDistance = max(radialDistance, max(topDistance, bottomDistance));
     return boundedDistance * CURSOR_RADIUS;
 }
 
-float3 cursorTopNormal(float3 p)
+float3 cursorLocatorNormal(float3 p)
 {
     float epsilon = 0.006;
-    float dx = cursorTopSdf(p + float3(epsilon, 0.0, 0.0)) - cursorTopSdf(p - float3(epsilon, 0.0, 0.0));
-    float dy = cursorTopSdf(p + float3(0.0, epsilon, 0.0)) - cursorTopSdf(p - float3(0.0, epsilon, 0.0));
-    float dz = cursorTopSdf(p + float3(0.0, 0.0, epsilon)) - cursorTopSdf(p - float3(0.0, 0.0, epsilon));
+    float dx = cursorLocatorSdf(p + float3(epsilon, 0.0, 0.0)) - cursorLocatorSdf(p - float3(epsilon, 0.0, 0.0));
+    float dy = cursorLocatorSdf(p + float3(0.0, epsilon, 0.0)) - cursorLocatorSdf(p - float3(0.0, epsilon, 0.0));
+    float dz = cursorLocatorSdf(p + float3(0.0, 0.0, epsilon)) - cursorLocatorSdf(p - float3(0.0, 0.0, epsilon));
     return normalize(float3(dx, dy, dz));
 }
 
-bool traceCursorTop(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float travel, out float3 normal)
+bool traceCursorLocator(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float travel, out float3 normal)
 {
     float sphereTravel;
     float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
@@ -357,14 +344,14 @@ bool traceCursorTop(float3 origin, float3 direction, float intervalStart, float 
         }
 
         float3 p = origin + direction * travel;
-        float distanceValue = cursorTopSdf(p);
+        float distanceValue = cursorLocatorSdf(p);
         if (abs(distanceValue) < max(0.0025, travel * 0.00025))
         {
-            normal = cursorTopNormal(p);
+            normal = cursorLocatorNormal(p);
             return true;
         }
 
-        travel += max(abs(distanceValue) * 0.58, 0.003);
+        travel += max(abs(distanceValue) * 0.36, 0.0025);
     }
 
     return false;
@@ -455,7 +442,7 @@ void considerFroxelPrimitiveHits(float3 origin, float3 direction, int froxelInde
         {
             float hitTravel;
             float3 hitNormal;
-            if (traceCursorTop(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
+            if (traceCursorLocator(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
             {
                 nearest.hit = true;
                 nearest.travel = hitTravel;

@@ -69,24 +69,19 @@ reusing field identity/travel/control.
   panning. D3D12 now stores fixed world-space `CloudCenters`; Grid can remain a
   moving visibility window, but medium bodies must not ride it unless simulation
   state explicitly moves them.
-- Cursor spinning-top SDF: `AquariumFrame` now carries the mouse cursor
-  projected onto the Grid XY plane. D3D12 bins a cursor primitive into the
-  existing view-froxel solid table and traces it as a revolved 2D profile: the
-  upper section is twice the earlier height and grows top-to-waist with a
-  polynomial-shaped smootherstep (`x = t*t*(0.55 + 0.45*t)`, then quintic
-  smootherstep), and the lower third shrinks waist-to-bottom with softened
-  `1 - sqrt(x)`. A narrow profile-space blend around the waist seam keeps the
-  object from reading as two perfect mathematical surfaces jammed together.
-  The shader and CPU froxel binning both need the enlarged cursor bound radius
-  (`1.46`) or the taller tip gets clipped out of candidate discovery. Frame
+- Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
+  the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
+  solid table and traces it as a small droplet/needle locator: local `z = -1`
+  kisses the Grid plane, the modest belly peaks near local `z = -0.42`, and the
+  upper needle ends at local `z = 0.95`. Shader and CPU froxel bounds must stay
+  matched (`0.72` currently) or candidate discovery clips the cursor. Frame
   constants pack current and previous cursor world anchors so the TAA resolve
   can reproject cursor hits with object motion instead of camera-only motion.
-  Keep heavy SDF evaluators outside generic packed-id hit helpers, and keep
-  this one analytic/cheap; sampled profile-segment distance and fractional
-  `pow` in the profile path both stalled D3D12 pipeline compilation. The
-  analytic profile field still must be conservative: `radial - radius(z)`
-  oversteps at grazing views, so the cursor evaluator scales radial distance by
-  the profile slope and marches with smaller steps.
+  Keep heavy SDF evaluators outside generic packed-id hit helpers, and keep this
+  profile analytic/cheap: sampled profile-segment distance, numeric slope
+  probing, and fractional `pow` all stalled D3D12 pipeline compilation. The
+  earlier spinning-top profile read as a space station or candle flame; keep it
+  as evidence, not live cursor doctrine.
 
 ## Hot Context
 
