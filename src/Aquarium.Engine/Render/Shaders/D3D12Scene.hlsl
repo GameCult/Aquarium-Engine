@@ -55,6 +55,8 @@ static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.56;
+static const float3 SELF_CENTER = float3(0.0, 0.0, 2.2);
+static const float3 SELF_EMISSIVE_RADIANCE = float3(10.0, 8.7, 4.2);
 
 struct VertexOut
 {
@@ -711,27 +713,47 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     return result;
 }
 
+float emissiveSphereSolidAngle(float3 p, float radius)
+{
+    float distanceToEmitter = max(length(SELF_CENTER - p), radius + 0.001);
+    float sinTheta = saturate(radius / distanceToEmitter);
+    float cosTheta = sqrt(saturate(1.0 - sinTheta * sinTheta));
+    return 2.0 * PI * (1.0 - cosTheta);
+}
+
+float3 emissiveSphereIrradiance(float3 p, float3 normal, float radius, out float3 lightDirection, out float solidAngle)
+{
+    float3 toEmitter = SELF_CENTER - p;
+    lightDirection = normalize(toEmitter);
+    solidAngle = emissiveSphereSolidAngle(p, radius);
+    float surfaceFacing = saturate(dot(normal, lightDirection));
+    float emitterFacing = smoothstep(radius * 0.98, radius * 1.08, length(toEmitter));
+    return SELF_EMISSIVE_RADIANCE * solidAngle * surfaceFacing * emitterFacing;
+}
+
 float3 shadeBody(float3 p, float3 normal, int primitiveId)
 {
-    float3 self = float3(0.0, 0.0, 2.2);
-    float3 lightDirection = normalize(self - p);
-    float ndl = saturate(dot(normal, lightDirection));
     if (primitiveId == 0)
     {
-        return float3(10.0, 8.7, 4.2);
+        return SELF_EMISSIVE_RADIANCE;
     }
+
+    float3 lightDirection;
+    float solidAngle;
+    float3 irradiance = emissiveSphereIrradiance(p, normal, SUN_RADIUS, lightDirection, solidAngle);
+    float irradianceLuma = dot(irradiance, float3(0.2126, 0.7152, 0.0722));
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
         static const float MinimumRoughness = 0.045;
         static const float CursorRoughness = 0.22;
-        static const float SelfRadiance = 18.0;
 
         float3 viewDirection = normalize(cameraPosition - p);
         float3 halfVector = normalize(lightDirection + viewDirection);
         float ndv = saturate(dot(normal, viewDirection));
         float ndh = saturate(dot(normal, halfVector));
         float vdh = saturate(dot(viewDirection, halfVector));
+        float ndl = saturate(dot(normal, lightDirection));
         float roughness = max(CursorRoughness, MinimumRoughness);
         float alpha = roughness * roughness;
         float alpha2 = alpha * alpha;
@@ -745,12 +767,12 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
         float3 f0 = float3(0.95, 0.62, 0.26);
         float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
         float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-        return specular * ndl * SelfRadiance;
+        return specular * irradiance;
     }
 
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return albedo * (ndl * 1.68);
+    return albedo * irradianceLuma / PI;
 }
 
 SceneOut D3D12ScenePS(VertexOut input)

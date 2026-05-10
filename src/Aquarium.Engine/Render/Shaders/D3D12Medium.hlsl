@@ -41,6 +41,10 @@ static const int FIELD_FLAG_CLOUD = 2;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
+static const float PI = 3.14159265359;
+static const float SELF_RADIUS = 1.12;
+static const float3 SELF_CENTER = float3(0.0, 0.0, 2.2);
+static const float3 SELF_EMISSIVE_RADIANCE = float3(10.0, 8.7, 4.2);
 
 struct VertexOut
 {
@@ -187,10 +191,8 @@ float terrainHeight(float2 p)
     return gridHeightTexture.SampleLevel(sourceSampler, saturate(gridUv(p)), 0.0).r;
 }
 
-float gridFogDensity(float3 p, out float3 scattering)
+float gridFogDensity(float3 p)
 {
-    scattering = 0.0;
-
     float2 local = gridLocal(p.xy);
     float radialFade = 1.0 - smoothstep(0.96, 1.12, length(local));
     float depthBelowGrid = terrainHeight(p.xy) - p.z;
@@ -211,10 +213,17 @@ float gridFogDensity(float3 p, out float3 scattering)
     float high = triNoise3d(domain * 7.4 - warp * 0.35 - flow.yzx);
     float textureWeight = saturate(0.58 + low * 1.42 - high * 0.52);
     float deepening = 1.0 - exp(-max(depthBelowGrid, 0.0) * 1.45);
-    float density = saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * lerp(0.72, 1.55, textureWeight));
+    return saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * lerp(0.72, 1.55, textureWeight));
+}
 
-    scattering = float3(0.58, 0.68, 0.24) * density * lerp(0.34, 0.72, textureWeight);
-    return density;
+float gridFogExtinctionApprox(float3 p)
+{
+    float2 local = gridLocal(p.xy);
+    float radialFade = 1.0 - smoothstep(0.96, 1.12, length(local));
+    float depthBelowGrid = terrainHeight(p.xy) - p.z;
+    float depthRamp = smoothstep(0.035, 0.72, depthBelowGrid);
+    float deepening = 1.0 - exp(-max(depthBelowGrid, 0.0) * 1.45);
+    return saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening));
 }
 
 float2 rotate2(float2 value, float angle)
@@ -238,15 +247,9 @@ float fieldDistance(float3 p, FieldInstance field)
     return ellipsoidSdf(local, max(field.radiusAngle.xyz, 0.001));
 }
 
-float registeredMediumDensity(float3 p, out float3 scattering)
+float registeredMediumDensityOnly(float3 p)
 {
-    float density = 0.0;
-    scattering = 0.0;
-
-    float3 gridFogScattering;
-    float gridDensity = gridFogDensity(p, gridFogScattering);
-    density += gridDensity;
-    scattering += gridFogScattering;
+    float density = gridFogDensity(p);
 
     [unroll]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
@@ -269,12 +272,74 @@ float registeredMediumDensity(float3 p, out float3 scattering)
         local /= max(field.radiusAngle.xyz, 0.001);
         float erosion = saturate(0.86 + fbm3(local * 3.4) * 0.14);
         float core = 1.0 - smoothstep(0.80, 1.05, length(local));
-        float fieldDensity = shell * core * erosion * field.mediumTerms.w;
-        density += fieldDensity;
-        scattering += field.colorIntensity.rgb * fieldDensity * field.mediumTerms.y;
+        density += shell * core * erosion * field.mediumTerms.w;
     }
 
     return saturate(density);
+}
+
+float emissiveSphereSolidAngle(float3 p)
+{
+    float3 toEmitter = SELF_CENTER - p;
+    float distanceToEmitter = max(length(toEmitter), SELF_RADIUS + 0.001);
+    float sinTheta = saturate(SELF_RADIUS / distanceToEmitter);
+    float cosTheta = sqrt(saturate(1.0 - sinTheta * sinTheta));
+    return 2.0 * PI * (1.0 - cosTheta);
+}
+
+float henyeyGreenstein(float cosTheta, float g)
+{
+    float g2 = g * g;
+    return (1.0 - g2) / max(4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5), 0.0001);
+}
+
+float emissiveSurfaceTransmittance(float3 p)
+{
+    float3 toEmitter = SELF_CENTER - p;
+    float distanceToEmitter = length(toEmitter);
+    float pathLength = max(distanceToEmitter - SELF_RADIUS, 0.0);
+    if (pathLength <= 0.001)
+    {
+        return 1.0;
+    }
+
+    float3 lightDirection = toEmitter / max(distanceToEmitter, 0.0001);
+    float opticalDepth = 0.0;
+
+    [loop]
+    for (int i = 0; i < 4; i++)
+    {
+        float travel = ((float)i + 0.5) * pathLength / 4.0;
+        opticalDepth += gridFogExtinctionApprox(p + lightDirection * travel);
+    }
+
+    opticalDepth *= (pathLength / 4.0) * 0.16;
+    return exp(-opticalDepth);
+}
+
+float3 emissiveSurfaceScattering(float3 p, float3 rayDirection, float density)
+{
+    if (density <= 0.0)
+    {
+        return 0.0;
+    }
+
+    float3 toEmitter = SELF_CENTER - p;
+    float3 lightDirection = normalize(toEmitter);
+    float solidAngle = emissiveSphereSolidAngle(p);
+    float cosTheta = dot(-rayDirection, lightDirection);
+    float phase = henyeyGreenstein(cosTheta, 0.32);
+    float visibility = smoothstep(SELF_RADIUS * 0.98, SELF_RADIUS * 1.08, length(toEmitter));
+    float transmittance = emissiveSurfaceTransmittance(p);
+    return SELF_EMISSIVE_RADIANCE * solidAngle * phase * density * visibility * transmittance;
+}
+
+float registeredMediumDensity(float3 p, float3 rayDirection, out float3 scattering)
+{
+    scattering = 0.0;
+    float density = registeredMediumDensityOnly(p);
+    scattering = emissiveSurfaceScattering(p, rayDirection, density);
+    return density;
 }
 
 float mediumSliceTravel(int sliceIndex)
@@ -297,7 +362,7 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     float travel = mediumSliceTravel(sliceIndex);
     float3 p = cameraPosition + rayDirection * travel;
     float3 scattering;
-    float density = registeredMediumDensity(p, scattering);
+    float density = registeredMediumDensity(p, rayDirection, scattering);
     float mediumBlend = saturate(mediumCompositeIntensity);
     density *= mediumBlend;
     scattering *= mediumBlend;

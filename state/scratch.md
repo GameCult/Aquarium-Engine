@@ -76,6 +76,15 @@ reusing field identity/travel/control.
   density/scattering below the surface. The post debug ray-density evaluator
   uses the same procedural density so Medium Ray Density / Transmittance stay
   honest against the final medium atlas.
+- Emissive-only lighting pass: the D3D12 fog no longer carries baked pea-soup
+  glow in its density function, and solid bodies no longer use a point-light
+  constant. Self is treated as an emissive sphere: the medium pass estimates
+  finite-surface solid angle, Henyey-Greenstein phase, and a cheap depth/radial
+  light-path transmittance toward Self; the scene shader shades planets and the
+  cursor from finite emissive-sphere irradiance. Full noisy density in the
+  emitter-to-sample march made shader pipeline compilation stall, so light-path
+  attenuation deliberately uses a cheap extinction approximation while visible
+  camera samples keep the textured density.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
