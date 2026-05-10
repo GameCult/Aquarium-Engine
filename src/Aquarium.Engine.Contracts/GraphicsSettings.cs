@@ -9,7 +9,7 @@ public readonly record struct GraphicsSettings(
     int MediumDebugStep)
 {
     public const int MinRenderDebugMode = 0;
-    public const int MaxRenderDebugMode = 12;
+    public const int MaxRenderDebugMode = 13;
     public const float MinSceneExposure = 0.02f;
     public const float MaxSceneExposure = 1.2f;
     public const float MinBloomIntensity = 0.0f;

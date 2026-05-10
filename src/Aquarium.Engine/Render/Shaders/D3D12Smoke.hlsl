@@ -75,3 +75,13 @@ float4 D3D12MediumLightDebugPS(VertexOut input) : SV_Target0
     float3 color = saturate(chroma * exposure);
     return float4(max(float3(0.004, 0.008, 0.012), color), 1.0);
 }
+
+float4 D3D12MediumLightDirectionDebugPS(VertexOut input) : SV_Target0
+{
+    float4 moment = sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0);
+    float momentLength = length(moment.rgb);
+    float confidence = saturate(momentLength / max(moment.a, 0.0001));
+    float3 direction = momentLength > 0.00001 ? moment.rgb / momentLength : 0.0;
+    float3 color = (direction * 0.5 + 0.5) * confidence;
+    return float4(max(float3(0.004, 0.008, 0.012), color), 1.0);
+}

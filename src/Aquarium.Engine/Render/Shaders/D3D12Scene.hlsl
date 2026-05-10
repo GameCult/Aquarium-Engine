@@ -27,6 +27,7 @@ StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumTransportTexture : register(t14);
 Texture2D<float4> mediumLightTexture : register(t15);
+Texture2D<float4> mediumLightDirectionTexture : register(t25);
 SamplerState gridSampler : register(s0);
 
 struct FieldInstance
@@ -71,6 +72,7 @@ static const float GRID_ALPHA_SCALE = 0.56;
 static const int FIELD_INSTANCE_COUNT = 11;
 static const int FIELD_FLAG_EMITTER = 8;
 static const float INV_FOUR_PI = 0.07957747155;
+static const float MEDIUM_PHASE_G = 0.34;
 
 struct VertexOut
 {
@@ -537,6 +539,23 @@ float3 froxelIrradianceAt(float2 uv, float travel)
     return mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceIndex), 0.0).rgb;
 }
 
+float froxelDominantLightAt(float2 uv, float travel, out float3 lightDirection)
+{
+    float slice = saturate(travel / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT;
+    int sliceIndex = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    float4 moment = mediumLightDirectionTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceIndex), 0.0);
+    float momentLength = length(moment.rgb);
+    lightDirection = momentLength > 0.00001 ? moment.rgb / momentLength : normalize(float3(0.18, -0.25, 0.95));
+    return saturate(momentLength / max(moment.a, 0.0001));
+}
+
+float henyeyGreensteinPhase(float cosTheta, float g)
+{
+    float gg = g * g;
+    float denominator = max(1.0 + gg - 2.0 * g * cosTheta, 0.0001);
+    return (1.0 - gg) / (4.0 * PI * denominator * sqrt(denominator));
+}
+
 float mediumSliceTravel(int sliceIndex)
 {
     float t = ((float)sliceIndex + 0.5) / (float)MEDIUM_FROXEL_SLICE_COUNT;
@@ -577,6 +596,7 @@ SolidHit nearestViewFroxelSolidHit(float2 uv, float3 origin, float3 direction, i
 
 void integrateMediumSlice(
     float2 uv,
+    float3 rayDirection,
     int sliceIndex,
     float intervalFraction,
     inout float transmittance,
@@ -589,6 +609,7 @@ void integrateMediumSlice(
     float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
     float4 transport = mediumTransportTexture.SampleLevel(gridSampler, atlasUv, 0.0);
     float3 propagatedLight = mediumLightTexture.SampleLevel(gridSampler, atlasUv, 0.0).rgb;
+    float4 directionMoment = mediumLightDirectionTexture.SampleLevel(gridSampler, atlasUv, 0.0);
     float sliceTravel = mediumSliceTravel(sliceIndex);
     float fraction = saturate(intervalFraction);
     float density = saturate(diagnostic.x);
@@ -599,7 +620,11 @@ void integrateMediumSlice(
     float partialTransmittance = exp(-sliceExtinction * fraction);
     float scatterIntegral = sigmaT > 0.0001 ? sigmaS * (1.0 - partialTransmittance) / sigmaT : 0.0;
     float densityContribution = density * fraction;
-    float3 sliceInScattering = propagatedLight * (INV_FOUR_PI * scatterIntegral);
+    float directionLength = length(directionMoment.rgb);
+    float3 lightDirection = directionLength > 0.00001 ? directionMoment.rgb / directionLength : -rayDirection;
+    float directionConfidence = saturate(directionLength / max(directionMoment.a, 0.0001));
+    float phase = lerp(INV_FOUR_PI, henyeyGreensteinPhase(dot(-rayDirection, lightDirection), MEDIUM_PHASE_G), directionConfidence);
+    float3 sliceInScattering = propagatedLight * (phase * scatterIntegral);
 
     densityMean += densityContribution;
     densityTravelSum += densityContribution * sliceTravel;
@@ -610,6 +635,7 @@ void integrateMediumSlice(
 
 void integrateMediumRange(
     float2 uv,
+    float3 rayDirection,
     float rangeStart,
     float rangeEnd,
     inout float transmittance,
@@ -645,6 +671,7 @@ void integrateMediumRange(
         float fraction = saturate((overlapEnd - overlapStart) / max(sliceEnd - sliceStart, 0.0001));
         integrateMediumSlice(
             uv,
+            rayDirection,
             sliceIndex,
             fraction,
             transmittance,
@@ -710,7 +737,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         gridHit = gridAlpha > 0.001;
     }
 
-    integrateMediumRange(uv, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
+    integrateMediumRange(uv, direction, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
     float mediumOpacity = saturate(1.0 - transmittance);
     float mediumDensityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
     float mediumTravel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, stopTravel) : farDistance + 1.0;
@@ -755,15 +782,6 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     return result;
 }
 
-float emitterSolidAngle(float3 p, FieldInstance emitter)
-{
-    float emitterRadius = max(emitter.centerRadius.w, 0.001);
-    float distanceToEmitter = max(length(emitter.centerRadius.xyz - p), emitterRadius + 0.001);
-    float sinTheta = saturate(emitterRadius / distanceToEmitter);
-    float cosTheta = sqrt(saturate(1.0 - sinTheta * sinTheta));
-    return 2.0 * PI * (1.0 - cosTheta);
-}
-
 float3 primitiveEmissionRadiance(float fieldId)
 {
     [loop]
@@ -780,10 +798,10 @@ float3 primitiveEmissionRadiance(float fieldId)
     return 0.0;
 }
 
-float3 cursorSpecularEmitterRadiance(float3 p, float3 normal, float receiverFieldId)
+float3 cursorSpecularFroxelRadiance(float2 uv, float travel, float3 p, float3 normal)
 {
     static const float MinimumRoughness = 0.045;
-    static const float CursorRoughness = 0.22;
+    static const float CursorRoughness = 0.16;
 
     float3 viewDirection = normalize(cameraPosition - p);
     float ndv = saturate(dot(normal, viewDirection));
@@ -794,37 +812,20 @@ float3 cursorSpecularEmitterRadiance(float3 p, float3 normal, float receiverFiel
     k = (k * k) * 0.125;
     float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
     float3 f0 = float3(0.95, 0.62, 0.26);
-    float3 reflected = 0.0;
-
-    [loop]
-    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
-    {
-        FieldInstance emitter = fieldInstances[i];
-        if ((((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0) ||
-            abs(emitter.fieldFlags.x - receiverFieldId) < 0.25)
-        {
-            continue;
-        }
-
-        float emitterRadius = max(emitter.centerRadius.w, 0.001);
-        float3 toEmitter = emitter.centerRadius.xyz - p;
-        float emitterDistance = length(toEmitter);
-        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
-        float3 halfVector = normalize(lightDirection + viewDirection);
-        float ndl = saturate(dot(normal, lightDirection));
-        float ndh = saturate(dot(normal, halfVector));
-        float vdh = saturate(dot(viewDirection, halfVector));
-        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
-        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
-        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
-        float geometry = geometryL * geometryV;
-        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
-        float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
-        reflected += specular * emitter.colorIntensity.rgb * emitterSolidAngle(p, emitter) * ndl * visibility;
-    }
-
-    return reflected;
+    float3 irradiance = froxelIrradianceAt(uv, travel);
+    float3 lightDirection;
+    float directionConfidence = froxelDominantLightAt(uv, travel, lightDirection);
+    float3 halfVector = normalize(lightDirection + viewDirection);
+    float ndl = saturate(dot(normal, lightDirection));
+    float ndh = saturate(dot(normal, halfVector));
+    float vdh = saturate(dot(viewDirection, halfVector));
+    float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
+    float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
+    float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
+    float geometry = geometryL * geometryV;
+    float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
+    float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
+    return specular * irradiance * ndl * directionConfidence;
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)
@@ -841,12 +842,15 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        return emission + cursorSpecularEmitterRadiance(p, normal, fieldId);
+        return emission + cursorSpecularFroxelRadiance(uv, travel, p, normal);
     }
 
+    float3 lightDirection;
+    float directionConfidence = froxelDominantLightAt(uv, travel, lightDirection);
+    float lambert = lerp(1.0, saturate(dot(normal, lightDirection)), directionConfidence);
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return emission + albedo * irradianceLuma / PI;
+    return emission + albedo * irradianceLuma * lambert / PI;
 }
 
 SceneOut D3D12ScenePS(VertexOut input)

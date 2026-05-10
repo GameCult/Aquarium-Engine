@@ -48,6 +48,7 @@ public sealed class D3D11Renderer : IAquariumRenderer
         new(10, "Medium Ray Transmittance"),
         new(11, "Froxel Density"),
         new(12, "Froxel Light"),
+        new(13, "Froxel Light Direction"),
     ];
 
     private const float SunRadius = 1.12f;

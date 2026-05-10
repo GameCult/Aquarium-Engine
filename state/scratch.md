@@ -506,3 +506,11 @@ reusing field identity/travel/control.
   to a hit, then stops on the nearest opaque surface. Current solid evaluators
   are analytic spheres; future SDF surfaces should replace that evaluator
   inside this traversal rather than creating a second solid pass.
+- D3D12 directional medium lighting pass: medium injection now writes raw
+  irradiance plus a separate luminance-weighted dominant-light direction
+  moment at `t25`; propagation transports both irradiance and direction.
+  Medium integration uses Henyey-Greenstein phase from the propagated direction
+  instead of pretending every froxel is isotropic. Planets and the cursor sample
+  the same froxel light/direction field; the old cursor-only direct emitter
+  specular loop has been cut. Debug mode `13` visualizes propagated froxel light
+  direction.

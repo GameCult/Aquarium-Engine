@@ -61,6 +61,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(10, "Medium Ray Transmittance"),
         new(11, "Froxel Density"),
         new(12, "Froxel Light"),
+        new(13, "Froxel Light Direction"),
     ];
 
     private readonly IDXGIFactory4 factory;
@@ -83,6 +84,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? mediumLightPropagationPipelineState;
     private ID3D12PipelineState? mediumDensityDebugPipelineState;
     private ID3D12PipelineState? mediumLightDebugPipelineState;
+    private ID3D12PipelineState? mediumLightDirectionDebugPipelineState;
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
     private ID3D12PipelineState? bloomBlurHorizontalPipelineState;
@@ -97,7 +99,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget mediumVolumeRenderTarget;
     private D3D12RenderTarget mediumTransportRenderTarget;
     private D3D12RenderTarget mediumLightInjectionRenderTarget;
+    private D3D12RenderTarget mediumLightDirectionInjectionRenderTarget;
     private D3D12RenderTarget mediumLightRenderTarget;
+    private D3D12RenderTarget mediumLightDirectionRenderTarget;
     private D3D12RenderTarget sceneRenderTarget;
     private D3D12RenderTarget sceneMetadataRenderTarget;
     private D3D12RenderTarget sceneControlRenderTarget;
@@ -213,7 +217,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
         mediumLightInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-injection-target", "Aquarium D3D12 Medium Light Injection Target");
+        mediumLightDirectionInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-injection-target", "Aquarium D3D12 Medium Light Direction Injection Target");
         mediumLightRenderTarget = CreateMediumVolumeRenderTarget("medium-light-target", "Aquarium D3D12 Propagated Medium Light Target");
+        mediumLightDirectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-target", "Aquarium D3D12 Propagated Medium Light Direction Target");
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
@@ -367,12 +373,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionTransportDescriptor);
         frameResources.MediumInjectionLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumLightInjectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionLightDescriptor);
+        frameResources.MediumInjectionLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumLightDirectionInjectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionLightDirectionDescriptor);
         frameResources.MediumTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumTargetsDescriptor);
         frameResources.MediumTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumTransportDescriptor);
         frameResources.MediumLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         mediumLightRenderTarget.CreateShaderResourceView(device, frameResources.MediumLightDescriptor);
+        frameResources.MediumLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        mediumLightDirectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumLightDirectionDescriptor);
         frameResources.SceneDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneRenderTarget.CreateShaderResourceView(device, frameResources.SceneDescriptor);
         frameResources.SceneMetadataDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -473,6 +483,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         && mediumLightPropagationPipelineState is not null
         && mediumDensityDebugPipelineState is not null
         && mediumLightDebugPipelineState is not null
+        && mediumLightDirectionDebugPipelineState is not null
         && bloomPrefilterPipelineState is not null
         && bloomDownsamplePipelineState is not null
         && bloomBlurHorizontalPipelineState is not null
@@ -520,7 +531,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneMediumColorRenderTarget.Dispose();
         sceneEventColorRenderTarget.Dispose();
         sceneEventMetadataRenderTarget.Dispose();
+        mediumLightDirectionRenderTarget.Dispose();
         mediumLightRenderTarget.Dispose();
+        mediumLightDirectionInjectionRenderTarget.Dispose();
         mediumLightInjectionRenderTarget.Dispose();
         mediumTransportRenderTarget.Dispose();
         mediumVolumeRenderTarget.Dispose();
@@ -650,6 +663,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumDensityDebug.Name = "Aquarium D3D12 Medium Density Debug Pipeline";
         var mediumLightDebug = CreateMediumLightDebugPipelineState(paths.Smoke);
         mediumLightDebug.Name = "Aquarium D3D12 Medium Light Debug Pipeline";
+        var mediumLightDirectionDebug = CreateMediumLightDirectionDebugPipelineState(paths.Smoke);
+        mediumLightDirectionDebug.Name = "Aquarium D3D12 Medium Light Direction Debug Pipeline";
         var bloomPrefilter = CreateBloomPrefilterPipelineState(paths.Post);
         bloomPrefilter.Name = "Aquarium D3D12 Bloom Prefilter Pipeline";
         var bloomDownsample = CreateBloomDownsamplePipelineState(paths.Post);
@@ -669,6 +684,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumLightPropagation,
             mediumDensityDebug,
             mediumLightDebug,
+            mediumLightDirectionDebug,
             bloomPrefilter,
             bloomDownsample,
             bloomBlurHorizontal,
@@ -698,8 +714,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("scene-event-metadata-target");
         resourceRegistry.RemoveRenderTarget("medium-transport-target");
         resourceRegistry.RemoveRenderTarget("medium-light-injection-target");
+        resourceRegistry.RemoveRenderTarget("medium-light-direction-injection-target");
         resourceRegistry.RemoveRenderTarget("medium-light-target");
-        resourceRegistry.RemoveRenderTarget("medium-event-target");
+        resourceRegistry.RemoveRenderTarget("medium-light-direction-target");
         resourceRegistry.RemoveRenderTarget("medium-volume-target");
         resourceRegistry.RemoveRenderTarget("grid-height-target");
         resourceRegistry.RemoveStructuredBuffer("froxel-primitive-buffer");
@@ -712,7 +729,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneMediumColorRenderTarget.Dispose();
         sceneEventColorRenderTarget.Dispose();
         sceneEventMetadataRenderTarget.Dispose();
+        mediumLightDirectionRenderTarget.Dispose();
         mediumLightRenderTarget.Dispose();
+        mediumLightDirectionInjectionRenderTarget.Dispose();
         mediumLightInjectionRenderTarget.Dispose();
         mediumTransportRenderTarget.Dispose();
         mediumVolumeRenderTarget.Dispose();
@@ -740,7 +759,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
         mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
         mediumLightInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-injection-target", "Aquarium D3D12 Medium Light Injection Target");
+        mediumLightDirectionInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-injection-target", "Aquarium D3D12 Medium Light Direction Injection Target");
         mediumLightRenderTarget = CreateMediumVolumeRenderTarget("medium-light-target", "Aquarium D3D12 Propagated Medium Light Target");
+        mediumLightDirectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-target", "Aquarium D3D12 Propagated Medium Light Direction Target");
         froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
         resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
         sceneRenderTarget = CreateSceneRenderTarget();
@@ -922,6 +943,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             mediumTransportRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             mediumLightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+            mediumLightDirectionRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
@@ -944,6 +966,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.FroxelPrimitiveDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(5, frameResources.MediumTargetsDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(21, frameResources.MediumLightDirectionDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -1042,24 +1065,33 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             var showMediumDensity = RenderDebugMode == 11;
             var showMediumLight = RenderDebugMode == 12;
+            var showMediumLightDirection = RenderDebugMode == 13;
             var historyReadIndex = temporalFrameIndex & 1;
             var historyWriteIndex = 1 - historyReadIndex;
 
-            if (showMediumDensity || showMediumLight)
+            if (showMediumDensity || showMediumLight || showMediumLightDirection)
             {
                 var sourceDescriptor = showMediumDensity
                     ? frameResources.MediumTargetsDescriptor
-                    : frameResources.MediumLightDescriptor;
+                    : showMediumLight
+                        ? frameResources.MediumLightDescriptor
+                        : frameResources.MediumLightDirectionDescriptor;
                 var pipelineState = showMediumDensity
                     ? mediumDensityDebugPipelineState!
-                    : mediumLightDebugPipelineState!;
+                    : showMediumLight
+                        ? mediumLightDebugPipelineState!
+                        : mediumLightDirectionDebugPipelineState!;
                 if (showMediumDensity)
                 {
                     mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
                 }
-                else
+                else if (showMediumLight)
                 {
                     mediumLightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
+                }
+                else
+                {
+                    mediumLightDirectionRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
                 }
 
                 context.BackBuffer.Transition(context.CommandList, ResourceStates.RenderTarget);
@@ -1205,9 +1237,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
+            mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             activeCommandList.ClearRenderTargetView(mediumLightInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+            activeCommandList.ClearRenderTargetView(mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetPipelineState(mediumVolumePipelineState!);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
@@ -1221,6 +1255,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 mediumVolumeRenderTarget.RenderTargetView.Cpu,
                 mediumTransportRenderTarget.RenderTargetView.Cpu,
                 mediumLightInjectionRenderTarget.RenderTargetView.Cpu,
+                mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu,
             ],
             null);
             activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
@@ -1243,16 +1278,25 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
+            mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
             mediumLightRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
+            mediumLightDirectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumLightRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+            activeCommandList.ClearRenderTargetView(mediumLightDirectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetPipelineState(mediumLightPropagationPipelineState!);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             activeCommandList.SetGraphicsRootDescriptorTable(5, frameResources.MediumInjectionTargetsDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(21, frameResources.MediumInjectionLightDirectionDescriptor.Gpu);
             activeCommandList.RSSetViewports(mediumViewport);
             activeCommandList.RSSetScissorRects(mediumScissorRect);
-            activeCommandList.OMSetRenderTargets(mediumLightRenderTarget.RenderTargetView.Cpu, null);
+            activeCommandList.OMSetRenderTargets(
+            [
+                mediumLightRenderTarget.RenderTargetView.Cpu,
+                mediumLightDirectionRenderTarget.RenderTargetView.Cpu,
+            ],
+            null);
             activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             activeCommandList.DrawInstanced(3, 1, 0, 0);
         }
@@ -1270,11 +1314,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
+            mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             mediumLightRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
+            mediumLightDirectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
             activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             activeCommandList.ClearRenderTargetView(mediumLightInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
             activeCommandList.ClearRenderTargetView(mediumLightRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+            activeCommandList.ClearRenderTargetView(mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
+            activeCommandList.ClearRenderTargetView(mediumLightDirectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
         }
         finally
         {
@@ -1821,10 +1869,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 gridHeightBrushPipelineState!,
                 scenePipelineState!,
                 mediumVolumePipelineState!,
-                mediumLightPropagationPipelineState!,
-                mediumDensityDebugPipelineState!,
-                mediumLightDebugPipelineState!,
-                bloomPrefilterPipelineState!,
+            mediumLightPropagationPipelineState!,
+            mediumDensityDebugPipelineState!,
+            mediumLightDebugPipelineState!,
+            mediumLightDirectionDebugPipelineState!,
+            bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
                 bloomBlurHorizontalPipelineState!,
                 bloomBlurVerticalPipelineState!,
@@ -1841,6 +1890,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumLightPropagationPipelineState = pipelines.MediumLightPropagation;
         mediumDensityDebugPipelineState = pipelines.MediumDensityDebug;
         mediumLightDebugPipelineState = pipelines.MediumLightDebug;
+        mediumLightDirectionDebugPipelineState = pipelines.MediumLightDirectionDebug;
         bloomPrefilterPipelineState = pipelines.BloomPrefilter;
         bloomDownsamplePipelineState = pipelines.BloomDownsample;
         bloomBlurHorizontalPipelineState = pipelines.BloomBlurHorizontal;
@@ -1858,6 +1908,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         mediumLightPropagationPipelineState = null;
         mediumDensityDebugPipelineState = null;
         mediumLightDebugPipelineState = null;
+        mediumLightDirectionDebugPipelineState = null;
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
         bloomBlurHorizontalPipelineState = null;
@@ -2036,6 +2087,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             24,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var mediumLightDirectionRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            25,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -2059,6 +2116,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([gridHeightMediumRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentMediumColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyMediumColorRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([mediumLightDirectionRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -2097,12 +2155,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             path,
             "FullscreenTriangleVS",
             "MediumVolumePS",
-            [MediumVolumeFormat, MediumVolumeFormat, MediumVolumeFormat]);
+            [MediumVolumeFormat, MediumVolumeFormat, MediumVolumeFormat, MediumVolumeFormat]);
     }
 
     private ID3D12PipelineState CreateMediumLightPropagationPipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "MediumLightPropagatePS", MediumVolumeFormat);
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "MediumLightPropagatePS", [MediumVolumeFormat, MediumVolumeFormat]);
     }
 
     private ID3D12PipelineState CreateMediumDensityDebugPipelineState(string path)
@@ -2113,6 +2171,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState CreateMediumLightDebugPipelineState(string path)
     {
         return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumLightDebugPS", Format.B8G8R8A8_UNorm);
+    }
+
+    private ID3D12PipelineState CreateMediumLightDirectionDebugPipelineState(string path)
+    {
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumLightDirectionDebugPS", Format.B8G8R8A8_UNorm);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -2447,6 +2510,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState MediumLightPropagation,
         ID3D12PipelineState MediumDensityDebug,
         ID3D12PipelineState MediumLightDebug,
+        ID3D12PipelineState MediumLightDirectionDebug,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
         ID3D12PipelineState BloomBlurHorizontal,
@@ -2460,6 +2524,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
+            MediumLightDirectionDebug.Dispose();
             MediumLightDebug.Dispose();
             MediumDensityDebug.Dispose();
             MediumLightPropagation.Dispose();
@@ -2497,11 +2562,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         public D3D12DescriptorSlot MediumInjectionLightDescriptor { get; set; }
 
+        public D3D12DescriptorSlot MediumInjectionLightDirectionDescriptor { get; set; }
+
         public D3D12DescriptorSlot MediumTargetsDescriptor { get; set; }
 
         public D3D12DescriptorSlot MediumTransportDescriptor { get; set; }
 
         public D3D12DescriptorSlot MediumLightDescriptor { get; set; }
+
+        public D3D12DescriptorSlot MediumLightDirectionDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneDescriptor { get; set; }
 

@@ -36,6 +36,7 @@ StructuredBuffer<FieldInstance> fieldInstances : register(t12);
 Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumLightTexture : register(t15);
 Texture2D<float4> gridHeightTexture : register(t22);
+Texture2D<float4> mediumLightDirectionTexture : register(t25);
 SamplerState sourceSampler : register(s0);
 
 static const int FIELD_INSTANCE_COUNT = 11;
@@ -60,6 +61,13 @@ struct MediumVolumeOut
     float4 diagnostic : SV_Target0;
     float4 transport : SV_Target1;
     float4 light : SV_Target2;
+    float4 lightDirection : SV_Target3;
+};
+
+struct MediumLightPropagationOut
+{
+    float4 light : SV_Target0;
+    float4 lightDirection : SV_Target1;
 };
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -328,9 +336,11 @@ float emissiveSurfaceTransmittance(float3 p, FieldInstance emitter)
     return exp(-opticalDepth);
 }
 
-float3 injectedEmitterIrradiance(float3 p)
+void injectedEmitterLighting(float3 p, out float3 irradiance, out float4 directionMoment)
 {
-    float3 irradiance = 0.0;
+    irradiance = 0.0;
+    float3 directionWeighted = 0.0;
+    float directionWeight = 0.0;
 
     [loop]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
@@ -344,13 +354,18 @@ float3 injectedEmitterIrradiance(float3 p)
         float emitterRadius = max(emitter.centerRadius.w, 0.001);
         float3 toEmitter = emitter.centerRadius.xyz - p;
         float emitterDistance = length(toEmitter);
+        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
         float solidAngle = emissiveFieldSolidAngle(p, emitter);
         float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
         float transmittance = emissiveSurfaceTransmittance(p, emitter);
-        irradiance += emitter.colorIntensity.rgb * solidAngle * visibility * transmittance;
+        float3 contribution = emitter.colorIntensity.rgb * solidAngle * visibility * transmittance;
+        float contributionWeight = dot(contribution, float3(0.2126, 0.7152, 0.0722));
+        irradiance += contribution;
+        directionWeighted += lightDirection * contributionWeight;
+        directionWeight += contributionWeight;
     }
 
-    return irradiance;
+    directionMoment = float4(directionWeighted, directionWeight);
 }
 
 float mediumSliceTravel(int sliceIndex)
@@ -382,12 +397,17 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     sigmaT *= mediumBlend;
     sigmaS *= mediumBlend;
     float transmittance = exp(-sigmaT * sliceLength);
-    float3 injectedIrradiance = injectedEmitterIrradiance(p) * mediumBlend;
+    float3 injectedIrradiance;
+    float4 lightDirectionMoment;
+    injectedEmitterLighting(p, injectedIrradiance, lightDirectionMoment);
+    injectedIrradiance *= mediumBlend;
+    lightDirectionMoment *= mediumBlend;
 
     MediumVolumeOut output;
     output.diagnostic = float4(saturate(density), sigmaT, sigmaS, albedo);
     output.transport = float4(0.0, 0.0, 0.0, saturate(transmittance));
     output.light = float4(injectedIrradiance, saturate(density));
+    output.lightDirection = lightDirectionMoment;
     return output;
 }
 
@@ -410,7 +430,16 @@ float3 propagatedNeighbor(int2 cell, int sliceIndex, float weight)
     return mediumLightTexture.SampleLevel(sourceSampler, uv, 0.0).rgb * weight * occlusion;
 }
 
-float4 MediumLightPropagatePS(VertexOut input) : SV_Target0
+float4 propagatedDirectionNeighbor(int2 cell, int sliceIndex, float weight)
+{
+    sliceIndex = clamp(sliceIndex, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    float2 uv = atlasUvFromCell(cell, sliceIndex);
+    float sigmaT = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0).y;
+    float occlusion = exp(-sigmaT * 0.55);
+    return mediumLightDirectionTexture.SampleLevel(sourceSampler, uv, 0.0) * weight * occlusion;
+}
+
+MediumLightPropagationOut MediumLightPropagatePS(VertexOut input)
 {
     int froxelWidth = max((int)(resolution.x / 8.0), 1);
     int froxelHeight = max((int)(resolution.y / 8.0), 1);
@@ -424,15 +453,30 @@ float4 MediumLightPropagatePS(VertexOut input) : SV_Target0
     float density = medium.x;
     float sigmaT = medium.y;
     float3 center = mediumLightTexture.SampleLevel(sourceSampler, uv, 0.0).rgb;
+    float4 centerDirection = mediumLightDirectionTexture.SampleLevel(sourceSampler, uv, 0.0);
     float3 propagated = center * 0.58;
+    float4 propagatedDirection = centerDirection * 0.58;
     propagated += propagatedNeighbor(cell + int2(1, 0), sliceIndex, 0.055);
     propagated += propagatedNeighbor(cell + int2(-1, 0), sliceIndex, 0.055);
     propagated += propagatedNeighbor(cell + int2(0, 1), sliceIndex, 0.055);
     propagated += propagatedNeighbor(cell + int2(0, -1), sliceIndex, 0.055);
     propagated += propagatedNeighbor(cell, sliceIndex + 1, 0.08);
     propagated += propagatedNeighbor(cell, sliceIndex - 1, 0.08);
+    propagatedDirection += propagatedDirectionNeighbor(cell + int2(1, 0), sliceIndex, 0.055);
+    propagatedDirection += propagatedDirectionNeighbor(cell + int2(-1, 0), sliceIndex, 0.055);
+    propagatedDirection += propagatedDirectionNeighbor(cell + int2(0, 1), sliceIndex, 0.055);
+    propagatedDirection += propagatedDirectionNeighbor(cell + int2(0, -1), sliceIndex, 0.055);
+    propagatedDirection += propagatedDirectionNeighbor(cell, sliceIndex + 1, 0.08);
+    propagatedDirection += propagatedDirectionNeighbor(cell, sliceIndex - 1, 0.08);
 
     float localRetention = lerp(0.72, 1.0, saturate(sigmaT * 7.0 + density * 0.35));
     float3 light = max(center, propagated * localRetention);
-    return float4(light, saturate(density));
+    float4 directionMoment = abs(centerDirection.a) > abs(propagatedDirection.a * localRetention)
+        ? centerDirection
+        : propagatedDirection * localRetention;
+
+    MediumLightPropagationOut output;
+    output.light = float4(light, saturate(density));
+    output.lightDirection = directionMoment;
+    return output;
 }
