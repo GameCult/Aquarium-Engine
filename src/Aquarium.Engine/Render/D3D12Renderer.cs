@@ -33,7 +33,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
     private const int GridHeightBrushCount = PlanetCount + 1;
-    private const int FieldInstanceCount = PlanetCount + 5;
+    private const int FieldInstanceCount = PlanetCount + 6;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -1328,6 +1328,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             mediumId: 1.0f,
             color: new Vector3(0.30f, 0.50f, 0.68f),
             medium: new Vector4(0.190f, 0.130f, 0.0f, 1.20f));
+        fieldInstances[10] = FieldInstanceGpu.Sphere(
+            fieldId: 5.0f,
+            flags: FieldFlags.Solid | FieldFlags.Emitter | FieldFlags.Receiver,
+            center: new Vector3(frame.CursorWorld.X, frame.CursorWorld.Y, CursorBodyRadius),
+            radius: CursorBodyBoundRadius,
+            materialId: 5.0f,
+            mediumId: 0.0f,
+            color: Vector3.Zero,
+            medium: Vector4.Zero);
     }
 
     private bool TryProjectSphereToViewFroxelBounds(

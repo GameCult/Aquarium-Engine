@@ -28,6 +28,18 @@ Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumTransportTexture : register(t14);
 SamplerState gridSampler : register(s0);
 
+struct FieldInstance
+{
+    float4 centerRadius;
+    float4 radiusAngle;
+    float4 fieldFlags;
+    float4 materialMedium;
+    float4 colorIntensity;
+    float4 mediumTerms;
+};
+
+StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_SELF = 2.0;
@@ -55,8 +67,8 @@ static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.56;
-static const float3 SELF_CENTER = float3(0.0, 0.0, 2.2);
-static const float3 SELF_EMISSIVE_RADIANCE = float3(10.0, 8.7, 4.2);
+static const int FIELD_INSTANCE_COUNT = 11;
+static const int FIELD_FLAG_EMITTER = 8;
 
 struct VertexOut
 {
@@ -713,66 +725,124 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     return result;
 }
 
-float emissiveSphereSolidAngle(float3 p, float radius)
+float emitterSolidAngle(float3 p, FieldInstance emitter)
 {
-    float distanceToEmitter = max(length(SELF_CENTER - p), radius + 0.001);
-    float sinTheta = saturate(radius / distanceToEmitter);
+    float emitterRadius = max(emitter.centerRadius.w, 0.001);
+    float distanceToEmitter = max(length(emitter.centerRadius.xyz - p), emitterRadius + 0.001);
+    float sinTheta = saturate(emitterRadius / distanceToEmitter);
     float cosTheta = sqrt(saturate(1.0 - sinTheta * sinTheta));
     return 2.0 * PI * (1.0 - cosTheta);
 }
 
-float3 emissiveSphereIrradiance(float3 p, float3 normal, float radius, out float3 lightDirection, out float solidAngle)
+float3 primitiveEmissionRadiance(float fieldId)
 {
-    float3 toEmitter = SELF_CENTER - p;
-    lightDirection = normalize(toEmitter);
-    solidAngle = emissiveSphereSolidAngle(p, radius);
-    float surfaceFacing = saturate(dot(normal, lightDirection));
-    float emitterFacing = smoothstep(radius * 0.98, radius * 1.08, length(toEmitter));
-    return SELF_EMISSIVE_RADIANCE * solidAngle * surfaceFacing * emitterFacing;
+    [loop]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    {
+        FieldInstance emitter = fieldInstances[i];
+        if (abs(emitter.fieldFlags.x - fieldId) < 0.25 &&
+            (((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) != 0))
+        {
+            return emitter.colorIntensity.rgb;
+        }
+    }
+
+    return 0.0;
+}
+
+float3 diffuseEmitterIrradiance(float3 p, float3 normal, float receiverFieldId)
+{
+    float3 irradiance = 0.0;
+
+    [loop]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    {
+        FieldInstance emitter = fieldInstances[i];
+        if ((((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0) ||
+            abs(emitter.fieldFlags.x - receiverFieldId) < 0.25)
+        {
+            continue;
+        }
+
+        float emitterRadius = max(emitter.centerRadius.w, 0.001);
+        float3 toEmitter = emitter.centerRadius.xyz - p;
+        float emitterDistance = length(toEmitter);
+        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
+        float facing = saturate(dot(normal, lightDirection));
+        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
+        irradiance += emitter.colorIntensity.rgb * emitterSolidAngle(p, emitter) * facing * visibility;
+    }
+
+    return irradiance;
+}
+
+float3 cursorSpecularEmitterRadiance(float3 p, float3 normal, float receiverFieldId)
+{
+    static const float MinimumRoughness = 0.045;
+    static const float CursorRoughness = 0.22;
+
+    float3 viewDirection = normalize(cameraPosition - p);
+    float ndv = saturate(dot(normal, viewDirection));
+    float roughness = max(CursorRoughness, MinimumRoughness);
+    float alpha = roughness * roughness;
+    float alpha2 = alpha * alpha;
+    float k = (roughness + 1.0);
+    k = (k * k) * 0.125;
+    float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
+    float3 f0 = float3(0.95, 0.62, 0.26);
+    float3 reflected = 0.0;
+
+    [loop]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    {
+        FieldInstance emitter = fieldInstances[i];
+        if ((((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0) ||
+            abs(emitter.fieldFlags.x - receiverFieldId) < 0.25)
+        {
+            continue;
+        }
+
+        float emitterRadius = max(emitter.centerRadius.w, 0.001);
+        float3 toEmitter = emitter.centerRadius.xyz - p;
+        float emitterDistance = length(toEmitter);
+        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
+        float3 halfVector = normalize(lightDirection + viewDirection);
+        float ndl = saturate(dot(normal, lightDirection));
+        float ndh = saturate(dot(normal, halfVector));
+        float vdh = saturate(dot(viewDirection, halfVector));
+        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
+        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
+        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
+        float geometry = geometryL * geometryV;
+        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
+        float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
+        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
+        reflected += specular * emitter.colorIntensity.rgb * emitterSolidAngle(p, emitter) * ndl * visibility;
+    }
+
+    return reflected;
 }
 
 float3 shadeBody(float3 p, float3 normal, int primitiveId)
 {
+    float fieldId = primitiveFieldId(primitiveId);
+    float3 emission = primitiveEmissionRadiance(fieldId);
     if (primitiveId == 0)
     {
-        return SELF_EMISSIVE_RADIANCE;
+        return emission;
     }
 
-    float3 lightDirection;
-    float solidAngle;
-    float3 irradiance = emissiveSphereIrradiance(p, normal, SUN_RADIUS, lightDirection, solidAngle);
+    float3 irradiance = diffuseEmitterIrradiance(p, normal, fieldId);
     float irradianceLuma = dot(irradiance, float3(0.2126, 0.7152, 0.0722));
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        static const float MinimumRoughness = 0.045;
-        static const float CursorRoughness = 0.22;
-
-        float3 viewDirection = normalize(cameraPosition - p);
-        float3 halfVector = normalize(lightDirection + viewDirection);
-        float ndv = saturate(dot(normal, viewDirection));
-        float ndh = saturate(dot(normal, halfVector));
-        float vdh = saturate(dot(viewDirection, halfVector));
-        float ndl = saturate(dot(normal, lightDirection));
-        float roughness = max(CursorRoughness, MinimumRoughness);
-        float alpha = roughness * roughness;
-        float alpha2 = alpha * alpha;
-        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
-        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
-        float k = (roughness + 1.0);
-        k = (k * k) * 0.125;
-        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
-        float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
-        float geometry = geometryL * geometryV;
-        float3 f0 = float3(0.95, 0.62, 0.26);
-        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
-        float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-        return specular * irradiance;
+        return emission + cursorSpecularEmitterRadiance(p, normal, fieldId);
     }
 
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return albedo * irradianceLuma / PI;
+    return emission + albedo * irradianceLuma / PI;
 }
 
 SceneOut D3D12ScenePS(VertexOut input)

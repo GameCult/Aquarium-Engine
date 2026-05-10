@@ -85,6 +85,17 @@ reusing field identity/travel/control.
   emitter-to-sample march made shader pipeline compilation stall, so light-path
   attenuation deliberately uses a cheap extinction approximation while visible
   camera samples keep the textured density.
+- Emissive field injection correction: the D3D12 lighting path no longer
+  hardcodes Self as the only direct emitter. `FieldInstance` data now carries
+  the emitter contract for medium injection and surface lighting:
+  `FieldFlags.Emitter` plus `colorIntensity.rgb` define emissive radiance.
+  The medium pass injects radiance from all emitter fields into the froxel
+  sample before scattering, with cheap path transmittance. The scene pass uses
+  the same emitter table for planet diffuse and cursor GGX specular. Self is
+  just field `2`; cursor is now present in the field table as field `5` with
+  zero emission until a control turns it on; nebula/cloud fields can become
+  emissive by setting the emitter flag and radiance instead of adding bespoke
+  shader branches.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`

@@ -36,15 +36,13 @@ StructuredBuffer<FieldInstance> fieldInstances : register(t12);
 Texture2D<float4> gridHeightTexture : register(t22);
 SamplerState sourceSampler : register(s0);
 
-static const int FIELD_INSTANCE_COUNT = 10;
+static const int FIELD_INSTANCE_COUNT = 11;
 static const int FIELD_FLAG_CLOUD = 2;
+static const int FIELD_FLAG_EMITTER = 8;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
 static const float PI = 3.14159265359;
-static const float SELF_RADIUS = 1.12;
-static const float3 SELF_CENTER = float3(0.0, 0.0, 2.2);
-static const float3 SELF_EMISSIVE_RADIANCE = float3(10.0, 8.7, 4.2);
 
 struct VertexOut
 {
@@ -278,11 +276,12 @@ float registeredMediumDensityOnly(float3 p)
     return saturate(density);
 }
 
-float emissiveSphereSolidAngle(float3 p)
+float emissiveFieldSolidAngle(float3 p, FieldInstance emitter)
 {
-    float3 toEmitter = SELF_CENTER - p;
-    float distanceToEmitter = max(length(toEmitter), SELF_RADIUS + 0.001);
-    float sinTheta = saturate(SELF_RADIUS / distanceToEmitter);
+    float emitterRadius = max(emitter.centerRadius.w, 0.001);
+    float3 toEmitter = emitter.centerRadius.xyz - p;
+    float distanceToEmitter = max(length(toEmitter), emitterRadius + 0.001);
+    float sinTheta = saturate(emitterRadius / distanceToEmitter);
     float cosTheta = sqrt(saturate(1.0 - sinTheta * sinTheta));
     return 2.0 * PI * (1.0 - cosTheta);
 }
@@ -293,11 +292,12 @@ float henyeyGreenstein(float cosTheta, float g)
     return (1.0 - g2) / max(4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5), 0.0001);
 }
 
-float emissiveSurfaceTransmittance(float3 p)
+float emissiveSurfaceTransmittance(float3 p, FieldInstance emitter)
 {
-    float3 toEmitter = SELF_CENTER - p;
+    float emitterRadius = max(emitter.centerRadius.w, 0.001);
+    float3 toEmitter = emitter.centerRadius.xyz - p;
     float distanceToEmitter = length(toEmitter);
-    float pathLength = max(distanceToEmitter - SELF_RADIUS, 0.0);
+    float pathLength = max(distanceToEmitter - emitterRadius, 0.0);
     if (pathLength <= 0.001)
     {
         return 1.0;
@@ -317,28 +317,39 @@ float emissiveSurfaceTransmittance(float3 p)
     return exp(-opticalDepth);
 }
 
-float3 emissiveSurfaceScattering(float3 p, float3 rayDirection, float density)
+float3 injectedEmitterRadiance(float3 p, float3 rayDirection)
 {
-    if (density <= 0.0)
+    float3 radiance = 0.0;
+
+    [loop]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
     {
-        return 0.0;
+        FieldInstance emitter = fieldInstances[i];
+        if (((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0)
+        {
+            continue;
+        }
+
+        float emitterRadius = max(emitter.centerRadius.w, 0.001);
+        float3 toEmitter = emitter.centerRadius.xyz - p;
+        float emitterDistance = length(toEmitter);
+        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
+        float solidAngle = emissiveFieldSolidAngle(p, emitter);
+        float cosTheta = dot(-rayDirection, lightDirection);
+        float phase = henyeyGreenstein(cosTheta, 0.32);
+        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
+        float transmittance = emissiveSurfaceTransmittance(p, emitter);
+        radiance += emitter.colorIntensity.rgb * solidAngle * phase * visibility * transmittance;
     }
 
-    float3 toEmitter = SELF_CENTER - p;
-    float3 lightDirection = normalize(toEmitter);
-    float solidAngle = emissiveSphereSolidAngle(p);
-    float cosTheta = dot(-rayDirection, lightDirection);
-    float phase = henyeyGreenstein(cosTheta, 0.32);
-    float visibility = smoothstep(SELF_RADIUS * 0.98, SELF_RADIUS * 1.08, length(toEmitter));
-    float transmittance = emissiveSurfaceTransmittance(p);
-    return SELF_EMISSIVE_RADIANCE * solidAngle * phase * density * visibility * transmittance;
+    return radiance;
 }
 
 float registeredMediumDensity(float3 p, float3 rayDirection, out float3 scattering)
 {
     scattering = 0.0;
     float density = registeredMediumDensityOnly(p);
-    scattering = emissiveSurfaceScattering(p, rayDirection, density);
+    scattering = injectedEmitterRadiance(p, rayDirection) * density;
     return density;
 }
 

@@ -77,7 +77,7 @@ static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
-static const int FIELD_INSTANCE_COUNT = 10;
+static const int FIELD_INSTANCE_COUNT = 11;
 static const int FIELD_FLAG_CLOUD = 2;
 static const int MEDIUM_RAY_PREVIEW_STEPS = 48;
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
