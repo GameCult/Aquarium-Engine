@@ -263,26 +263,18 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
 float cursorLocatorProfileRadius(float z)
 {
     static const float ContactZ = -1.0;
-    static const float BulbCenterZ = -0.46;
-    static const float BulbRadius = 0.54;
-    static const float TipStartZ = -0.10;
     static const float TipZ = 1.15;
-    static const float TipBaseRadius = 0.34;
+    static const float RadiusScale = 0.78;
 
     float u = saturate((z - ContactZ) / (TipZ - ContactZ));
-    float sphereY = (z - BulbCenterZ) / BulbRadius;
-    float bulbRadius = BulbRadius * sqrt(saturate(1.0 - sphereY * sphereY));
-    float tipT = saturate((z - TipStartZ) / (TipZ - TipStartZ));
-    float taper = (1.0 - tipT);
-    float tipRadius = TipBaseRadius * taper * taper * taper;
-    float blend = smoothstep(-0.24, 0.10, z);
-    float baseRadius = lerp(bulbRadius, tipRadius, blend);
-    baseRadius = max(baseRadius, 0.0);
-    float rippleEnvelope = smoothstep(0.08, 0.22, u) * (1.0 - smoothstep(0.72, 0.92, u));
-    float rippleWave = 0.5 + 0.5 * sin(z * 28.0 - timeSeconds * 4.0);
-    float rippleRidge = rippleWave * rippleWave * rippleWave;
-    float rippleRadius = min(0.018, baseRadius * 0.10) * rippleRidge * rippleEnvelope;
-    return baseRadius + rippleRadius;
+    float x = u * 2.0 - 1.0;
+    float halfTerm = (1.0 - x) * 0.5;
+    float teardropWeight = halfTerm * halfTerm * halfTerm;
+    float baseRadius = RadiusScale * sqrt(saturate(1.0 - x * x)) * teardropWeight;
+    float rippleEnvelope = smoothstep(0.08, 0.22, u) * (1.0 - smoothstep(0.76, 0.94, u));
+    float rippleWave = sin(z * 28.0 - timeSeconds * 4.0);
+    float rippleRadius = min(0.014, baseRadius * 0.07) * rippleWave * rippleEnvelope;
+    return max(baseRadius + rippleRadius, 0.0);
 }
 
 float cursorLocatorSdf(float3 p)
