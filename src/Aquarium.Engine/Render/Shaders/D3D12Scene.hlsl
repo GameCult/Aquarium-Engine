@@ -262,13 +262,26 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
 
 float cursorTopProfileRadius(float t)
 {
-    float x = saturate(t);
+    float x = pow(saturate(t), 2.8);
     return x * x * (3.0 - 2.0 * x);
+}
+
+float cursorTopProfileSlope(float t)
+{
+    float safeT = max(saturate(t), 0.0001);
+    float x = pow(safeT, 2.8);
+    float smoothstepSlope = 6.0 * x * (1.0 - x);
+    return smoothstepSlope * 2.8 * pow(safeT, 1.8);
 }
 
 float cursorBottomProfileRadius(float t)
 {
     return 1.0 - sqrt(saturate(t));
+}
+
+float cursorBottomProfileSlope(float t)
+{
+    return -0.5 * rsqrt(max(saturate(t), 0.001));
 }
 
 float cursorTopSdf(float3 p)
@@ -282,13 +295,18 @@ float cursorTopSdf(float3 p)
     float2 samplePoint = float2(length(local.xy), local.z);
     float topT = saturate((TopHeight - samplePoint.y) / TopHeight);
     float bottomT = saturate(-samplePoint.y / BottomHeight);
-    float profileRadius = samplePoint.y >= 0.0
+    bool upperProfile = samplePoint.y >= 0.0;
+    float profileRadius = upperProfile
         ? WaistRadius * cursorTopProfileRadius(topT)
         : WaistRadius * cursorBottomProfileRadius(bottomT);
+    float profileSlope = upperProfile
+        ? -WaistRadius * cursorTopProfileSlope(topT) / TopHeight
+        : -WaistRadius * cursorBottomProfileSlope(bottomT) / BottomHeight;
     float radialDistance = samplePoint.x - profileRadius;
+    float surfaceDistance = radialDistance * rsqrt(1.0 + min(profileSlope * profileSlope, 144.0));
     float topDistance = samplePoint.y - TopHeight;
     float bottomDistance = -BottomHeight - samplePoint.y;
-    float boundedDistance = max(radialDistance, max(topDistance, bottomDistance));
+    float boundedDistance = max(surfaceDistance, max(topDistance, bottomDistance));
     return boundedDistance * CURSOR_RADIUS;
 }
 
@@ -336,7 +354,7 @@ bool traceCursorTop(float3 origin, float3 direction, float intervalStart, float 
             return true;
         }
 
-        travel += max(abs(distanceValue) * 0.72, 0.004);
+        travel += max(abs(distanceValue) * 0.58, 0.003);
     }
 
     return false;

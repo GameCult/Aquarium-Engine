@@ -77,7 +77,10 @@ reusing field identity/travel/control.
   previous cursor world anchors so the TAA resolve can reproject cursor hits
   with object motion instead of camera-only motion. Keep heavy SDF evaluators
   outside generic packed-id hit helpers, and keep this one analytic/cheap;
-  sampled profile-segment distance stalled D3D12 pipeline compilation.
+  sampled profile-segment distance stalled D3D12 pipeline compilation. The
+  analytic profile field still must be conservative: `radial - radius(z)`
+  oversteps at grazing views, so the cursor evaluator scales radial distance by
+  the profile slope and marches with smaller steps.
 
 ## Hot Context
 
