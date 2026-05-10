@@ -1054,6 +1054,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(15, frameResources.SceneEventMetadataDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(16, frameResources.HistoryEventColorDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(17, frameResources.HistoryEventMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(18, frameResources.GridHeightDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
@@ -1138,6 +1139,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             activeCommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(18, frameResources.GridHeightDescriptor.Gpu);
             activeCommandList.RSSetViewports(mediumViewport);
             activeCommandList.RSSetScissorRects(mediumScissorRect);
             activeCommandList.OMSetRenderTargets(
@@ -1892,6 +1894,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             21,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var gridHeightMediumRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            22,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -1912,6 +1920,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([currentEventMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyEventColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyEventMetadataRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([gridHeightMediumRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {

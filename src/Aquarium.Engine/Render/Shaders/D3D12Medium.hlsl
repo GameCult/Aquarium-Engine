@@ -33,6 +33,8 @@ struct FieldInstance
 };
 
 StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+Texture2D<float4> gridHeightTexture : register(t22);
+SamplerState sourceSampler : register(s0);
 
 static const int FIELD_INSTANCE_COUNT = 10;
 static const int FIELD_FLAG_CLOUD = 2;
@@ -136,6 +138,85 @@ float fbm3(float3 p)
     return clamp(value, -1.0, 1.0);
 }
 
+float tri(float x)
+{
+    return abs(frac(x) - 0.5);
+}
+
+float3 tri3(float3 p)
+{
+    return float3(
+        tri(p.z + tri(p.y)),
+        tri(p.z + tri(p.x)),
+        tri(p.y + tri(p.x)));
+}
+
+float triNoise3d(float3 p)
+{
+    float z = 1.4;
+    float value = 0.001;
+    float3 basePoint = p;
+
+    [unroll]
+    for (int i = 0; i < 2; i++)
+    {
+        float3 dg = tri3(basePoint * 2.0);
+        p += dg + timeSeconds * 0.055;
+        basePoint *= 1.8;
+        z *= 1.5;
+        p *= 1.2;
+        value += tri(p.z + tri(p.x + tri(p.y))) / z;
+        basePoint += 0.14;
+    }
+
+    return value;
+}
+
+float2 gridLocal(float2 p)
+{
+    return (p - gridCenter) / max(gridRadius, 0.001);
+}
+
+float2 gridUv(float2 p)
+{
+    return gridLocal(p) * 0.5 + 0.5;
+}
+
+float terrainHeight(float2 p)
+{
+    return gridHeightTexture.SampleLevel(sourceSampler, saturate(gridUv(p)), 0.0).r;
+}
+
+float gridFogDensity(float3 p, out float3 scattering)
+{
+    scattering = 0.0;
+
+    float2 local = gridLocal(p.xy);
+    float radialFade = 1.0 - smoothstep(0.96, 1.12, length(local));
+    float depthBelowGrid = terrainHeight(p.xy) - p.z;
+    float depthRamp = smoothstep(0.035, 0.72, depthBelowGrid);
+    if (radialFade <= 0.0 || depthRamp <= 0.0)
+    {
+        return 0.0;
+    }
+
+    float3 domain = float3(p.xy - gridCenter, p.z * 1.7) * 0.18;
+    float3 flow = float3(0.11, -0.07, 0.05) * timeSeconds;
+    float3 warp = float3(
+        triNoise3d(domain + flow + 13.1),
+        triNoise3d(domain.yzx - flow + 27.7),
+        triNoise3d(domain.zxy + flow * 0.63 + 41.3)) * 2.0 - 1.0;
+
+    float low = triNoise3d(domain * 1.85 + warp * 0.82 + flow);
+    float high = triNoise3d(domain * 7.4 - warp * 0.35 - flow.yzx);
+    float textureWeight = saturate(0.58 + low * 1.42 - high * 0.52);
+    float deepening = 1.0 - exp(-max(depthBelowGrid, 0.0) * 1.45);
+    float density = saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * lerp(0.72, 1.55, textureWeight));
+
+    scattering = float3(0.58, 0.68, 0.24) * density * lerp(0.34, 0.72, textureWeight);
+    return density;
+}
+
 float2 rotate2(float2 value, float angle)
 {
     float s = sin(angle);
@@ -161,6 +242,11 @@ float registeredMediumDensity(float3 p, out float3 scattering)
 {
     float density = 0.0;
     scattering = 0.0;
+
+    float3 gridFogScattering;
+    float gridDensity = gridFogDensity(p, gridFogScattering);
+    density += gridDensity;
+    scattering += gridFogScattering;
 
     [unroll]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)

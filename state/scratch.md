@@ -69,6 +69,13 @@ reusing field identity/travel/control.
   panning. D3D12 now stores fixed world-space `CloudCenters`; Grid can remain a
   moving visibility window, but medium bodies must not ride it unless simulation
   state explicitly moves them.
+- Grid fog volume: the first below-Grid pea-soup volume is a real D3D12 medium
+  contribution, not a post tint. The medium pass binds the Grid height target
+  through a dedicated `t22` SRV, samples the actual height surface as the fog
+  ceiling, and adds animated Aetheria-style triangular-noise domain warping to
+  density/scattering below the surface. The post debug ray-density evaluator
+  uses the same procedural density so Medium Ray Density / Transmittance stay
+  honest against the final medium atlas.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
