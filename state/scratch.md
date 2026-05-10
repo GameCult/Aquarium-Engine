@@ -69,14 +69,15 @@ reusing field identity/travel/control.
   panning. D3D12 now stores fixed world-space `CloudCenters`; Grid can remain a
   moving visibility window, but medium bodies must not ride it unless simulation
   state explicitly moves them.
-- Cursor SuperFormula SDF: `AquariumFrame` now carries the mouse cursor
+- Cursor spinning-top SDF: `AquariumFrame` now carries the mouse cursor
   projected onto the Grid XY plane. D3D12 bins a cursor primitive into the
-  existing view-froxel solid table and traces it as an approximate 3D
-  SuperFormula SDF, with normals from the same SDF. Frame constants pack current
-  and previous cursor world anchors so the TAA resolve can reproject cursor hits
+  existing view-froxel solid table and traces it as a revolved 2D profile: the
+  upper two-thirds grows top-to-waist with `3x^2 - 2x^3`, and the lower third
+  shrinks waist-to-bottom with `1 - sqrt(x)`. Frame constants pack current and
+  previous cursor world anchors so the TAA resolve can reproject cursor hits
   with object motion instead of camera-only motion. Keep heavy SDF evaluators
-  outside generic packed-id hit helpers, or the shader compiler duplicates the
-  expensive path across every slot and startup stalls.
+  outside generic packed-id hit helpers, and keep this one analytic/cheap;
+  sampled profile-segment distance stalled D3D12 pipeline compilation.
 
 ## Hot Context
 

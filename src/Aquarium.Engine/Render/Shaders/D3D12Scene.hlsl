@@ -260,36 +260,48 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
     return travel >= intervalStart && travel <= intervalEnd;
 }
 
-float superFormulaRadius(float angle, float m, float n1, float n2, float n3)
+float cursorTopProfileRadius(float t)
 {
-    float c = abs(cos(m * angle * 0.25));
-    float s = abs(sin(m * angle * 0.25));
-    return pow(pow(c, n2) + pow(s, n3), -1.0 / n1);
+    float x = saturate(t);
+    return x * x * (3.0 - 2.0 * x);
 }
 
-float cursorSuperFormulaSdf(float3 p)
+float cursorBottomProfileRadius(float t)
 {
+    return 1.0 - sqrt(saturate(t));
+}
+
+float cursorTopSdf(float3 p)
+{
+    static const float BottomHeight = 0.625;
+    static const float TopHeight = 1.25;
+    static const float WaistRadius = 0.78;
+
     float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
     float3 local = (p - center) / CURSOR_RADIUS;
-    float distanceFromCenter = max(length(local), 0.0001);
-    float theta = atan2(local.y, local.x);
-    float phi = asin(clamp(local.z / distanceFromCenter, -1.0, 1.0));
-    float radiusTheta = superFormulaRadius(theta, 7.0, 0.34, 1.7, 1.7);
-    float radiusPhi = superFormulaRadius(phi, 5.0, 0.42, 1.35, 1.35);
-    float surfaceRadius = saturate(radiusTheta * radiusPhi) * 0.72 + 0.28;
-    return (distanceFromCenter - surfaceRadius) * CURSOR_RADIUS;
+    float2 samplePoint = float2(length(local.xy), local.z);
+    float topT = saturate((TopHeight - samplePoint.y) / TopHeight);
+    float bottomT = saturate(-samplePoint.y / BottomHeight);
+    float profileRadius = samplePoint.y >= 0.0
+        ? WaistRadius * cursorTopProfileRadius(topT)
+        : WaistRadius * cursorBottomProfileRadius(bottomT);
+    float radialDistance = samplePoint.x - profileRadius;
+    float topDistance = samplePoint.y - TopHeight;
+    float bottomDistance = -BottomHeight - samplePoint.y;
+    float boundedDistance = max(radialDistance, max(topDistance, bottomDistance));
+    return boundedDistance * CURSOR_RADIUS;
 }
 
-float3 cursorSuperFormulaNormal(float3 p)
+float3 cursorTopNormal(float3 p)
 {
     float epsilon = 0.006;
-    float dx = cursorSuperFormulaSdf(p + float3(epsilon, 0.0, 0.0)) - cursorSuperFormulaSdf(p - float3(epsilon, 0.0, 0.0));
-    float dy = cursorSuperFormulaSdf(p + float3(0.0, epsilon, 0.0)) - cursorSuperFormulaSdf(p - float3(0.0, epsilon, 0.0));
-    float dz = cursorSuperFormulaSdf(p + float3(0.0, 0.0, epsilon)) - cursorSuperFormulaSdf(p - float3(0.0, 0.0, epsilon));
+    float dx = cursorTopSdf(p + float3(epsilon, 0.0, 0.0)) - cursorTopSdf(p - float3(epsilon, 0.0, 0.0));
+    float dy = cursorTopSdf(p + float3(0.0, epsilon, 0.0)) - cursorTopSdf(p - float3(0.0, epsilon, 0.0));
+    float dz = cursorTopSdf(p + float3(0.0, 0.0, epsilon)) - cursorTopSdf(p - float3(0.0, 0.0, epsilon));
     return normalize(float3(dx, dy, dz));
 }
 
-bool traceCursorSuperFormula(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float travel, out float3 normal)
+bool traceCursorTop(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float travel, out float3 normal)
 {
     float sphereTravel;
     float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
@@ -317,10 +329,10 @@ bool traceCursorSuperFormula(float3 origin, float3 direction, float intervalStar
         }
 
         float3 p = origin + direction * travel;
-        float distanceValue = cursorSuperFormulaSdf(p);
+        float distanceValue = cursorTopSdf(p);
         if (abs(distanceValue) < max(0.0025, travel * 0.00025))
         {
-            normal = cursorSuperFormulaNormal(p);
+            normal = cursorTopNormal(p);
             return true;
         }
 
@@ -415,7 +427,7 @@ void considerFroxelPrimitiveHits(float3 origin, float3 direction, int froxelInde
         {
             float hitTravel;
             float3 hitNormal;
-            if (traceCursorSuperFormula(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
+            if (traceCursorTop(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
             {
                 nearest.hit = true;
                 nearest.travel = hitTravel;
