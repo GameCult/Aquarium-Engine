@@ -72,18 +72,21 @@ reusing field identity/travel/control.
 - Cursor spinning-top SDF: `AquariumFrame` now carries the mouse cursor
   projected onto the Grid XY plane. D3D12 bins a cursor primitive into the
   existing view-froxel solid table and traces it as a revolved 2D profile: the
-  upper two-thirds grows top-to-waist with shaped smoothstep
-  `smoothstep(pow(x, 2.25))`, and the lower third shrinks waist-to-bottom with
-  softened `1 - sqrt(x)`. A narrow profile-space blend around the waist seam
-  keeps the object from reading as two perfect mathematical surfaces jammed
-  together. Frame constants pack current and previous cursor world anchors so
-  the TAA resolve can reproject cursor hits with object motion instead of
-  camera-only motion. Keep heavy SDF evaluators outside generic packed-id hit
-  helpers, and keep this one analytic/cheap; sampled profile-segment distance
-  stalled D3D12 pipeline compilation. The analytic profile field still must be
-  conservative: `radial - radius(z)` oversteps at grazing views, so the cursor
-  evaluator scales radial distance by the profile slope and marches with
-  smaller steps.
+  upper section is twice the earlier height and grows top-to-waist with a
+  polynomial-shaped smootherstep (`x = t*t*(0.55 + 0.45*t)`, then quintic
+  smootherstep), and the lower third shrinks waist-to-bottom with softened
+  `1 - sqrt(x)`. A narrow profile-space blend around the waist seam keeps the
+  object from reading as two perfect mathematical surfaces jammed together.
+  The shader and CPU froxel binning both need the enlarged cursor bound radius
+  (`1.46`) or the taller tip gets clipped out of candidate discovery. Frame
+  constants pack current and previous cursor world anchors so the TAA resolve
+  can reproject cursor hits with object motion instead of camera-only motion.
+  Keep heavy SDF evaluators outside generic packed-id hit helpers, and keep
+  this one analytic/cheap; sampled profile-segment distance and fractional
+  `pow` in the profile path both stalled D3D12 pipeline compilation. The
+  analytic profile field still must be conservative: `radial - radius(z)`
+  oversteps at grazing views, so the cursor evaluator scales radial distance by
+  the profile slope and marches with smaller steps.
 
 ## Hot Context
 

@@ -37,7 +37,7 @@ static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int CURSOR_PRIMITIVE_ID = PLANET_COUNT + 1;
 static const float CURSOR_RADIUS = 0.56;
-static const float CURSOR_BOUND_RADIUS = 0.74;
+static const float CURSOR_BOUND_RADIUS = 1.46;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_DOWNSCALE = 8;
@@ -262,16 +262,18 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
 
 float cursorTopProfileRadius(float t)
 {
-    float x = pow(saturate(t), 2.25);
-    return x * x * (3.0 - 2.0 * x);
+    float u = saturate(t);
+    float x = u * u * (0.55 + 0.45 * u);
+    return x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
 }
 
 float cursorTopProfileSlope(float t)
 {
-    float safeT = max(saturate(t), 0.0001);
-    float x = pow(safeT, 2.25);
-    float smoothstepSlope = 6.0 * x * (1.0 - x);
-    return smoothstepSlope * 2.25 * pow(safeT, 1.25);
+    float u = saturate(t);
+    float x = u * u * (0.55 + 0.45 * u);
+    float shapedSlope = 1.1 * u + 1.35 * u * u;
+    float smootherstepSlope = 30.0 * x * x * (1.0 - x) * (1.0 - x);
+    return smootherstepSlope * shapedSlope;
 }
 
 float cursorBottomProfileRadius(float t)
@@ -294,7 +296,7 @@ float cursorBottomProfileSlope(float t)
 float cursorTopSdf(float3 p)
 {
     static const float BottomHeight = 0.625;
-    static const float TopHeight = 1.25;
+    static const float TopHeight = 2.50;
     static const float WaistRadius = 0.70;
     static const float SeamBlendHeight = 0.07;
 
