@@ -46,6 +46,15 @@ public sealed class AquariumGraphicsSettingsState
     [Key(11)]
     public float MediumNoiseContrast { get; set; } = GraphicsSettings.Default.MediumNoiseContrast;
 
+    [Key(12)]
+    public float MediumGridFogDensity { get; set; } = GraphicsSettings.Default.MediumGridFogDensity;
+
+    [Key(13)]
+    public float MediumPrimitiveFogDensity { get; set; } = GraphicsSettings.Default.MediumPrimitiveFogDensity;
+
+    [Key(14)]
+    public float MediumNoiseSpeed { get; set; } = GraphicsSettings.Default.MediumNoiseSpeed;
+
     public static AquariumGraphicsSettingsState FromSettings(GraphicsSettings settings)
     {
         var normalized = settings.Normalized();
@@ -60,7 +69,10 @@ public sealed class AquariumGraphicsSettingsState
             MediumFogDensity = normalized.MediumFogDensity,
             MediumFogHeightFalloff = normalized.MediumFogHeightFalloff,
             MediumNoiseScale = normalized.MediumNoiseScale,
-            MediumNoiseContrast = normalized.MediumNoiseContrast
+            MediumNoiseContrast = normalized.MediumNoiseContrast,
+            MediumGridFogDensity = normalized.MediumGridFogDensity,
+            MediumPrimitiveFogDensity = normalized.MediumPrimitiveFogDensity,
+            MediumNoiseSpeed = normalized.MediumNoiseSpeed
         };
     }
 
@@ -76,6 +88,9 @@ public sealed class AquariumGraphicsSettingsState
             MediumFogDensity,
             MediumFogHeightFalloff,
             MediumNoiseScale,
-            MediumNoiseContrast).Normalized();
+            MediumNoiseContrast,
+            MediumGridFogDensity,
+            MediumPrimitiveFogDensity,
+            MediumNoiseSpeed).Normalized();
     }
 }

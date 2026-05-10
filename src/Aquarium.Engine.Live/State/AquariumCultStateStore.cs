@@ -96,6 +96,9 @@ public sealed class AquariumCultStateStore : IDisposable
         state.MediumFogHeightFalloff = normalized.MediumFogHeightFalloff;
         state.MediumNoiseScale = normalized.MediumNoiseScale;
         state.MediumNoiseContrast = normalized.MediumNoiseContrast;
+        state.MediumGridFogDensity = normalized.MediumGridFogDensity;
+        state.MediumPrimitiveFogDensity = normalized.MediumPrimitiveFogDensity;
+        state.MediumNoiseSpeed = normalized.MediumNoiseSpeed;
         state.SaveGeneration++;
         cache.AddAsync(state, new CultRecordHandle<AquariumGraphicsSettingsState>(GraphicsSettingsKey)).GetAwaiter().GetResult();
         backingStore.PushAll();

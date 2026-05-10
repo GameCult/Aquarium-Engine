@@ -565,3 +565,10 @@ reusing field identity/travel/control.
   and the schema guardrails correctly rejected it. These knobs feed the D3D12
   frame constants and modulate D3D12Medium/Post coefficient debug plus D3D12Scene
   per-pixel medium detail.
+- D3D12 medium knob correction: remove fake scene sky/background radiance; miss
+  rays return black again until a real sky/atmosphere exists. The Medium panel
+  now exposes Atmosphere Density, Grid Density, Primitive Density, Fog Falloff,
+  Noise Frequency, Noise Contrast, and Noise Speed. Ranges are intentionally
+  broad enough to overcrank and break the image. The old persisted fog density
+  slot is atmosphere density; Grid/primitive density and noise speed were
+  appended to preserve CultCache schema compatibility.

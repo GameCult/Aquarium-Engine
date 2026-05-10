@@ -23,6 +23,10 @@ cbuffer AquariumFrame : register(b0)
     float mediumFogHeightFalloff;
     float mediumNoiseScale;
     float mediumNoiseContrast;
+    float mediumGridFogDensity;
+    float mediumPrimitiveFogDensity;
+    float mediumNoiseSpeed;
+    float mediumReserved0;
     float4 cursorWorlds;
 };
 

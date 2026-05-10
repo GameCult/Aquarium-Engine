@@ -23,6 +23,10 @@ cbuffer AquariumFrame : register(b0)
     float mediumFogHeightFalloff;
     float mediumNoiseScale;
     float mediumNoiseContrast;
+    float mediumGridFogDensity;
+    float mediumPrimitiveFogDensity;
+    float mediumNoiseSpeed;
+    float mediumReserved0;
     float4 cursorWorlds;
 };
 
@@ -154,13 +158,6 @@ float hash21(float2 p)
     return frac(p.x * p.y);
 }
 
-float hash31(float3 p)
-{
-    p = frac(p * 0.1031);
-    p += dot(p, p.yzx + 33.33);
-    return frac((p.x + p.y) * p.z) * 2.0 - 1.0;
-}
-
 float tri(float x)
 {
     return abs(frac(x) - 0.5);
@@ -184,7 +181,7 @@ float triNoise3d(float3 p)
     for (int i = 0; i < 2; i++)
     {
         float3 dg = tri3(basePoint * 2.0);
-        p += dg + timeSeconds * 0.055;
+        p += dg + timeSeconds * mediumNoiseSpeed * 0.055;
         basePoint *= 1.8;
         z *= 1.5;
         p *= 1.2;
@@ -215,20 +212,6 @@ float mediumRayDetail(float3 p)
     float veil = lerp(0.60, 1.85, textureWeight);
     float strata = lerp(0.82, 1.24, triNoise3d(float3(domain.xy * 0.42, p.z * 0.18) - flow.zxy * 0.45));
     return lerp(1.0, veil * strata, mediumNoiseContrast);
-}
-
-float3 skyRadiance(float3 rayDirection)
-{
-    float up = saturate(rayDirection.z * 0.5 + 0.5);
-    float horizon = exp(-abs(rayDirection.z) * 3.2);
-    float3 zenith = float3(0.008, 0.026, 0.046);
-    float3 lowSky = float3(0.032, 0.115, 0.135);
-    float3 horizonGlow = float3(0.10, 0.20, 0.19) * horizon;
-    float3 color = lerp(float3(0.001, 0.004, 0.006), lerp(lowSky, zenith, up), smoothstep(0.02, 0.92, up));
-    color += horizonGlow;
-    float stars = smoothstep(0.992, 0.999, hash31(floor(rayDirection * 320.0)));
-    color += stars * float3(0.9, 1.0, 1.0) * 0.18 * smoothstep(0.25, 0.9, up);
-    return color;
 }
 
 float planetRadius(int index)
@@ -790,7 +773,7 @@ void integrateMediumRange(
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
 {
     RayMarchResult result;
-    result.color = skyRadiance(direction);
+    result.color = float3(0.0, 0.0, 0.0);
     result.travel = farDistance + 1.0;
     result.fieldId = 0.0;
     result.normal = 0.0;

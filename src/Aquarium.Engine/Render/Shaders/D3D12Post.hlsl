@@ -23,6 +23,10 @@ cbuffer AquariumFrame : register(b0)
     float mediumFogHeightFalloff;
     float mediumNoiseScale;
     float mediumNoiseContrast;
+    float mediumGridFogDensity;
+    float mediumPrimitiveFogDensity;
+    float mediumNoiseSpeed;
+    float mediumReserved0;
     float4 cursorWorlds;
 };
 
@@ -410,7 +414,7 @@ float triNoise3d(float3 p)
     for (int i = 0; i < 2; i++)
     {
         float3 dg = tri3(basePoint * 2.0);
-        p += dg + timeSeconds * 0.055;
+        p += dg + timeSeconds * mediumNoiseSpeed * 0.055;
         basePoint *= 1.8;
         z *= 1.5;
         p *= 1.2;
@@ -503,13 +507,12 @@ float fieldDistance(float3 p, FieldInstance field)
 
 void registeredMediumCoefficients(float3 p, out float density, out float sigmaT, out float sigmaS, out float albedo)
 {
-    density = gridFogDensity(p);
-    sigmaT = density * GRID_FOG_EXTINCTION;
-    sigmaS = sigmaT * GRID_FOG_SCATTERING_ALBEDO;
-    float globalDensity = globalFogDensity(p);
-    density += globalDensity;
-    sigmaT += globalDensity * GLOBAL_FOG_EXTINCTION;
-    sigmaS += globalDensity * GLOBAL_FOG_EXTINCTION * GLOBAL_FOG_SCATTERING_ALBEDO;
+    float gridDensity = gridFogDensity(p) * mediumGridFogDensity;
+    float atmosphereDensity = globalFogDensity(p) * mediumFogDensity;
+    density = gridDensity + atmosphereDensity;
+    sigmaT = gridDensity * GRID_FOG_EXTINCTION + atmosphereDensity * GLOBAL_FOG_EXTINCTION;
+    sigmaS = gridDensity * GRID_FOG_EXTINCTION * GRID_FOG_SCATTERING_ALBEDO
+        + atmosphereDensity * GLOBAL_FOG_EXTINCTION * GLOBAL_FOG_SCATTERING_ALBEDO;
 
     [unroll]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
@@ -532,7 +535,7 @@ void registeredMediumCoefficients(float3 p, out float density, out float sigmaT,
         local /= max(field.radiusAngle.xyz, 0.001);
         float erosion = saturate(0.86 + fbm3(local * 3.4) * 0.14);
         float core = 1.0 - smoothstep(0.80, 1.05, length(local));
-        float fieldDensity = shell * core * erosion * field.mediumTerms.w;
+        float fieldDensity = shell * core * erosion * field.mediumTerms.w * mediumPrimitiveFogDensity;
         float fieldSigmaT = fieldDensity * max(field.mediumTerms.x, 0.0);
         float fieldAlbedo = saturate(field.mediumTerms.y);
 
@@ -541,9 +544,6 @@ void registeredMediumCoefficients(float3 p, out float density, out float sigmaT,
         sigmaS += fieldSigmaT * fieldAlbedo;
     }
 
-    density *= mediumFogDensity;
-    sigmaT *= mediumFogDensity;
-    sigmaS *= mediumFogDensity;
     density = saturate(density);
     sigmaT = max(sigmaT, 0.0);
     sigmaS = min(max(sigmaS, 0.0), sigmaT);

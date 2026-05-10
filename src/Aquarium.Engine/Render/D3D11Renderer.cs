@@ -274,7 +274,7 @@ public sealed class D3D11Renderer : IAquariumRenderer
             MaxLOD = float.MaxValue,
         });
         frameConstantBuffer = device.CreateBuffer(
-            128,
+            144,
             BindFlags.ConstantBuffer,
             ResourceUsage.Default,
             CpuAccessFlags.None,
@@ -347,6 +347,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
             MediumFogHeightFalloff,
             MediumNoiseScale,
             MediumNoiseContrast,
+            MediumGridFogDensity,
+            MediumPrimitiveFogDensity,
+            MediumNoiseSpeed,
+            0.0f,
             new float4(frame.CursorWorld.X, frame.CursorWorld.Y, frame.CursorWorld.X, frame.CursorWorld.Y));
 
         BuildFroxelPrimitiveTable(frame);
@@ -404,6 +408,12 @@ public sealed class D3D11Renderer : IAquariumRenderer
 
     public float MediumNoiseContrast { get; set; } = GraphicsSettings.Default.MediumNoiseContrast;
 
+    public float MediumGridFogDensity { get; set; } = GraphicsSettings.Default.MediumGridFogDensity;
+
+    public float MediumPrimitiveFogDensity { get; set; } = GraphicsSettings.Default.MediumPrimitiveFogDensity;
+
+    public float MediumNoiseSpeed { get; set; } = GraphicsSettings.Default.MediumNoiseSpeed;
+
     public bool DebugUiVisible
     {
         get => debugUi.IsVisible;
@@ -434,7 +444,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
             MediumFogDensity,
             MediumFogHeightFalloff,
             MediumNoiseScale,
-            MediumNoiseContrast).Normalized();
+            MediumNoiseContrast,
+            MediumGridFogDensity,
+            MediumPrimitiveFogDensity,
+            MediumNoiseSpeed).Normalized();
     }
 
     public void ApplyGraphicsSettings(GraphicsSettings settings)
@@ -450,6 +463,9 @@ public sealed class D3D11Renderer : IAquariumRenderer
         MediumFogHeightFalloff = normalized.MediumFogHeightFalloff;
         MediumNoiseScale = normalized.MediumNoiseScale;
         MediumNoiseContrast = normalized.MediumNoiseContrast;
+        MediumGridFogDensity = normalized.MediumGridFogDensity;
+        MediumPrimitiveFogDensity = normalized.MediumPrimitiveFogDensity;
+        MediumNoiseSpeed = normalized.MediumNoiseSpeed;
     }
 
     private DebugUi CreateDebugUi()
@@ -465,10 +481,13 @@ public sealed class D3D11Renderer : IAquariumRenderer
                 .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.")
                 .Section("Medium")
                 .Slider("Composite", () => MediumCompositeIntensity, value => MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene.")
-                .Slider("Fog Density", () => MediumFogDensity, value => MediumFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity), GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity, "0.###", "Scales registered medium density/extinction for diagnosis.")
+                .Slider("Atmosphere Density", () => MediumFogDensity, value => MediumFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity), GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity, "0.###", "Scales global atmosphere density/extinction.")
+                .Slider("Grid Density", () => MediumGridFogDensity, value => MediumGridFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumGridFogDensity, GraphicsSettings.MaxMediumGridFogDensity), GraphicsSettings.MinMediumGridFogDensity, GraphicsSettings.MaxMediumGridFogDensity, "0.###", "Scales Grid-height fog density/extinction.")
+                .Slider("Primitive Density", () => MediumPrimitiveFogDensity, value => MediumPrimitiveFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumPrimitiveFogDensity, GraphicsSettings.MaxMediumPrimitiveFogDensity), GraphicsSettings.MinMediumPrimitiveFogDensity, GraphicsSettings.MaxMediumPrimitiveFogDensity, "0.###", "Scales SDF/cloud primitive medium density/extinction.")
                 .Slider("Fog Falloff", () => MediumFogHeightFalloff, value => MediumFogHeightFalloff = Math.Clamp(value, GraphicsSettings.MinMediumFogHeightFalloff, GraphicsSettings.MaxMediumFogHeightFalloff), GraphicsSettings.MinMediumFogHeightFalloff, GraphicsSettings.MaxMediumFogHeightFalloff, "0.###", "Global fog exponential decay along world Z+.")
-                .Slider("Noise Scale", () => MediumNoiseScale, value => MediumNoiseScale = Math.Clamp(value, GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale), GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale, "0.###", "World-space procedural medium noise frequency.")
+                .Slider("Noise Frequency", () => MediumNoiseScale, value => MediumNoiseScale = Math.Clamp(value, GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale), GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale, "0.###", "World-space procedural medium noise frequency.")
                 .Slider("Noise Contrast", () => MediumNoiseContrast, value => MediumNoiseContrast = Math.Clamp(value, GraphicsSettings.MinMediumNoiseContrast, GraphicsSettings.MaxMediumNoiseContrast), GraphicsSettings.MinMediumNoiseContrast, GraphicsSettings.MaxMediumNoiseContrast, "0.###", "How aggressively procedural noise modulates visible density.")
+                .Slider("Noise Speed", () => MediumNoiseSpeed, value => MediumNoiseSpeed = Math.Clamp(value, GraphicsSettings.MinMediumNoiseSpeed, GraphicsSettings.MaxMediumNoiseSpeed), GraphicsSettings.MinMediumNoiseSpeed, GraphicsSettings.MaxMediumNoiseSpeed, "0.###", "Animation speed for procedural medium noise.")
                 .Slider("Ray Step", () => MediumDebugStep, value => MediumDebugStep = Math.Clamp(value, GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep), GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep, "Selects the medium raymarch sample shown by ray debug views.", () => RenderDebugMode is 9 or 10));
     }
 
@@ -1156,6 +1175,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
         float MediumFogHeightFalloff,
         float MediumNoiseScale,
         float MediumNoiseContrast,
+        float MediumGridFogDensity,
+        float MediumPrimitiveFogDensity,
+        float MediumNoiseSpeed,
+        float MediumReserved0,
         float4 CursorWorlds);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
