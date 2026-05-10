@@ -623,7 +623,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float coverageContinuityWeight = 1.0 - smoothstep(0.12, 0.65, abs(previousEventCoverage - currentEventCoverage));
             float eventConfidence = smoothstep(0.0, 8.0, previousEventAge);
             float validationWeight = travelWeight * fieldWeight * coverageContinuityWeight * smoothstep(0.001, 0.08, currentEventCoverage);
-            eventHistoryWeight = 0.92 * lerp(0.58, 1.0, eventConfidence) * validationWeight;
+            eventHistoryWeight = 0.985 * lerp(0.72, 1.0, eventConfidence) * validationWeight;
             eventHistoryAge = validationWeight > 0.01 ? min(previousEventAge + 1.0, MAX_HISTORY_AGE) : 0.0;
             eventHistoryColor = loadHistoryEventColor(previousEventUv).rgb;
         }

@@ -52,6 +52,11 @@ reusing field identity/travel/control.
   resolved surface+medium scene. This is the future particle/billboard class:
   sampled event color plus event metadata, not alpha blending and not the solid
   surface packet.
+- Event TAA tuning: stochastic event history needs very high retention. A 0.92
+  cap still lets every dither miss chew visible chunks out of low-coverage Grid
+  lines, leaving grain. Current D3D12 event lane uses 0.985 max retention with a
+  stronger fresh-history floor. Debug mode 6 is named Lane Identity because it
+  shows the winning diagnostic lane, not only the hard surface field id.
 
 ## Hot Context
 

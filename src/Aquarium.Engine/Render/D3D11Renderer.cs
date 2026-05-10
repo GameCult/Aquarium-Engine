@@ -41,7 +41,7 @@ public sealed class D3D11Renderer : IAquariumRenderer
         new(3, "History Age"),
         new(4, "History Weight"),
         new(5, "Temporal Control"),
-        new(6, "Field Identity"),
+        new(6, "Lane Identity"),
         new(7, "Bloom"),
         new(8, "Exposed Luminance"),
         new(9, "Medium Ray Density"),
