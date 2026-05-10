@@ -842,8 +842,11 @@ float3 cursorSpecularFroxelRadiance(float2 uv, float travel, float3 p, float3 no
 
     float3 viewFresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
     float3 fieldRadiance = irradiance * INV_FOUR_PI;
-    float backlit = saturate(dot(lightDirection, -viewDirection)) * (1.0 - ndl);
-    float environmentWeight = 0.22 + 0.48 * backlit;
+    float3 reflectedView = reflect(-viewDirection, normal);
+    float reflectedLight = pow(saturate(dot(reflectedView, lightDirection)), lerp(4.0, 14.0, directionConfidence));
+    float litMediumHemisphere = pow(saturate(dot(normal, -lightDirection)), 1.7) * directionConfidence;
+    float grazingReflection = pow(1.0 - ndv, 2.5);
+    float environmentWeight = 0.025 + reflectedLight * 0.28 + litMediumHemisphere * 0.18 + grazingReflection * 0.06;
     float3 mediumSpecular = fieldRadiance * viewFresnel * environmentWeight;
     return directSpecular + mediumSpecular;
 }

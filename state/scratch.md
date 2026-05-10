@@ -540,4 +540,7 @@ reusing field identity/travel/control.
   no diffuse fallback. Direct dominant-direction GGX goes black whenever visible
   normals fail `NdotL`, even if the object is inside the scene's brightest
   medium. Cursor shading now adds a low-frequency diegetic environment specular
-  term from local propagated froxel irradiance, boosted for view/backlit cases.
+  term from local propagated froxel irradiance. The useful approximation is not
+  a flat irradiance wash and not a strict mirror lobe that can miss entirely:
+  combine reflected-view alignment, the hemisphere facing the lit medium, and a
+  small grazing term so normals still shape the brass response.
