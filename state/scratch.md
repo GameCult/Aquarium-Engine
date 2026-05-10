@@ -544,3 +544,10 @@ reusing field identity/travel/control.
   a flat irradiance wash and not a strict mirror lobe that can miss entirely:
   combine reflected-view alignment, the hemisphere facing the lit medium, and a
   small grazing term so normals still shape the brass response.
+- D3D12 scene spice pass: camera distance is clamped to [5, 40]. Grid radius is
+  `clamp(cameraDistance * 2, 20, 80)`, so the schematic surface has room to
+  breathe without pitch/yaw/projection resizing it. Medium density now includes
+  a thin global fog term in the same physical coefficient evaluator as Grid fog,
+  exponentially decaying along Z+ and mirrored in the post/debug ray preview.
+  Grid fog texture uses stronger Aetheria-style tri-noise domain warp,
+  filaments, and low strata instead of a single polite breakup layer.

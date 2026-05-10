@@ -85,6 +85,9 @@ static const int FIELD_FLAG_CLOUD = 2;
 static const int MEDIUM_RAY_PREVIEW_STEPS = 48;
 static const float GRID_FOG_EXTINCTION = 0.18;
 static const float GRID_FOG_SCATTERING_ALBEDO = 0.82;
+static const float GLOBAL_FOG_DENSITY = 0.075;
+static const float GLOBAL_FOG_EXTINCTION = 0.075;
+static const float GLOBAL_FOG_SCATTERING_ALBEDO = 0.78;
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -447,11 +450,27 @@ float gridFogDensity(float3 p)
         triNoise3d(domain.yzx - flow + 27.7),
         triNoise3d(domain.zxy + flow * 0.63 + 41.3)) * 2.0 - 1.0;
 
-    float low = triNoise3d(domain * 1.85 + warp * 0.82 + flow);
-    float high = triNoise3d(domain * 7.4 - warp * 0.35 - flow.yzx);
-    float textureWeight = saturate(0.58 + low * 1.42 - high * 0.52);
+    float3 warped = domain + warp * 1.05;
+    float low = triNoise3d(warped * 1.55 + flow);
+    float mid = triNoise3d(warped * 3.45 - flow.yzx * 0.72 + 8.3);
+    float high = triNoise3d(warped * 8.6 + flow.zxy * 1.35 + 19.7);
+    float strand = 1.0 - abs(mid * 2.0 - 1.0);
+    float filament = strand * strand * lerp(0.42, 1.0, high);
+    float billow = low * 0.86 + filament * 0.62 - high * 0.24;
+    float textureWeight = saturate(0.34 + billow * 1.44);
     float deepening = 1.0 - exp(-max(depthBelowGrid, 0.0) * 1.45);
-    return saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * lerp(0.72, 1.55, textureWeight));
+    float strata = lerp(0.78, 1.28, triNoise3d(float3(domain.xy * 0.48, p.z * 0.22) + flow.zxy * 0.5));
+    return saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * lerp(0.58, 1.82, textureWeight) * strata);
+}
+
+float globalFogDensity(float3 p)
+{
+    float upwardDecay = exp(-max(p.z, 0.0) * 0.16);
+    float belowGridLift = lerp(1.0, 1.42, saturate(-p.z * 0.035));
+    float3 domain = float3((p.xy - gridCenter) * 0.045, p.z * 0.065);
+    float slow = triNoise3d(domain + float3(0.018, -0.011, 0.006) * timeSeconds);
+    float breakup = lerp(0.72, 1.18, slow);
+    return GLOBAL_FOG_DENSITY * upwardDecay * belowGridLift * breakup;
 }
 
 float2 rotate2(float2 value, float angle)
@@ -480,6 +499,10 @@ void registeredMediumCoefficients(float3 p, out float density, out float sigmaT,
     density = gridFogDensity(p);
     sigmaT = density * GRID_FOG_EXTINCTION;
     sigmaS = sigmaT * GRID_FOG_SCATTERING_ALBEDO;
+    float globalDensity = globalFogDensity(p);
+    density += globalDensity;
+    sigmaT += globalDensity * GLOBAL_FOG_EXTINCTION;
+    sigmaS += globalDensity * GLOBAL_FOG_EXTINCTION * GLOBAL_FOG_SCATTERING_ALBEDO;
 
     [unroll]
     for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)

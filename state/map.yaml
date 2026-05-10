@@ -41,7 +41,7 @@ current_model:
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
-  - Grid radius follows camera zoom distance, not pitch/yaw/projection.
+  - Grid radius follows twice the clamped camera zoom distance, then clamps to [20, 80]; pitch/yaw/projection do not resize it.
   - Body anchors remain world-space and independent of the moving Grid window.
   - World-space domains own Grid texture/weather sampling.
   - SDF clouds are local world media, not skybox content; they can exist above, below, around, or enclosing the camera.

@@ -5,12 +5,15 @@ namespace Aquarium.Engine;
 
 public sealed class OrbitCameraRig
 {
+    public const float MinimumDistance = 5.0f;
+    public const float MaximumDistance = 40.0f;
+
     public OrbitCameraRig(Vector2 target, float yawRadians, float pitchRadians, float distance)
     {
         Target = target;
         YawRadians = yawRadians;
         PitchRadians = pitchRadians;
-        Distance = MathF.Max(1.0f, distance);
+        Distance = ClampDistance(distance);
     }
 
     public Vector2 Target { get; private set; }
@@ -44,7 +47,7 @@ public sealed class OrbitCameraRig
 
     public void Zoom(float wheelSteps)
     {
-        Distance = MathF.Max(1.0f, Distance * MathF.Pow(0.92f, wheelSteps));
+        Distance = ClampDistance(Distance * MathF.Pow(0.92f, wheelSteps));
     }
 
     public void Pan(Vector2 gridDelta)
@@ -104,5 +107,10 @@ public sealed class OrbitCameraRig
         var right = new Vector2(forward.Y, -forward.X);
 
         return right * localDelta.X + forward * localDelta.Y;
+    }
+
+    private static float ClampDistance(float distance)
+    {
+        return Math.Clamp(distance, MinimumDistance, MaximumDistance);
     }
 }
