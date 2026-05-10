@@ -525,3 +525,9 @@ reusing field identity/travel/control.
   still a compact diffusion-style approximation, not full multi-bounce
   transport, but the cost and state are explicit and the scene consumes only the
   final propagated irradiance/direction targets.
+- D3D12 medium sample decorrelation pass: D3D12 now uploads the existing
+  Aetheria `Aetheria-LDR_LLL1_0.r8` blue-noise texture as a static structured
+  buffer. Medium froxel injection uses animated blue-noise offsets for both the
+  representative ray's sub-froxel XY location and the sample's in-slice Z
+  travel. This is different from Aetheria's per-pixel cloud march: Aquarium must
+  fight both fixed march-step aliasing and the 8x8 froxel row/column lattice.

@@ -37,6 +37,7 @@ Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumLightTexture : register(t15);
 Texture2D<float4> gridHeightTexture : register(t22);
 Texture2D<float4> mediumLightDirectionTexture : register(t25);
+StructuredBuffer<uint> ditherTexture : register(t26);
 SamplerState sourceSampler : register(s0);
 
 static const int FIELD_INSTANCE_COUNT = 11;
@@ -45,8 +46,11 @@ static const int FIELD_FLAG_EMITTER = 8;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
+static const int MEDIUM_FROXEL_DOWNSCALE = 8;
+static const int DITHER_TEXTURE_SIZE = 512;
 static const float PI = 3.14159265359;
 static const float INV_FOUR_PI = 0.07957747155;
+static const float GOLDEN_RATIO_CONJUGATE = 0.61803398875;
 static const float GRID_FOG_EXTINCTION = 0.18;
 static const float GRID_FOG_SCATTERING_ALBEDO = 0.82;
 
@@ -95,6 +99,17 @@ float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 c
     float3 up;
     cameraBasis(camera, center, forward, right, up);
     return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
+}
+
+float blueNoise(uint2 pixel)
+{
+    uint2 wrapped = pixel & (DITHER_TEXTURE_SIZE - 1);
+    return ((float)(ditherTexture[wrapped.x + wrapped.y * DITHER_TEXTURE_SIZE] & 255u) + 0.5) / 256.0;
+}
+
+float animatedBlueNoise(uint2 pixel, float salt)
+{
+    return frac(blueNoise(pixel) + frameIndex * GOLDEN_RATIO_CONJUGATE + salt);
 }
 
 float hash31(float3 p)
@@ -380,12 +395,20 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     int2 tile = clamp((int2)floor(atlasCoord), int2(0, 0), int2(MEDIUM_FROXEL_ATLAS_COLUMNS - 1, MEDIUM_FROXEL_ATLAS_ROWS - 1));
     int sliceIndex = tile.x + tile.y * MEDIUM_FROXEL_ATLAS_COLUMNS;
     float2 localUv = frac(atlasCoord);
+    int froxelWidth = max((int)(resolution.x / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
+    int froxelHeight = max((int)(resolution.y / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
+    int2 cell = clamp((int2)floor(localUv * float2(froxelWidth, froxelHeight)), int2(0, 0), int2(froxelWidth - 1, froxelHeight - 1));
+    uint2 ditherPixel = (uint2)(cell * MEDIUM_FROXEL_DOWNSCALE);
+    float2 xyJitter = float2(
+        animatedBlueNoise(ditherPixel + uint2(17u, 59u), 0.0),
+        animatedBlueNoise(ditherPixel + uint2(113u, 211u), 0.37)) - 0.5;
     float2 screenUv = float2(localUv.x, 1.0 - localUv.y);
-    float2 pixel = screenUv * resolution;
+    float2 pixel = screenUv * resolution + xyJitter * (float)MEDIUM_FROXEL_DOWNSCALE;
     float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
 
     float sliceLength = farDistance / (float)MEDIUM_FROXEL_SLICE_COUNT;
-    float travel = mediumSliceTravel(sliceIndex);
+    float zJitter = animatedBlueNoise(ditherPixel + uint2(307u, 401u), 0.73);
+    float travel = (((float)sliceIndex + zJitter) / (float)MEDIUM_FROXEL_SLICE_COUNT) * farDistance;
     float3 p = cameraPosition + rayDirection * travel;
     float density;
     float sigmaT;

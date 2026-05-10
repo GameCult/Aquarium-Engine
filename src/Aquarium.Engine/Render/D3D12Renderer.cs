@@ -47,6 +47,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const string MediumShaderRelativePath = "Render/Shaders/D3D12Medium.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
+    private const string DitherTextureRelativePath = "Assets/Textures/Aetheria-LDR_LLL1_0.r8";
+    private const int DitherTextureSize = 512;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -129,6 +131,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(-0.4f, -3.9f, -1.35f),
     ];
     private D3D12StructuredBuffer froxelPrimitiveBuffer;
+    private readonly D3D12StructuredBuffer ditherBuffer;
     private readonly D3D12StructuredBuffer fieldInstanceBuffer;
     private Int4[] froxelPrimitiveIds = [];
     private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
@@ -235,12 +238,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
         froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
+        ditherBuffer = CreateDitherBuffer(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
         fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
         resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
+        resourceRegistry.Add("dither-buffer", ditherBuffer);
         resourceRegistry.Add("field-instance-buffer", fieldInstanceBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
+        ditherBuffer.Upload(commandList, frames[frameIndex].UploadRing, LoadDitherPixels(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath)));
         commandList.Close();
+        fence = device.CreateFence(0);
+        fence.Name = "Aquarium D3D12 Frame Fence";
+        commandQueue.ExecuteCommandList(commandList);
+        WaitForGpu();
         ReportStartupProgress(startupProgress, "Creating D3D12 render pipelines");
         fullscreenRootSignature = CreateFullscreenRootSignature();
         fullscreenRootSignature.Name = "Aquarium D3D12 Fullscreen Root Signature";
@@ -248,8 +258,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         StartPipelineBuild("initial");
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
-        fence = device.CreateFence(0);
-        fence.Name = "Aquarium D3D12 Frame Fence";
         Console.WriteLine($"D3D12 resource registry: {resourceRegistry.Describe()}");
         Console.WriteLine("D3D12 device and swapchain created.");
     }
@@ -368,6 +376,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         frameResources.FroxelPrimitiveDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         froxelPrimitiveBuffer.CreateShaderResourceView(device, frameResources.FroxelPrimitiveDescriptor);
+        frameResources.DitherDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        ditherBuffer.CreateShaderResourceView(device, frameResources.DitherDescriptor);
         frameResources.FieldInstanceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         fieldInstanceBuffer.CreateShaderResourceView(device, frameResources.FieldInstanceDescriptor);
         frameResources.GridHeightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -534,6 +544,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         DisposePipelineStates();
         fullscreenRootSignature.Dispose();
         fieldInstanceBuffer.Dispose();
+        ditherBuffer.Dispose();
         froxelPrimitiveBuffer.Dispose();
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
@@ -660,6 +671,32 @@ public sealed class D3D12Renderer : IAquariumRenderer
             froxelPrimitiveIds.Length,
             Marshal.SizeOf<Int4>(),
             "Aquarium D3D12 View-Froxel Primitive Buffer");
+    }
+
+    private D3D12StructuredBuffer CreateDitherBuffer(string path)
+    {
+        return new D3D12StructuredBuffer(
+            device,
+            DitherTextureSize * DitherTextureSize,
+            sizeof(uint),
+            "Aquarium D3D12 Aetheria Blue Noise Buffer");
+    }
+
+    private static uint[] LoadDitherPixels(string path)
+    {
+        var pixels = File.ReadAllBytes(path);
+        if (pixels.Length != DitherTextureSize * DitherTextureSize)
+        {
+            throw new InvalidOperationException($"Dither texture {path} must be {DitherTextureSize}x{DitherTextureSize} R8 data.");
+        }
+
+        var values = new uint[pixels.Length];
+        for (var index = 0; index < pixels.Length; index++)
+        {
+            values[index] = pixels[index];
+        }
+
+        return values;
     }
 
     private D3D12PipelineSet CreatePipelineSet(D3D12ShaderPaths paths)
@@ -1269,6 +1306,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             activeCommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
             activeCommandList.SetGraphicsRootDescriptorTable(18, frameResources.GridHeightDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(22, frameResources.DitherDescriptor.Gpu);
             activeCommandList.RSSetViewports(mediumViewport);
             activeCommandList.RSSetScissorRects(mediumScissorRect);
             activeCommandList.OMSetRenderTargets(
@@ -2159,6 +2197,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             25,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var ditherRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            26,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -2183,6 +2227,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([currentMediumColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyMediumColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([mediumLightDirectionRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([ditherRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -2617,6 +2662,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot GridBrushConstantsDescriptor { get; set; }
 
         public D3D12DescriptorSlot FroxelPrimitiveDescriptor { get; set; }
+
+        public D3D12DescriptorSlot DitherDescriptor { get; set; }
 
         public D3D12DescriptorSlot FieldInstanceDescriptor { get; set; }
 
