@@ -263,17 +263,25 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
 float cursorLocatorProfileRadius(float z)
 {
     static const float ContactZ = -1.0;
+    static const float BulbCenterZ = -0.46;
+    static const float BulbRadius = 0.54;
+    static const float TipStartZ = -0.10;
     static const float TipZ = 1.15;
-    static const float PeakRadius = 0.39;
-    static const float Normalization = 6.75;
+    static const float TipBaseRadius = 0.34;
 
     float u = saturate((z - ContactZ) / (TipZ - ContactZ));
-    float top = 1.0 - u;
-    float baseRadius = PeakRadius * Normalization * u * top * top;
-    float rippleEnvelope = smoothstep(0.10, 0.28, u) * (1.0 - smoothstep(0.82, 0.98, u));
+    float sphereY = (z - BulbCenterZ) / BulbRadius;
+    float bulbRadius = BulbRadius * sqrt(saturate(1.0 - sphereY * sphereY));
+    float tipT = saturate((z - TipStartZ) / (TipZ - TipStartZ));
+    float taper = (1.0 - tipT);
+    float tipRadius = TipBaseRadius * taper * taper * taper;
+    float blend = smoothstep(-0.24, 0.10, z);
+    float baseRadius = lerp(bulbRadius, tipRadius, blend);
+    baseRadius = max(baseRadius, 0.0);
+    float rippleEnvelope = smoothstep(0.08, 0.22, u) * (1.0 - smoothstep(0.72, 0.92, u));
     float rippleWave = 0.5 + 0.5 * sin(z * 28.0 - timeSeconds * 4.0);
     float rippleRidge = rippleWave * rippleWave * rippleWave;
-    float rippleRadius = min(0.026, baseRadius * 0.16) * rippleRidge * rippleEnvelope;
+    float rippleRadius = min(0.018, baseRadius * 0.10) * rippleRidge * rippleEnvelope;
     return baseRadius + rippleRadius;
 }
 
@@ -723,24 +731,21 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        float3 cursorCenter = float3(cursorWorlds.xy, CURSOR_RADIUS);
-        float3 local = (p - cursorCenter) / CURSOR_RADIUS;
-        float height01 = saturate((local.z + 1.0) / 2.15);
-        float ripplePhase = local.z * 28.0 - timeSeconds * 4.0;
-        float rippleWave = 0.5 + 0.5 * sin(ripplePhase);
-        float rippleLine = pow(rippleWave, 18.0);
-        float envelope = smoothstep(0.04, 0.18, height01) * (1.0 - smoothstep(0.90, 1.0, height01));
-        float latitudinalGlow = rippleLine * envelope;
-        float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.4);
-        float light = 0.18 + saturate(dot(normal, lightDirection)) * 1.45;
-        float3 baseColor = lerp(float3(0.30, 0.78, 0.88), float3(0.56, 1.0, 1.0), latitudinalGlow * 0.45);
-        float3 rippleColor = float3(0.72, 1.0, 1.0) * latitudinalGlow * (0.35 + rim * 0.65);
-        return baseColor * light + float3(0.90, 0.78, 1.0) * rim * 0.65 + rippleColor;
+        float3 viewDirection = normalize(cameraPosition - p);
+        float3 halfVector = normalize(lightDirection + viewDirection);
+        float specularCore = pow(saturate(dot(normal, halfVector)), 180.0);
+        float specularShoulder = pow(saturate(dot(normal, halfVector)), 42.0);
+        float fresnel = pow(1.0 - saturate(dot(normal, viewDirection)), 5.0);
+        float3 brass = float3(0.92, 0.58, 0.20);
+        float3 darkBrass = float3(0.22, 0.13, 0.045);
+        float3 diffuse = brass * (ndl * 0.34);
+        float3 reflection = brass * (specularCore * 7.0 + specularShoulder * 0.85) + lerp(darkBrass, brass, 0.65) * fresnel * 1.05;
+        return diffuse + reflection;
     }
 
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return albedo * (0.08 + ndl * 1.6);
+    return albedo * (ndl * 1.68);
 }
 
 SceneOut D3D12ScenePS(VertexOut input)

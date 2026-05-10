@@ -72,19 +72,22 @@ reusing field identity/travel/control.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
-  kisses the Grid plane, local `z = 1.15` is the top tip, and radius follows
-  normalized `u * (1 - u)^2` so the mass is biased downward instead of reading
-  as a sunflower seed. Shader and CPU froxel bounds must stay matched (`0.72`
-  currently) or candidate discovery clips the cursor. Frame constants pack
+  kisses the Grid plane, local `z = 1.15` is the top tip, the lower bulb is
+  sphere-derived around local `z = -0.46`, and the upper section blends into a
+  strengthened cubic taper so the bulb reads round instead of pagoda/seed.
+  Shader and CPU froxel bounds must stay matched (`0.72` currently) or
+  candidate discovery clips the cursor. Frame constants pack
   current and previous cursor world anchors so the TAA resolve can reproject
   cursor hits with object motion instead of camera-only motion. Keep heavy SDF
   evaluators outside generic packed-id hit helpers, and keep this profile
   analytic/cheap: sampled profile-segment distance, numeric slope probing, and
   fractional `pow` all stalled D3D12 pipeline compilation. Cursor juice is part
   of the SDF: latitudinal ridges add a small animated radius offset using
-  `sin(localZ * 28 - time * 4)`, with matching surface glow only reinforcing
-  the same phase. The earlier spinning-top profile read as a space station or
-  candle flame; keep it as evidence, not live cursor doctrine.
+  `sin(localZ * 28 - time * 4)`, with amplitude reduced so ripples do not form
+  shelves. The material is brass/metallic, non-emissive, has a sharper specular
+  core, and has no ambient diffuse floor; only Self-driven lighting/specular
+  terms should shape it. The earlier spinning-top profile read as a space
+  station or candle flame; keep it as evidence, not live cursor doctrine.
 
 ## Hot Context
 
