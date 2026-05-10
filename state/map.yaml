@@ -63,14 +63,15 @@ renderer_state:
     - DirectWrite overlay text after scene rendering.
     - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, bloom veil, and medium composite intensity.
-    - First field instance structured buffer feeding a half-resolution registered medium diagnostic/transport pass.
-    - Parallel D3D12 scaffold behind IAquariumRenderer proving device/queue/swapchain, per-frame command allocators, fences, static/transient descriptor arenas, upload ring constants, RTV/SRV/UAV render targets, structured field buffers, transparent-surface bins, tracked barriers, command events, resize descriptor-arena rebuild, the migrated Grid height pass, the first medium froxel atlas pass, and a first D3D12 scene pass.
+    - Field instance structured buffer feeding D3D12 medium density, transport, raw light injection, and propagated froxel light passes.
+    - D3D12 default renderer behind IAquariumRenderer with device/queue/swapchain, per-frame command allocators, fences, static/transient descriptor arenas, upload ring constants, RTV/SRV/UAV render targets, structured field buffers, tracked barriers, command events, resize descriptor-arena rebuild, migrated Grid height brushes, view-froxel solid bins, HDR/bloom/present, temporal history lanes, and DirectWrite overlay bridge.
+    - D3D12 Grid linework is direct-traced as a non-terminating stochastic event lane before the nearest solid; the failed transparent-froxel Grid bin experiment is dead and must stay out of live code.
     - Splash screen with bundled app icon and GameCult typefaces.
   next:
-    - Port the D3D12 temporal resolve, bloom pyramid, full Grid line shader, and general binned transparent-surface representation.
+    - Replace CPU bootstrap view-froxel binning with GPU/raster binning before primitive/event counts scale.
+    - Add directional/probe lighting for glossy SDF surfaces so cursor metal can stop using a private direct-emitter specular loop.
     - Promote field instances from fixed renderer table to a CPU-owned registry with per-field debug controls.
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
-    - Restore HDR scene target, gentle pre-tonemap bloom, and ACES as explicit passes.
     - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
     - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
     - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.

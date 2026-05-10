@@ -45,20 +45,19 @@ resource graph beyond smoke-pass scaffolding.
   density, so the debug path now follows the renderer being built rather than a
   Grid-height bring-up convenience.
 - D3D12 final mode now draws a real scene pass instead of the smoke diagnostic:
-  Self, planets, and medium transport flow through D3D12. Transparent Grid line
-  contribution is sampled into the medium atlas as a thin participating layer,
-  so it is integrated with volumetrics rather than alpha-blended or used to
-  occlude the ray.
-- The D3D12 scene shader now follows a unified ray traversal shape: it walks
-  ray-depth intervals, integrates medium/event transport, queries the binned
-  froxel primitive table for solid candidates, and resolves the nearest opaque
-  hit in order. Current solids are still analytic spheres, but the hot loop now
-  has the right ownership boundary for future SDF evaluators.
-- The transparent Grid layer is no longer hardcoded as a medium-special case:
-  D3D12 now uploads a transparent-surface table and a froxel-binned transparent
-  surface id buffer, then the medium shader resolves transparent contributions
-  through that bin. This is the pipeline shape particles and billboards should
-  grow into.
+  Self, planets, medium transport, and the Grid event lane flow through D3D12.
+  The Grid is traced directly as a non-terminating transparent event before the
+  nearest solid; it is not baked into the medium atlas, alpha-blended as a
+  surface, or allowed to own canonical scene depth.
+- The D3D12 scene shader uses the view-froxel primitive table as the solid
+  broad phase, then integrates medium up to the nearest opaque hit. Current
+  solids are still analytic spheres plus the cursor SDF, but the ownership
+  boundary is now clear: future SDF evaluators replace the primitive hit
+  evaluator inside the same binned solid path.
+- Transparent Grid output writes a separate stochastic-event color/metadata
+  lane for temporal resolve. Future particles and billboard-like surfaces should
+  join that event lane with their own candidate generation, not resurrect the
+  removed transparent-froxel Grid experiment.
 - Renderer calls receive current window dimensions, and the D3D12 backend can
   recreate swapchain buffers plus dependent smoke resources on resize.
 - Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds
@@ -87,9 +86,10 @@ resource graph beyond smoke-pass scaffolding.
   debug views instead of the old smoke-copy scaffold. Keep the smoke shader only
   for narrowly scoped diagnostics; do not let smoke-era policy steer production
   pass ownership.
-- The transparent-surface bin currently has only the Grid layer as its first
-  registered producer. Future stochastic particles and billboards should extend
-  that path rather than reintroducing alpha-blended scene surfaces.
+- The stochastic-event lane currently has only the direct-traced Grid producer.
+  Future particles and billboards need a producer for candidate events, but the
+  removed transparent-surface binning code should stay gone unless a measured
+  multi-event problem asks for a new version.
 - Solid bins currently contain only Self/planet analytic sphere candidates.
   Future work should replace the analytic evaluator with bounded SDF surface
   solving inside the existing interval traversal, not a separate solid pass.

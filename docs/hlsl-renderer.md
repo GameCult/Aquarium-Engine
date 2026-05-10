@@ -84,22 +84,18 @@ remains only as a temporary visual reference until the old backend is deleted.
 
 D3D12 also uploads the current froxel primitive id table and field instance
 table into default-heap structured buffers every frame. The D3D12 medium pass
-renders a packed frustum froxel atlas into diagnostic and transport render
-targets from those field instances, and mode `11` displays the froxel density
-target. D3D12 final mode now renders Self, planets, medium transport, and
-transparent events through a bounded interval traversal. A camera ray walks the
-medium depth intervals, integrates medium transport, looks up solid and
-transparent candidates from froxel tables at conservative interval sample
-points, composites transparent events without stopping, and stops only at the
-nearest opaque hit after integrating transport up to that travel. Grid
-transparency is a binned transparent candidate event, not an alpha-blended
-surface, scene-depth terminator, or pre-averaged froxel medium sample. The
-scene traversal intersects the Grid height sheet, samples the height texture at
-the hit position, evaluates cartesian gridlines, height isolines, and
-gradient-angle field lines there, then keeps marching. The Grid candidate table
-marks only a conservative height slab, and the shader brackets the sheet inside
-the active interval before solving, so grazing rays do not accumulate the same
-surface as repeated froxel events. D3D12 also owns an HDR scene target
+renders a packed frustum froxel atlas into diagnostic, transport, and raw light
+injection targets from those field instances; a propagation pass writes the
+froxel light texture consumed by medium integration and diffuse solid shading.
+Mode `11` displays froxel density, and mode `12` displays propagated froxel
+light. D3D12 final mode now renders Self, planets, cursor, medium transport,
+and a separate Grid event lane. A camera ray queries solid candidates from its
+view-froxel tube, refines exact sphere/cursor hits, stops looking once later
+slices cannot beat the nearest opaque travel, and integrates medium only up to
+that travel. Grid transparency is direct-traced against the height sheet before
+the nearest solid, then emitted as premultiplied stochastic-event radiance; it
+does not write opaque scene depth, live in the medium atlas, or use the removed
+transparent-surface binning experiment. D3D12 also owns an HDR scene target
 and bloom/present pass. Its scene pass now writes color/travel,
 field-id/normal metadata, and temporal-control targets, with debug modes `5`
 and `6` inspecting the current control and identity buffers. Its resolve pass
@@ -107,10 +103,9 @@ now writes ping-pong history color, metadata, and control targets and validates
 opaque history with previous-camera reprojection plus field, travel, normal,
 neighborhood color, coverage, and medium-continuity checks. Debug modes `3` and
 `4` show history age and weight. Medium-only pixels use a density-weighted ray
-centroid and `FIELD_ID_MEDIUM`; binned transparent events emit
-`FIELD_ID_TRANSPARENT_EVENT` with support-weighted travel, so transparent Grid
-and future particles can accumulate through a distributed history path without
-pretending to be opaque.
+centroid and `FIELD_ID_MEDIUM`; Grid events emit a separate event color and
+metadata packet, so future particles can accumulate through the same temporal
+class without pretending to be opaque.
 D3D12 debug modes `9` and `10` are direct ray-step density/transmittance
 previews from the field instance buffer, matching the D3D11 diagnostic contract
 rather than sampling the froxel atlas. Mode `11` remains the froxel density
@@ -256,12 +251,10 @@ event-stream design in `docs/stochastic-transparent-surface-pipeline.md`, not to
 the scene first-hit surface path. A ray can encounter multiple transparent
 events; stochastic coverage may choose different events across frames; temporal
 validation compares distribution summaries instead of one canonical travel. In
-D3D12 the scene traversal discovers binned transparent candidates, intersects
-them as ordered ray events, composites them front-to-back without terminating,
-and emits `FIELD_ID_TRANSPARENT_EVENT` when event support is present. The Grid
-path uses interval-bracketed heightfield intersections; particles need the same
-candidate/event pipe with a richer per-froxel event list and quad intersection
-evaluator.
+D3D12 the current Grid producer traces the heightfield directly and writes the
+event lane. Particles still need a producer that emits the same event metadata
+from billboard/quad intersections; the failed transparent-froxel Grid binning
+experiment is not part of the live machine.
 
 The presentation path now applies an explicit exposure before display
 transformation and adds a low-gain pre-tonemap bloom/veil pyramid. The bloom
@@ -295,12 +288,12 @@ transmittance, and propagated light front-to-back; the persisted Medium
 Composite control still scales the visible medium while the light contract
 remains renderer-owned.
 
-The D3D12 scene pass has begun collapsing solid, medium, and transparent-event
-composition into one traversal clock. The first implementation still uses
-analytic sphere evaluators for Self and planets, but those evaluators are called
-only from froxel-binned solid candidates inside each ray interval. Future SDF
-surfaces should replace the sphere evaluator with bounded SDF marching plus
-bracket/bisect surface refinement inside that same interval contract.
+The D3D12 scene pass now keeps solid, medium, and event ownership separate while
+sharing one ray clock. Solid candidates come from the view-froxel table and are
+refined by exact primitive evaluators; medium integrates to the nearest solid;
+Grid events are emitted on their own temporal lane. Future SDF surfaces should
+replace the primitive evaluator with bounded SDF marching plus bracket/bisect
+surface refinement inside the same binned solid path.
 
 The running window also has a Direct2D debug panel toggled with `F2`. It follows
 the CultLib code-first composition style rather than an immediate-mode toolkit:

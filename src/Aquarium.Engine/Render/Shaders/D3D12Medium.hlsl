@@ -289,12 +289,6 @@ float emissiveFieldSolidAngle(float3 p, FieldInstance emitter)
     return 2.0 * PI * (1.0 - cosTheta);
 }
 
-float henyeyGreenstein(float cosTheta, float g)
-{
-    float g2 = g * g;
-    return (1.0 - g2) / max(4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5), 0.0001);
-}
-
 float emissiveSurfaceTransmittance(float3 p, FieldInstance emitter)
 {
     float emitterRadius = max(emitter.centerRadius.w, 0.001);
@@ -318,34 +312,6 @@ float emissiveSurfaceTransmittance(float3 p, FieldInstance emitter)
 
     opticalDepth *= (pathLength / 4.0) * 0.16;
     return exp(-opticalDepth);
-}
-
-float3 injectedEmitterRadiance(float3 p, float3 rayDirection)
-{
-    float3 radiance = 0.0;
-
-    [loop]
-    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
-    {
-        FieldInstance emitter = fieldInstances[i];
-        if (((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0)
-        {
-            continue;
-        }
-
-        float emitterRadius = max(emitter.centerRadius.w, 0.001);
-        float3 toEmitter = emitter.centerRadius.xyz - p;
-        float emitterDistance = length(toEmitter);
-        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
-        float solidAngle = emissiveFieldSolidAngle(p, emitter);
-        float cosTheta = dot(-rayDirection, lightDirection);
-        float phase = henyeyGreenstein(cosTheta, 0.32);
-        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
-        float transmittance = emissiveSurfaceTransmittance(p, emitter);
-        radiance += emitter.colorIntensity.rgb * solidAngle * phase * visibility * transmittance;
-    }
-
-    return radiance;
 }
 
 float3 injectedEmitterIrradiance(float3 p)
@@ -373,14 +339,6 @@ float3 injectedEmitterIrradiance(float3 p)
     return irradiance;
 }
 
-float registeredMediumDensity(float3 p, float3 rayDirection, out float3 scattering)
-{
-    scattering = 0.0;
-    float density = registeredMediumDensityOnly(p);
-    scattering = injectedEmitterRadiance(p, rayDirection) * density;
-    return density;
-}
-
 float mediumSliceTravel(int sliceIndex)
 {
     float t = ((float)sliceIndex + 0.5) / (float)MEDIUM_FROXEL_SLICE_COUNT;
@@ -400,22 +358,17 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     float sliceLength = farDistance / (float)MEDIUM_FROXEL_SLICE_COUNT;
     float travel = mediumSliceTravel(sliceIndex);
     float3 p = cameraPosition + rayDirection * travel;
-    float3 scattering;
-    float density = registeredMediumDensity(p, rayDirection, scattering);
+    float density = registeredMediumDensityOnly(p);
     float mediumBlend = saturate(mediumCompositeIntensity);
     density *= mediumBlend;
-    scattering *= mediumBlend;
     float extinction = density * 0.16;
     float transmittance = exp(-extinction * sliceLength);
-    float3 inScattering = density > 0.001
-        ? scattering * (1.0 - transmittance) / max(extinction, 0.001)
-        : 0.0;
+    float3 injectedIrradiance = injectedEmitterIrradiance(p) * mediumBlend;
 
-    float sourceDebug = saturate(dot(inScattering, float3(0.2126, 0.7152, 0.0722)) * 0.65);
     MediumVolumeOut output;
-    output.diagnostic = float4(saturate(density), saturate(transmittance), sourceDebug, 1.0);
-    output.transport = float4(inScattering, saturate(transmittance));
-    output.light = float4(injectedEmitterIrradiance(p) * mediumBlend, saturate(density));
+    output.diagnostic = float4(saturate(density), saturate(transmittance), saturate(dot(injectedIrradiance, float3(0.2126, 0.7152, 0.0722)) * 0.05), 1.0);
+    output.transport = float4(0.0, 0.0, 0.0, saturate(transmittance));
+    output.light = float4(injectedIrradiance, saturate(density));
     return output;
 }
 

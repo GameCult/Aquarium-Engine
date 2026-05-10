@@ -21,11 +21,10 @@ transparent surface candidate buffers, descriptors, root parameters, shader
 structs, and event traversal were cut rather than left as dead scaffolding.
 D3D12 Grid line width now mirrors the D3D11 reference:
 periodic domains use `fwidth()` and pixel-width constants instead of world-space
-`ddx/ddy` footprint guesses. The stochastic mask now samples Aetheria's copied
-512x512 R8 blue-noise texture in screen space through D3D12 `t15/s1`, point and
-wrap sampled. It shifts the blue-noise tile by a low-discrepancy pixel offset
-each frame so TAA sees temporal coverage variation without all pixels toggling
-together.
+`ddx/ddy` footprint guesses. For the current single Grid event, the event lane
+emits expected premultiplied radiance (`color * coverage`) instead of visible
+blue-noise hit/miss. Blue-noise stochastic selection is reserved for a future
+multi-event chooser.
 
 Follow-up TAA diagnosis: D3D12 had stable Grid metadata/control but noisy final,
 raw, and history because the post resolve used stochastic hit/miss scene color
@@ -122,6 +121,12 @@ reusing field identity/travel/control.
   light field. Debug mode `12` visualizes the propagated froxel light. Cursor
   brass specular still uses direct emitter loops until the renderer owns
   directional/probe lighting for glossy surfaces.
+- Sanitation pass: the D3D12 medium pass no longer computes phase-scattered
+  direct radiance into `transport.rgb`, because final scene integration reads
+  transmittance from `transport.a` and propagated light from the light target.
+  The medium pass now writes density/transmittance plus raw emitter irradiance
+  only. The D3D12 scene solid search also exits the view-froxel slice loop once
+  the nearest opaque hit is in front of all remaining slices.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
@@ -418,30 +423,22 @@ reusing field identity/travel/control.
   atlases from the D3D12 field instance buffer. Render debug mode `11` displays
   D3D12 froxel density; the temporary Grid-height debug view was cut rather
   than left as stale bring-up scaffolding.
-- D3D12 transparent candidate scene pass: Grid line transparency is no longer
-  injected into the medium froxel atlas. The scene traversal binds the
-  transparent surface table, discovers the binned Grid candidate through froxel
-  ids, intersects the Grid height sheet, evaluates cartesian gridlines, height
-  isolines, and gradient-angle field lines at the actual ray hit, composites the
-  transparent event without terminating, and continues marching toward medium
-  and opaque SDF/solid hits.
-- D3D12 transparent-surface bins: Grid line transparency now flows through a
-  transparent surface table plus froxel-binned transparent surface ids. The
-  scene shader discovers the Grid layer through the froxel bin, not through a
-  hardcoded alpha/composite side path or a medium-atlas summary. This is the
-  first implementation of the particle/billboard transparency contract.
+- D3D12 transparent candidate dead end: the Grid was briefly routed through a
+  transparent-surface table and froxel-binned surface ids. That path produced
+  angle-dependent soup and has been cut from live code. The current Grid path
+  traces the height sheet directly before the nearest solid and writes a
+  separate stochastic-event lane.
 - D3D12 HDR presentation pass: final D3D12 scene output is now scene-linear
   `R16G16B16A16_Float`. A three-level half/quarter/eighth bloom pyramid uses
   firefly-safe downsample plus separable horizontal/vertical blur before final
   exposure, bloom/veil composite, and ACES presentation. Debug mode 7 shows
   bloom contribution; mode 8 shows exposed luminance; mode 11 still bypasses
   post to inspect the medium density atlas.
-- D3D12 binned Grid linework pass: the transparent surface scene path now
-  evaluates Grid height gradients and contributes cartesian gridlines, height
-  isolines, and gradient-angle field lines from the same froxel-binned
-  transparent surface entry. Keep future particles/billboards in this shared
-  transparent-surface integration class; do not resurrect alpha surfaces for
-  them.
+- D3D12 Grid event lane: the direct Grid trace evaluates height gradients,
+  cartesian gridlines, height isolines, and gradient-angle field lines at the
+  ray hit, then emits premultiplied event radiance and event metadata. Future
+  particles/billboards should emit compatible event packets, not alpha surfaces
+  and not a revived Grid froxel-bin path.
 - D3D12 temporal diagnostic spine pass: the scene pass now writes MRTs for
   color/travel, field-id/normal metadata, and temporal control. Present debug
   mode 5 shows current control and mode 6 shows field identity. History
@@ -458,21 +455,15 @@ reusing field identity/travel/control.
   `FIELD_ID_MEDIUM`, coverage from medium opacity/density, and travel from a
   density-weighted ray centroid. Resolve treats this as volumetric history:
   normal validation is skipped, color rejection is relaxed, and continuity is
-  driven by coverage plus medium opacity. This lets binned Grid/fog contribution
-  accumulate without reintroducing alpha surfaces.
+  driven by coverage plus medium opacity.
 - D3D12 medium ray debug pass: resolve now binds the field instance buffer and
   implements direct ray-step registered-medium previews for modes 9 and 10.
   These are correctness probes independent of the froxel atlas; mode 11 remains
   the atlas density view.
-- D3D12 transparent event traversal pass: the scene pass now derives
-  transparent-event support and support-weighted travel from intersected
-  candidates instead of a froxel summary. This fixes the Grid blur/undersampling
-  failure caused by sampling linework once per low-resolution medium atlas
-  slice. The follow-up grazing-view fix bins the Grid only into a conservative
-  height slab and brackets the height-sheet crossing inside the active ray
-  interval before solving it; otherwise shallow rays rediscover the same sheet
-  in multiple depth froxels and composite soup. Particles/billboards need the
-  same pipe with richer per-froxel event lists and quad intersection evaluators.
+- D3D12 transparent event retreat: direct Grid tracing fixed the blur and
+  undersampling caused by pre-averaging linework in low-resolution medium
+  atlases and the instability caused by froxel-binning a global height sheet.
+  The event lane survived; the transparent Grid binning machinery did not.
 - D3D12 overlay parity pass: DirectWrite/Direct2D debug UI remains native hinted
   overlay text through the documented D3D11On12 bridge. D3D12 renders the frame
   and leaves the backbuffer in render-target state; the bridge acquires the

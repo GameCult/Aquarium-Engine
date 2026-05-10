@@ -620,8 +620,15 @@ void integrateMediumRange(
         return;
     }
 
+    int firstSlice = clamp((int)floor(saturate(rangeStart / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    int lastSlice = clamp((int)floor(saturate(rangeEnd / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    if (rangeEnd < farDistance)
+    {
+        lastSlice = min(lastSlice, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    }
+
     [loop]
-    for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
+    for (int sliceIndex = firstSlice; sliceIndex <= lastSlice; sliceIndex++)
     {
         float sliceStart = mediumSliceStartTravel(sliceIndex);
         float sliceEnd = mediumSliceEndTravel(sliceIndex);
@@ -676,6 +683,11 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     [loop]
     for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
     {
+        if (nearestSolid.hit && mediumSliceStartTravel(sliceIndex) > nearestSolid.travel)
+        {
+            break;
+        }
+
         SolidHit cellSolid = nearestViewFroxelSolidHit(uv, origin, direction, sliceIndex);
         if (cellSolid.hit && cellSolid.travel < nearestSolid.travel)
         {
