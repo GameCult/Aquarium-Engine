@@ -838,7 +838,14 @@ float3 cursorSpecularFroxelRadiance(float2 uv, float travel, float3 p, float3 no
     float geometry = geometryL * geometryV;
     float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
     float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-    return specular * irradiance * ndl * directionConfidence;
+    float3 directSpecular = specular * irradiance * ndl * directionConfidence;
+
+    float3 viewFresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+    float3 fieldRadiance = irradiance * INV_FOUR_PI;
+    float backlit = saturate(dot(lightDirection, -viewDirection)) * (1.0 - ndl);
+    float environmentWeight = 0.22 + 0.48 * backlit;
+    float3 mediumSpecular = fieldRadiance * viewFresnel * environmentWeight;
+    return directSpecular + mediumSpecular;
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)

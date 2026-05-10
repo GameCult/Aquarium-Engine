@@ -536,3 +536,8 @@ reusing field identity/travel/control.
   travel-to-slice when sampling propagated froxel light. That reintroduced
   visible lighting pops as planets crossed slice boundaries. Surface
   irradiance/dominant-direction lookup now interpolates adjacent slice centers.
+- D3D12 cursor medium-reflection pass: the brass cursor is metallic, so it has
+  no diffuse fallback. Direct dominant-direction GGX goes black whenever visible
+  normals fail `NdotL`, even if the object is inside the scene's brightest
+  medium. Cursor shading now adds a low-frequency diegetic environment specular
+  term from local propagated froxel irradiance, boosted for view/backlit cases.
