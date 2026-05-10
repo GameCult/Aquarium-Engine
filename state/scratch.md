@@ -80,7 +80,9 @@ reusing field identity/travel/control.
   sampled profile-segment distance stalled D3D12 pipeline compilation. The
   analytic profile field still must be conservative: `radial - radius(z)`
   oversteps at grazing views, so the cursor evaluator scales radial distance by
-  the profile slope and marches with smaller steps.
+  the profile slope and marches with smaller steps. The bottom `1 - sqrt(x)`
+  profile is softened/renormalized near `x = 0` so the waist seam does not
+  inherit an infinite slope.
 
 ## Hot Context
 

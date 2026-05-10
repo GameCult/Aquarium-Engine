@@ -276,12 +276,19 @@ float cursorTopProfileSlope(float t)
 
 float cursorBottomProfileRadius(float t)
 {
-    return 1.0 - sqrt(saturate(t));
+    static const float SqrtSoftening = 0.035;
+    float root0 = sqrt(SqrtSoftening);
+    float root1 = sqrt(1.0 + SqrtSoftening);
+    float x = (sqrt(saturate(t) + SqrtSoftening) - root0) / (root1 - root0);
+    return 1.0 - x;
 }
 
 float cursorBottomProfileSlope(float t)
 {
-    return -0.5 * rsqrt(max(saturate(t), 0.001));
+    static const float SqrtSoftening = 0.035;
+    float root0 = sqrt(SqrtSoftening);
+    float root1 = sqrt(1.0 + SqrtSoftening);
+    return -0.5 * rsqrt(saturate(t) + SqrtSoftening) / (root1 - root0);
 }
 
 float cursorTopSdf(float3 p)
