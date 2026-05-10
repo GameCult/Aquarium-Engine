@@ -551,3 +551,10 @@ reusing field identity/travel/control.
   exponentially decaying along Z+ and mirrored in the post/debug ray preview.
   Grid fog texture uses stronger Aetheria-style tri-noise domain warp,
   filaments, and low strata instead of a single polite breakup layer.
+- D3D12 per-pixel medium detail pass: froxels are the coarse coefficient,
+  binning, and propagation substrate, not the last word in visible density
+  texture. The scene ray integration now re-samples a cheap world-space
+  Aetheria-style tri-noise detail multiplier at the per-pixel interval midpoint
+  before applying froxel transmittance/scattering. Miss rays now see a dim
+  teal/blue sky radiance with sparse stars instead of a black void; this is
+  background radiance only and must not become ambient lighting for surfaces.

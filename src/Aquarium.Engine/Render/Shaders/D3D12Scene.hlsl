@@ -150,6 +150,82 @@ float hash21(float2 p)
     return frac(p.x * p.y);
 }
 
+float hash31(float3 p)
+{
+    p = frac(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return frac((p.x + p.y) * p.z) * 2.0 - 1.0;
+}
+
+float tri(float x)
+{
+    return abs(frac(x) - 0.5);
+}
+
+float3 tri3(float3 p)
+{
+    return float3(
+        tri(p.z + tri(p.y)),
+        tri(p.z + tri(p.x)),
+        tri(p.y + tri(p.x)));
+}
+
+float triNoise3d(float3 p)
+{
+    float z = 1.4;
+    float value = 0.001;
+    float3 basePoint = p;
+
+    [unroll]
+    for (int i = 0; i < 2; i++)
+    {
+        float3 dg = tri3(basePoint * 2.0);
+        p += dg + timeSeconds * 0.055;
+        basePoint *= 1.8;
+        z *= 1.5;
+        p *= 1.2;
+        value += tri(p.z + tri(p.x + tri(p.y))) / z;
+        basePoint += 0.14;
+    }
+
+    return value;
+}
+
+float mediumRayDetail(float3 p)
+{
+    float3 domain = float3(p.xy - gridCenter, p.z * 1.55) * 0.145;
+    float3 flow = float3(0.10, -0.075, 0.045) * timeSeconds;
+    float3 warp = float3(
+        triNoise3d(domain + flow + 4.1),
+        triNoise3d(domain.yzx - flow * 0.85 + 17.7),
+        triNoise3d(domain.zxy + flow.zxy * 1.25 + 31.3)) * 2.0 - 1.0;
+
+    float3 warped = domain + warp * 1.35;
+    float low = triNoise3d(warped * 1.25 + flow);
+    float mid = triNoise3d(warped * 3.1 - flow.yzx * 0.8 + 9.4);
+    float high = triNoise3d(warped * 8.4 + flow.zxy * 1.5 + 22.2);
+    float strand = 1.0 - abs(mid * 2.0 - 1.0);
+    float filament = strand * strand * lerp(0.35, 1.0, high);
+    float textureWeight = saturate(0.30 + low * 0.88 + filament * 0.72 - high * 0.18);
+    float veil = lerp(0.60, 1.85, textureWeight);
+    float strata = lerp(0.82, 1.24, triNoise3d(float3(domain.xy * 0.42, p.z * 0.18) - flow.zxy * 0.45));
+    return veil * strata;
+}
+
+float3 skyRadiance(float3 rayDirection)
+{
+    float up = saturate(rayDirection.z * 0.5 + 0.5);
+    float horizon = exp(-abs(rayDirection.z) * 3.2);
+    float3 zenith = float3(0.008, 0.026, 0.046);
+    float3 lowSky = float3(0.032, 0.115, 0.135);
+    float3 horizonGlow = float3(0.10, 0.20, 0.19) * horizon;
+    float3 color = lerp(float3(0.001, 0.004, 0.006), lerp(lowSky, zenith, up), smoothstep(0.02, 0.92, up));
+    color += horizonGlow;
+    float stars = smoothstep(0.992, 0.999, hash31(floor(rayDirection * 320.0)));
+    color += stars * float3(0.9, 1.0, 1.0) * 0.18 * smoothstep(0.25, 0.9, up);
+    return color;
+}
+
 float planetRadius(int index)
 {
     return lerp(0.34, 0.62, hash21(float2(index, 19.7)));
@@ -609,9 +685,11 @@ SolidHit nearestViewFroxelSolidHit(float2 uv, float3 origin, float3 direction, i
 
 void integrateMediumSlice(
     float2 uv,
+    float3 origin,
     float3 rayDirection,
     int sliceIndex,
-    float intervalFraction,
+    float intervalStart,
+    float intervalEnd,
     inout float transmittance,
     inout float3 inScattering,
     inout float densityMean,
@@ -624,12 +702,19 @@ void integrateMediumSlice(
     float3 propagatedLight = mediumLightTexture.SampleLevel(gridSampler, atlasUv, 0.0).rgb;
     float4 directionMoment = mediumLightDirectionTexture.SampleLevel(gridSampler, atlasUv, 0.0);
     float sliceTravel = mediumSliceTravel(sliceIndex);
-    float fraction = saturate(intervalFraction);
+    float sliceStart = mediumSliceStartTravel(sliceIndex);
+    float sliceEnd = mediumSliceEndTravel(sliceIndex);
+    float fraction = saturate((intervalEnd - intervalStart) / max(sliceEnd - sliceStart, 0.0001));
+    float3 samplePosition = origin + rayDirection * ((intervalStart + intervalEnd) * 0.5);
+    float detail = mediumRayDetail(samplePosition);
     float density = saturate(diagnostic.x);
     float sigmaT = max(diagnostic.y, 0.0);
     float sigmaS = min(max(diagnostic.z, 0.0), sigmaT);
+    density = saturate(density * detail);
+    sigmaT *= detail;
+    sigmaS = min(sigmaS * detail, sigmaT);
     float fullSliceTransmittance = saturate(transport.a);
-    float sliceExtinction = max(-log(max(fullSliceTransmittance, 0.0001)), sigmaT * (mediumSliceEndTravel(sliceIndex) - mediumSliceStartTravel(sliceIndex)));
+    float sliceExtinction = max(-log(max(fullSliceTransmittance, 0.0001)) * detail, sigmaT * (sliceEnd - sliceStart));
     float partialTransmittance = exp(-sliceExtinction * fraction);
     float scatterIntegral = sigmaT > 0.0001 ? sigmaS * (1.0 - partialTransmittance) / sigmaT : 0.0;
     float densityContribution = density * fraction;
@@ -648,6 +733,7 @@ void integrateMediumSlice(
 
 void integrateMediumRange(
     float2 uv,
+    float3 origin,
     float3 rayDirection,
     float rangeStart,
     float rangeEnd,
@@ -681,12 +767,13 @@ void integrateMediumRange(
             continue;
         }
 
-        float fraction = saturate((overlapEnd - overlapStart) / max(sliceEnd - sliceStart, 0.0001));
         integrateMediumSlice(
             uv,
+            origin,
             rayDirection,
             sliceIndex,
-            fraction,
+            overlapStart,
+            overlapEnd,
             transmittance,
             inScattering,
             densityMean,
@@ -698,7 +785,7 @@ void integrateMediumRange(
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
 {
     RayMarchResult result;
-    result.color = float3(0.001, 0.003, 0.004);
+    result.color = skyRadiance(direction);
     result.travel = farDistance + 1.0;
     result.fieldId = 0.0;
     result.normal = 0.0;
@@ -750,7 +837,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         gridHit = gridAlpha > 0.001;
     }
 
-    integrateMediumRange(uv, direction, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
+    integrateMediumRange(uv, origin, direction, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
     float mediumOpacity = saturate(1.0 - transmittance);
     float mediumDensityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
     float mediumTravel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, stopTravel) : farDistance + 1.0;
