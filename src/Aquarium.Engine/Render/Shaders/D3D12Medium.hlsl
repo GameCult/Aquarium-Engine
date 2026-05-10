@@ -33,6 +33,8 @@ struct FieldInstance
 };
 
 StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+Texture2D<float4> mediumVolumeTexture : register(t13);
+Texture2D<float4> mediumLightTexture : register(t15);
 Texture2D<float4> gridHeightTexture : register(t22);
 SamplerState sourceSampler : register(s0);
 
@@ -54,6 +56,7 @@ struct MediumVolumeOut
 {
     float4 diagnostic : SV_Target0;
     float4 transport : SV_Target1;
+    float4 light : SV_Target2;
 };
 
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -345,6 +348,31 @@ float3 injectedEmitterRadiance(float3 p, float3 rayDirection)
     return radiance;
 }
 
+float3 injectedEmitterIrradiance(float3 p)
+{
+    float3 irradiance = 0.0;
+
+    [loop]
+    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    {
+        FieldInstance emitter = fieldInstances[i];
+        if (((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0)
+        {
+            continue;
+        }
+
+        float emitterRadius = max(emitter.centerRadius.w, 0.001);
+        float3 toEmitter = emitter.centerRadius.xyz - p;
+        float emitterDistance = length(toEmitter);
+        float solidAngle = emissiveFieldSolidAngle(p, emitter);
+        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
+        float transmittance = emissiveSurfaceTransmittance(p, emitter);
+        irradiance += emitter.colorIntensity.rgb * solidAngle * visibility * transmittance;
+    }
+
+    return irradiance;
+}
+
 float registeredMediumDensity(float3 p, float3 rayDirection, out float3 scattering)
 {
     scattering = 0.0;
@@ -387,5 +415,50 @@ MediumVolumeOut MediumVolumePS(VertexOut input)
     MediumVolumeOut output;
     output.diagnostic = float4(saturate(density), saturate(transmittance), sourceDebug, 1.0);
     output.transport = float4(inScattering, saturate(transmittance));
+    output.light = float4(injectedEmitterIrradiance(p) * mediumBlend, saturate(density));
     return output;
+}
+
+float2 atlasUvFromCell(int2 cell, int sliceIndex)
+{
+    int froxelWidth = max((int)(resolution.x / 8.0), 1);
+    int froxelHeight = max((int)(resolution.y / 8.0), 1);
+    int tileX = sliceIndex % MEDIUM_FROXEL_ATLAS_COLUMNS;
+    int tileY = sliceIndex / MEDIUM_FROXEL_ATLAS_COLUMNS;
+    int2 atlasPixel = int2(tileX * froxelWidth, tileY * froxelHeight) + clamp(cell, int2(0, 0), int2(froxelWidth - 1, froxelHeight - 1));
+    return ((float2)atlasPixel + 0.5) / float2(froxelWidth * MEDIUM_FROXEL_ATLAS_COLUMNS, froxelHeight * MEDIUM_FROXEL_ATLAS_ROWS);
+}
+
+float3 propagatedNeighbor(int2 cell, int sliceIndex, float weight)
+{
+    sliceIndex = clamp(sliceIndex, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    float2 uv = atlasUvFromCell(cell, sliceIndex);
+    float density = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0).x;
+    float occlusion = exp(-density * 0.36);
+    return mediumLightTexture.SampleLevel(sourceSampler, uv, 0.0).rgb * weight * occlusion;
+}
+
+float4 MediumLightPropagatePS(VertexOut input) : SV_Target0
+{
+    int froxelWidth = max((int)(resolution.x / 8.0), 1);
+    int froxelHeight = max((int)(resolution.y / 8.0), 1);
+    int2 atlasPixel = int2(input.position.xy);
+    int2 tile = clamp(atlasPixel / int2(froxelWidth, froxelHeight), int2(0, 0), int2(MEDIUM_FROXEL_ATLAS_COLUMNS - 1, MEDIUM_FROXEL_ATLAS_ROWS - 1));
+    int2 cell = atlasPixel - tile * int2(froxelWidth, froxelHeight);
+    int sliceIndex = tile.x + tile.y * MEDIUM_FROXEL_ATLAS_COLUMNS;
+    float2 uv = atlasUvFromCell(cell, sliceIndex);
+
+    float density = mediumVolumeTexture.SampleLevel(sourceSampler, uv, 0.0).x;
+    float3 center = mediumLightTexture.SampleLevel(sourceSampler, uv, 0.0).rgb;
+    float3 propagated = center * 0.58;
+    propagated += propagatedNeighbor(cell + int2(1, 0), sliceIndex, 0.055);
+    propagated += propagatedNeighbor(cell + int2(-1, 0), sliceIndex, 0.055);
+    propagated += propagatedNeighbor(cell + int2(0, 1), sliceIndex, 0.055);
+    propagated += propagatedNeighbor(cell + int2(0, -1), sliceIndex, 0.055);
+    propagated += propagatedNeighbor(cell, sliceIndex + 1, 0.08);
+    propagated += propagatedNeighbor(cell, sliceIndex - 1, 0.08);
+
+    float localRetention = lerp(0.72, 1.0, saturate(density * 1.4));
+    float3 light = max(center, propagated * localRetention);
+    return float4(light, saturate(density));
 }

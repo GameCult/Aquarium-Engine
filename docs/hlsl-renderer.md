@@ -279,20 +279,20 @@ field identity, `7` is bloom contribution, and `8` is exposed luminance. The
 startup mode can still be set with `--render-debug` or
 `AQUARIUM_RENDER_DEBUG_MODE`.
 
-Fog work has started behind diagnostics rather than final-frame haze. The host
-packs stable field instances into a structured buffer shared with HLSL. A
-packed froxel medium pass writes 32 frustum slices into diagnostic and transport
-textures before the scene pass. At 1280x720 the first volume is 160x90x32,
-packed as an 8x4 D3D11 atlas. Each froxel reconstructs a world position and
-samples registered medium density there; resolve integrates those cells
-front-to-back for composition and diagnostics. Mode `9` previews direct
-registered-medium density at the selected ray step, mode `10` previews direct
-ray transmittance to that step, and mode `11` shows integrated froxel density.
-Direct ray debug remains the correctness reference while the froxel pass earns
-final-frame authority. Final composition uses `surface * transmittance +
-in-scattering`, gated by the persisted Medium Composite control. The default is
-`0`, so the pass can be inspected without changing the presented frame until the
-medium is tuned.
+Fog work now has an explicit froxel lighting lane instead of baked color. The
+host packs stable field instances into a structured buffer shared with HLSL. A
+packed froxel medium pass writes 32 frustum slices into diagnostic, transport,
+and light-injection textures; a follow-up propagation pass writes the propagated
+medium light texture consumed by both fog integration and solid diffuse shading.
+At 1280x720 the first volume is 160x90x32, packed as an 8x4 atlas. Each froxel
+reconstructs a world position, samples registered medium density, and injects
+light from `FieldFlags.Emitter` surfaces using finite solid angle and cheap
+path transmittance. Mode `9` previews direct registered-medium density at the
+selected ray step, mode `10` previews direct ray transmittance to that step, and
+mode `11` shows integrated froxel density. Final composition uses density,
+transmittance, and propagated light front-to-back; the persisted Medium
+Composite control still scales the visible medium while the light contract
+remains renderer-owned.
 
 The D3D12 scene pass has begun collapsing solid, medium, and transparent-event
 composition into one traversal clock. The first implementation still uses

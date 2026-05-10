@@ -26,6 +26,7 @@ Texture2D<float4> gridHeightTexture : register(t0);
 StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
 Texture2D<float4> mediumVolumeTexture : register(t13);
 Texture2D<float4> mediumTransportTexture : register(t14);
+Texture2D<float4> mediumLightTexture : register(t15);
 SamplerState gridSampler : register(s0);
 
 struct FieldInstance
@@ -160,7 +161,7 @@ float3 planetCenterAt(int index, float sampleTime)
     return float3(xy, 1.15 + planetRadius(index) * 0.72);
 }
 
-float3 shadeBody(float3 p, float3 normal, int primitiveId);
+float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId);
 
 float2 gridLocal(float2 p)
 {
@@ -528,6 +529,13 @@ float2 mediumAtlasUv(float2 uv, int sliceIndex)
     return (float2(tileX, tileY) + uv) / float2(MEDIUM_FROXEL_ATLAS_COLUMNS, MEDIUM_FROXEL_ATLAS_ROWS);
 }
 
+float3 froxelIrradianceAt(float2 uv, float travel)
+{
+    float slice = saturate(travel / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT;
+    int sliceIndex = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    return mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceIndex), 0.0).rgb;
+}
+
 float mediumSliceTravel(int sliceIndex)
 {
     float t = ((float)sliceIndex + 0.5) / (float)MEDIUM_FROXEL_SLICE_COUNT;
@@ -579,6 +587,7 @@ void integrateMediumSlice(
     float2 atlasUv = mediumAtlasUv(uv, sliceIndex);
     float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
     float4 transport = mediumTransportTexture.SampleLevel(gridSampler, atlasUv, 0.0);
+    float3 propagatedLight = mediumLightTexture.SampleLevel(gridSampler, atlasUv, 0.0).rgb;
     float sliceTravel = mediumSliceTravel(sliceIndex);
     float fraction = saturate(intervalFraction);
     float fullSliceTransmittance = saturate(transport.a);
@@ -587,11 +596,12 @@ void integrateMediumSlice(
     float scatterDenominator = max(1.0 - fullSliceTransmittance, 0.0001);
     float scatterFraction = (1.0 - partialTransmittance) / scatterDenominator;
     float densityContribution = diagnostic.x * fraction;
+    float3 sliceInScattering = propagatedLight * diagnostic.x * scatterFraction * 0.14;
 
     densityMean += densityContribution;
     densityTravelSum += densityContribution * sliceTravel;
     densitySum += densityContribution;
-    inScattering += transmittance * transport.rgb * scatterFraction;
+    inScattering += transmittance * sliceInScattering;
     transmittance *= saturate(partialTransmittance);
 }
 
@@ -700,7 +710,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     if (nearestSolid.hit)
     {
         float3 p = origin + direction * nearestSolid.travel;
-        float3 bodyColor = shadeBody(p, nearestSolid.normal, nearestSolid.primitiveId);
+        float3 bodyColor = shadeBody(uv, nearestSolid.travel, p, nearestSolid.normal, nearestSolid.primitiveId);
         result.color = bodyColor * transmittance + inScattering;
         result.travel = nearestSolid.travel;
         result.fieldId = nearestSolid.fieldId;
@@ -755,32 +765,6 @@ float3 primitiveEmissionRadiance(float fieldId)
     return 0.0;
 }
 
-float3 diffuseEmitterIrradiance(float3 p, float3 normal, float receiverFieldId)
-{
-    float3 irradiance = 0.0;
-
-    [loop]
-    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
-    {
-        FieldInstance emitter = fieldInstances[i];
-        if ((((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) == 0) ||
-            abs(emitter.fieldFlags.x - receiverFieldId) < 0.25)
-        {
-            continue;
-        }
-
-        float emitterRadius = max(emitter.centerRadius.w, 0.001);
-        float3 toEmitter = emitter.centerRadius.xyz - p;
-        float emitterDistance = length(toEmitter);
-        float3 lightDirection = toEmitter / max(emitterDistance, 0.0001);
-        float facing = saturate(dot(normal, lightDirection));
-        float visibility = smoothstep(emitterRadius * 0.98, emitterRadius * 1.08, emitterDistance);
-        irradiance += emitter.colorIntensity.rgb * emitterSolidAngle(p, emitter) * facing * visibility;
-    }
-
-    return irradiance;
-}
-
 float3 cursorSpecularEmitterRadiance(float3 p, float3 normal, float receiverFieldId)
 {
     static const float MinimumRoughness = 0.045;
@@ -828,7 +812,7 @@ float3 cursorSpecularEmitterRadiance(float3 p, float3 normal, float receiverFiel
     return reflected;
 }
 
-float3 shadeBody(float3 p, float3 normal, int primitiveId)
+float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)
 {
     float fieldId = primitiveFieldId(primitiveId);
     float3 emission = primitiveEmissionRadiance(fieldId);
@@ -837,7 +821,7 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
         return emission;
     }
 
-    float3 irradiance = diffuseEmitterIrradiance(p, normal, fieldId);
+    float3 irradiance = froxelIrradianceAt(uv, travel);
     float irradianceLuma = dot(irradiance, float3(0.2126, 0.7152, 0.0722));
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)

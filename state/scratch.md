@@ -112,6 +112,15 @@ reusing field identity/travel/control.
   This is direct froxel emitter propagation plus medium-color reprojection, not
   full multi-bounce GI. A cold shader build for this wider scene/resolve shape
   may exceed the 30s headless watchdog; warm/default verification passes.
+- Medium light propagation lane: D3D12 now splits medium lighting into raw
+  light injection and propagated light. The medium pass writes density,
+  transport, and raw emitter injection from `FieldFlags.Emitter`; a follow-up
+  fullscreen froxel-atlas pass samples neighbor froxels in XY and travel, with
+  density attenuation, into the propagated light target. Scene medium
+  integration now uses density/transmittance plus propagated light instead of
+  hard-baked transport color, and solid diffuse shading samples the same froxel
+  light field. Cursor brass specular still uses direct emitter loops until the
+  renderer owns directional/probe lighting for glossy surfaces.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
   solid table and traces it as an asymmetric teardrop lobe: local `z = -1`

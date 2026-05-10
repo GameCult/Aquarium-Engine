@@ -23,10 +23,11 @@ temporary visual reference until the old backend is deleted.
   copy into default-heap structured buffers, and bind as transient SRVs for the
   diagnostic shader. This proves the backend can feed real Aquarium field data
   without reading directly from upload memory.
-- The D3D12 medium pass renders a packed frustum froxel atlas into diagnostic
-  and transport render targets from the field instance buffer. Render debug mode
-  `11` now displays D3D12 froxel density, matching the future renderer path
-  rather than the temporary Grid-height bring-up view.
+- The D3D12 medium path renders a packed frustum froxel atlas into diagnostic,
+  transport, and light-injection render targets from the field instance buffer,
+  then runs a propagation pass into the light texture consumed by fog integration
+  and solid diffuse shading. Render debug mode `11` displays D3D12 froxel
+  density, matching the renderer path rather than a temporary bring-up view.
 - The D3D12 scene pass now renders Self, planets, medium transport, and the
   first transparent candidate event through the D3D12 frame graph. Grid line
   transparency is no longer baked into the medium froxel atlas; the scene
