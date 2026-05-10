@@ -532,18 +532,31 @@ float2 mediumAtlasUv(float2 uv, int sliceIndex)
     return (float2(tileX, tileY) + uv) / float2(MEDIUM_FROXEL_ATLAS_COLUMNS, MEDIUM_FROXEL_ATLAS_ROWS);
 }
 
+float sliceCenterCoordinate(float travel)
+{
+    return saturate(travel / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT - 0.5;
+}
+
 float3 froxelIrradianceAt(float2 uv, float travel)
 {
-    float slice = saturate(travel / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT;
-    int sliceIndex = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    return mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceIndex), 0.0).rgb;
+    float slice = sliceCenterCoordinate(travel);
+    int sliceA = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    int sliceB = clamp(sliceA + 1, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    float sliceBlend = saturate(slice - (float)sliceA);
+    float3 lightA = mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceA), 0.0).rgb;
+    float3 lightB = mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceB), 0.0).rgb;
+    return lerp(lightA, lightB, sliceBlend);
 }
 
 float froxelDominantLightAt(float2 uv, float travel, out float3 lightDirection)
 {
-    float slice = saturate(travel / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT;
-    int sliceIndex = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    float4 moment = mediumLightDirectionTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceIndex), 0.0);
+    float slice = sliceCenterCoordinate(travel);
+    int sliceA = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    int sliceB = clamp(sliceA + 1, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
+    float sliceBlend = saturate(slice - (float)sliceA);
+    float4 momentA = mediumLightDirectionTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceA), 0.0);
+    float4 momentB = mediumLightDirectionTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceB), 0.0);
+    float4 moment = lerp(momentA, momentB, sliceBlend);
     float momentLength = length(moment.rgb);
     lightDirection = momentLength > 0.00001 ? moment.rgb / momentLength : normalize(float3(0.18, -0.25, 0.95));
     return saturate(momentLength / max(moment.a, 0.0001));

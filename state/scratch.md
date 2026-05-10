@@ -531,3 +531,8 @@ reusing field identity/travel/control.
   representative ray's sub-froxel XY location and the sample's in-slice Z
   travel. This is different from Aetheria's per-pixel cloud march: Aquarium must
   fight both fixed march-step aliasing and the 8x8 froxel row/column lattice.
+- D3D12 propagated light slice interpolation: injection jitter uniformly covers
+  each froxel slice interval, but surface shading was still flooring
+  travel-to-slice when sampling propagated froxel light. That reintroduced
+  visible lighting pops as planets crossed slice boundaries. Surface
+  irradiance/dominant-direction lookup now interpolates adjacent slice centers.
