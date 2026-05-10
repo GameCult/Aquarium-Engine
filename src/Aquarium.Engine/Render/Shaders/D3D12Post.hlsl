@@ -19,7 +19,7 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
     float mediumDebugStep;
-    float3 presentationPadding;
+    float4 cursorWorlds;
 };
 
 Texture2D<float4> sourceTexture : register(t0);
@@ -73,6 +73,7 @@ static const int PLANET_COUNT = 5;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_GRID = 4.0;
+static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const float MAX_HISTORY_AGE = 32.0;
 static const int FIELD_INSTANCE_COUNT = 10;
@@ -122,6 +123,11 @@ float3 debugFieldIdColor(float fieldId)
     if (abs(fieldId - FIELD_ID_MEDIUM) < 0.25)
     {
         return float3(0.28, 0.72, 1.0);
+    }
+
+    if (abs(fieldId - FIELD_ID_CURSOR) < 0.25)
+    {
+        return float3(0.78, 0.24, 1.0);
     }
 
     if (fieldId >= 10.0)
@@ -182,6 +188,13 @@ float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
         int planetIndex = clamp((int)round(fieldId - FIELD_ID_PLANET_BASE), 0, PLANET_COUNT - 1);
         float3 currentCenter = planetCenterAt(planetIndex, timeSeconds);
         float3 previousCenter = planetCenterAt(planetIndex, previousTimeSeconds);
+        return previousCenter + (worldPosition - currentCenter);
+    }
+
+    if (abs(fieldId - FIELD_ID_CURSOR) < 0.25)
+    {
+        float3 currentCenter = float3(cursorWorlds.xy, 0.56);
+        float3 previousCenter = float3(cursorWorlds.zw, 0.56);
         return previousCenter + (worldPosition - currentCenter);
     }
 

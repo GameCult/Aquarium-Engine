@@ -341,9 +341,7 @@ public sealed class D3D11Renderer : IAquariumRenderer
             BloomVeilIntensity,
             MediumCompositeIntensity,
             MediumDebugStep,
-            0.0f,
-            0.0f,
-            0.0f);
+            new float4(frame.CursorWorld.X, frame.CursorWorld.Y, frame.CursorWorld.X, frame.CursorWorld.Y));
 
         BuildFroxelPrimitiveTable(frame);
         BuildFieldInstanceTable(frame);
@@ -1122,9 +1120,7 @@ public sealed class D3D11Renderer : IAquariumRenderer
         float BloomVeilIntensity,
         float MediumCompositeIntensity,
         float MediumDebugStep,
-        float Padding0,
-        float Padding1,
-        float Padding2);
+        float4 CursorWorlds);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
 

@@ -28,6 +28,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MediumFroxelAtlasRows = 4;
     private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
     private const int ViewFroxelPrimitiveSlotCount = 2;
+    private const int CursorPrimitiveId = PlanetCount + 1;
     private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
@@ -37,6 +38,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
     private const float SunRadius = 1.12f;
+    private const float CursorBodyRadius = 0.56f;
+    private const float CursorBodyBoundRadius = 0.74f;
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";
@@ -129,6 +132,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private int frameIndex;
     private Vector3 previousCameraPosition;
     private Vector2 previousGridCenter;
+    private Vector2 previousCursorWorld;
     private float previousGridRadius = 0.001f;
     private float previousTimeSeconds;
     private GridHeightBrushConstants gridHeightBrushConstants;
@@ -302,6 +306,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             previousCameraPosition = frame.CameraPosition;
             previousGridCenter = frame.Grid.Center;
+            previousCursorWorld = frame.CursorWorld;
             previousGridRadius = frame.Grid.Radius;
             previousTimeSeconds = frame.TimeSeconds;
         }
@@ -329,7 +334,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             settings.BloomVeilIntensity,
             settings.MediumCompositeIntensity,
             settings.MediumDebugStep,
-            Vector3.Zero));
+            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
@@ -429,6 +434,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ReportCapacityOncePerSecond(frame.TimeSeconds, frameResources);
         previousCameraPosition = frame.CameraPosition;
         previousGridCenter = frame.Grid.Center;
+        previousCursorWorld = frame.CursorWorld;
         previousGridRadius = frame.Grid.Radius;
         previousTimeSeconds = frame.TimeSeconds;
         hasPresentedReadyFrame = true;
@@ -1229,6 +1235,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             var radius = PlanetRadius(i);
             AddPrimitiveToFroxels(frame, i + 1, PlanetCenter(i, frame.TimeSeconds, radius), radius * 1.16f);
         }
+
+        AddPrimitiveToFroxels(frame, CursorPrimitiveId, CursorCenter(frame), CursorBodyBoundRadius);
     }
 
     private void AddPrimitiveToFroxels(AquariumFrame frame, int primitiveId, Vector3 center, float boundRadius)
@@ -2050,6 +2058,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return Lerp(0.34f, 0.62f, Hash21(index, 19.7f));
     }
 
+    private static Vector3 CursorCenter(AquariumFrame frame)
+    {
+        return new Vector3(frame.CursorWorld.X, frame.CursorWorld.Y, CursorBodyRadius);
+    }
+
     private static Vector3 PlanetCenter(int index, float timeSeconds, float radius)
     {
         var f = (float)index;
@@ -2107,7 +2120,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float BloomVeilIntensity,
         float MediumCompositeIntensity,
         float MediumDebugStep,
-        Vector3 PresentationPadding);
+        Vector4 CursorWorlds);
 
     [StructLayout(LayoutKind.Sequential)]
     private record struct GridHeightBrushConstants(

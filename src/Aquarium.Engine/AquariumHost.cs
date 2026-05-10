@@ -3,6 +3,7 @@ using Aquarium.Engine.Input;
 using Aquarium.Engine.Live;
 using Aquarium.Engine.Platform;
 using Aquarium.Engine.Render;
+using System.Numerics;
 
 namespace Aquarium.Engine;
 
@@ -57,7 +58,16 @@ public static class AquariumHost
                 renderer.ApplyGraphicsSettings(settingsRuntime.GraphicsSettings);
             }
 
-            renderer.Render(runtimeLoader.Runtime.Frame, window.ClientWidth, window.ClientHeight);
+            var renderFrame = runtimeLoader.Runtime.Frame with
+            {
+                CursorWorld = ProjectMouseToGridPlane(
+                    input.MousePosition,
+                    window.ClientWidth,
+                    window.ClientHeight,
+                    runtimeLoader.Runtime.Frame.CameraPosition,
+                    runtimeLoader.Runtime.Frame.Grid.Center),
+            };
+            renderer.Render(renderFrame, window.ClientWidth, window.ClientHeight);
             if (!runtime.Options.Headless && !renderer.HasPresentedReadyFrame)
             {
                 window.PaintSplash("Aquarium", "Compiling renderer pipelines");
@@ -207,6 +217,43 @@ public static class AquariumHost
         {
             runtime.GraphicsSettings = settings;
         }
+    }
+
+    private static Vector2 ProjectMouseToGridPlane(Vector2 mousePosition, int width, int height, Vector3 cameraPosition, Vector2 gridCenter)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return gridCenter;
+        }
+
+        var pixel = new Vector2(
+            Math.Clamp(mousePosition.X, 0.0f, MathF.Max(width - 1.0f, 0.0f)),
+            MathF.Max(height, 1.0f) - Math.Clamp(mousePosition.Y, 0.0f, MathF.Max(height - 1.0f, 0.0f)));
+        var rayDirection = RayDirectionForPixel(pixel, width, height, cameraPosition, gridCenter);
+        if (MathF.Abs(rayDirection.Z) < 0.0001f)
+        {
+            return gridCenter;
+        }
+
+        var travel = -cameraPosition.Z / rayDirection.Z;
+        if (travel <= 0.0f || !float.IsFinite(travel))
+        {
+            return gridCenter;
+        }
+
+        var world = cameraPosition + rayDirection * travel;
+        return new Vector2(world.X, world.Y);
+    }
+
+    private static Vector3 RayDirectionForPixel(Vector2 pixel, int width, int height, Vector3 cameraPosition, Vector2 gridCenter)
+    {
+        var resolution = new Vector2(width, height);
+        var ndc = ((pixel * 2.0f) - resolution) / MathF.Max(height, 1.0f);
+        var target = new Vector3(gridCenter.X, gridCenter.Y, 0.0f);
+        var forward = Vector3.Normalize(target - cameraPosition);
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
+        var up = Vector3.Cross(right, forward);
+        return Vector3.Normalize(forward * 1.6f + right * ndc.X + up * ndc.Y);
     }
 
     private static void ApplyRendererDebugInput(IAquariumRenderer renderer, InputState input)

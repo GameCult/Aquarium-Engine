@@ -19,7 +19,7 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
     float mediumDebugStep;
-    float3 presentationPadding;
+    float4 cursorWorlds;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
@@ -33,7 +33,11 @@ static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_GRID = 4.0;
+static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
+static const int CURSOR_PRIMITIVE_ID = PLANET_COUNT + 1;
+static const float CURSOR_RADIUS = 0.56;
+static const float CURSOR_BOUND_RADIUS = 0.74;
 static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
 static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
 static const int MEDIUM_FROXEL_DOWNSCALE = 8;
@@ -256,6 +260,76 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
     return travel >= intervalStart && travel <= intervalEnd;
 }
 
+float superFormulaRadius(float angle, float m, float n1, float n2, float n3)
+{
+    float c = abs(cos(m * angle * 0.25));
+    float s = abs(sin(m * angle * 0.25));
+    return pow(pow(c, n2) + pow(s, n3), -1.0 / n1);
+}
+
+float cursorSuperFormulaSdf(float3 p)
+{
+    float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
+    float3 local = (p - center) / CURSOR_RADIUS;
+    float distanceFromCenter = max(length(local), 0.0001);
+    float theta = atan2(local.y, local.x);
+    float phi = asin(clamp(local.z / distanceFromCenter, -1.0, 1.0));
+    float radiusTheta = superFormulaRadius(theta, 7.0, 0.34, 1.7, 1.7);
+    float radiusPhi = superFormulaRadius(phi, 5.0, 0.42, 1.35, 1.35);
+    float surfaceRadius = saturate(radiusTheta * radiusPhi) * 0.72 + 0.28;
+    return (distanceFromCenter - surfaceRadius) * CURSOR_RADIUS;
+}
+
+float3 cursorSuperFormulaNormal(float3 p)
+{
+    float epsilon = 0.006;
+    float dx = cursorSuperFormulaSdf(p + float3(epsilon, 0.0, 0.0)) - cursorSuperFormulaSdf(p - float3(epsilon, 0.0, 0.0));
+    float dy = cursorSuperFormulaSdf(p + float3(0.0, epsilon, 0.0)) - cursorSuperFormulaSdf(p - float3(0.0, epsilon, 0.0));
+    float dz = cursorSuperFormulaSdf(p + float3(0.0, 0.0, epsilon)) - cursorSuperFormulaSdf(p - float3(0.0, 0.0, epsilon));
+    return normalize(float3(dx, dy, dz));
+}
+
+bool traceCursorSuperFormula(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float travel, out float3 normal)
+{
+    float sphereTravel;
+    float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
+    if (!traceSphere(origin, direction, center, CURSOR_BOUND_RADIUS, sphereTravel))
+    {
+        travel = farDistance + 1.0;
+        normal = 0.0;
+        return false;
+    }
+
+    float3 oc = origin - center;
+    float b = dot(oc, direction);
+    float c = dot(oc, oc) - CURSOR_BOUND_RADIUS * CURSOR_BOUND_RADIUS;
+    float h = sqrt(max(b * b - c, 0.0));
+    float startTravel = max(max(-b - h, intervalStart), 0.0);
+    float endTravel = min(-b + h, intervalEnd);
+    travel = startTravel;
+    normal = 0.0;
+    [loop]
+    for (int stepIndex = 0; stepIndex < 48; stepIndex++)
+    {
+        if (travel > endTravel)
+        {
+            return false;
+        }
+
+        float3 p = origin + direction * travel;
+        float distanceValue = cursorSuperFormulaSdf(p);
+        if (abs(distanceValue) < max(0.0025, travel * 0.00025))
+        {
+            normal = cursorSuperFormulaNormal(p);
+            return true;
+        }
+
+        travel += max(abs(distanceValue) * 0.72, 0.004);
+    }
+
+    return false;
+}
+
 float3 primitiveCenterAt(int primitiveId, float sampleTime)
 {
     if (primitiveId == 0)
@@ -263,22 +337,42 @@ float3 primitiveCenterAt(int primitiveId, float sampleTime)
         return float3(0.0, 0.0, 2.2);
     }
 
+    if (primitiveId == CURSOR_PRIMITIVE_ID)
+    {
+        return float3(cursorWorlds.xy, CURSOR_RADIUS);
+    }
+
     return planetCenterAt(primitiveId - 1, sampleTime);
 }
 
 float primitiveRadius(int primitiveId)
 {
-    return primitiveId == 0 ? SUN_RADIUS : planetRadius(primitiveId - 1);
+    if (primitiveId == 0)
+    {
+        return SUN_RADIUS;
+    }
+
+    if (primitiveId == CURSOR_PRIMITIVE_ID)
+    {
+        return CURSOR_BOUND_RADIUS;
+    }
+
+    return planetRadius(primitiveId - 1);
 }
 
 float primitiveFieldId(int primitiveId)
 {
+    if (primitiveId == CURSOR_PRIMITIVE_ID)
+    {
+        return FIELD_ID_CURSOR;
+    }
+
     return primitiveId == 0 ? FIELD_ID_SELF : FIELD_ID_PLANET_BASE + (float)(primitiveId - 1);
 }
 
 void considerPrimitiveHit(float3 origin, float3 direction, int primitiveId, float intervalStart, float intervalEnd, inout SolidHit nearest)
 {
-    if (primitiveId < 0)
+    if (primitiveId < 0 || primitiveId == CURSOR_PRIMITIVE_ID)
     {
         return;
     }
@@ -308,10 +402,28 @@ void considerFroxelPrimitiveHits(float3 origin, float3 direction, int froxelInde
     for (int slot = 0; slot < VIEW_FROXEL_PRIMITIVE_SLOT_COUNT; slot++)
     {
         int4 ids = froxelPrimitiveIds[froxelIndex * VIEW_FROXEL_PRIMITIVE_SLOT_COUNT + slot];
+        bool hasCursor =
+            ids.x == CURSOR_PRIMITIVE_ID ||
+            ids.y == CURSOR_PRIMITIVE_ID ||
+            ids.z == CURSOR_PRIMITIVE_ID ||
+            ids.w == CURSOR_PRIMITIVE_ID;
         considerPrimitiveHit(origin, direction, ids.x, intervalStart, intervalEnd, nearest);
         considerPrimitiveHit(origin, direction, ids.y, intervalStart, intervalEnd, nearest);
         considerPrimitiveHit(origin, direction, ids.z, intervalStart, intervalEnd, nearest);
         considerPrimitiveHit(origin, direction, ids.w, intervalStart, intervalEnd, nearest);
+        if (hasCursor)
+        {
+            float hitTravel;
+            float3 hitNormal;
+            if (traceCursorSuperFormula(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
+            {
+                nearest.hit = true;
+                nearest.travel = hitTravel;
+                nearest.normal = hitNormal;
+                nearest.fieldId = FIELD_ID_CURSOR;
+                nearest.primitiveId = CURSOR_PRIMITIVE_ID;
+            }
+        }
     }
 }
 
@@ -594,6 +706,13 @@ float3 shadeBody(float3 p, float3 normal, int primitiveId)
     if (primitiveId == 0)
     {
         return float3(10.0, 8.7, 4.2);
+    }
+
+    if (primitiveId == CURSOR_PRIMITIVE_ID)
+    {
+        float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.4);
+        float light = 0.18 + saturate(dot(normal, lightDirection)) * 1.45;
+        return float3(0.38, 0.92, 1.0) * light + float3(0.90, 0.78, 1.0) * rim * 0.65;
     }
 
     float hue = hash21(float2(primitiveId, 6.3));

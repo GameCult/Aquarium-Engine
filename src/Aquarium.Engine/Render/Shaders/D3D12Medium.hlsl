@@ -19,7 +19,7 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
     float mediumDebugStep;
-    float3 presentationPadding;
+    float4 cursorWorlds;
 };
 
 struct FieldInstance
