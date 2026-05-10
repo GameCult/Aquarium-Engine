@@ -260,41 +260,22 @@ bool traceSphereInInterval(float3 origin, float3 direction, float3 center, float
     return travel >= intervalStart && travel <= intervalEnd;
 }
 
-float smootherstep(float t)
-{
-    float x = saturate(t);
-    return x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
-}
-
 float cursorLocatorProfileRadius(float z)
 {
     static const float ContactZ = -1.0;
-    static const float BellyZ = -0.42;
-    static const float NeckZ = 0.18;
-    static const float TipZ = 0.95;
-    static const float BellyRadius = 0.26;
-    static const float NeckRadius = 0.055;
+    static const float TipZ = 1.15;
+    static const float PeakRadius = 0.39;
+    static const float Normalization = 6.75;
 
-    if (z < BellyZ)
-    {
-        float t = (z - ContactZ) / (BellyZ - ContactZ);
-        return BellyRadius * smootherstep(t);
-    }
-
-    if (z < NeckZ)
-    {
-        float t = (z - BellyZ) / (NeckZ - BellyZ);
-        return lerp(BellyRadius, NeckRadius, smootherstep(t));
-    }
-
-    float t = (z - NeckZ) / (TipZ - NeckZ);
-    return NeckRadius * (1.0 - smootherstep(t));
+    float u = saturate((z - ContactZ) / (TipZ - ContactZ));
+    float top = 1.0 - u;
+    return PeakRadius * Normalization * u * top * top;
 }
 
 float cursorLocatorSdf(float3 p)
 {
     static const float ContactZ = -1.0;
-    static const float TipZ = 0.95;
+    static const float TipZ = 1.15;
 
     float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
     float3 local = (p - center) / CURSOR_RADIUS;

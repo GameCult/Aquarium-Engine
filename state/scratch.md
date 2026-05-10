@@ -71,17 +71,18 @@ reusing field identity/travel/control.
   state explicitly moves them.
 - Cursor locator SDF: `AquariumFrame` carries the mouse cursor projected onto
   the Grid XY plane. D3D12 bins a cursor primitive into the existing view-froxel
-  solid table and traces it as a small droplet/needle locator: local `z = -1`
-  kisses the Grid plane, the modest belly peaks near local `z = -0.42`, and the
-  upper needle ends at local `z = 0.95`. Shader and CPU froxel bounds must stay
-  matched (`0.72` currently) or candidate discovery clips the cursor. Frame
-  constants pack current and previous cursor world anchors so the TAA resolve
-  can reproject cursor hits with object motion instead of camera-only motion.
-  Keep heavy SDF evaluators outside generic packed-id hit helpers, and keep this
-  profile analytic/cheap: sampled profile-segment distance, numeric slope
-  probing, and fractional `pow` all stalled D3D12 pipeline compilation. The
-  earlier spinning-top profile read as a space station or candle flame; keep it
-  as evidence, not live cursor doctrine.
+  solid table and traces it as an asymmetric teardrop lobe: local `z = -1`
+  kisses the Grid plane, local `z = 1.15` is the top tip, and radius follows
+  normalized `u * (1 - u)^2` so the mass is biased downward instead of reading
+  as a sunflower seed. Shader and CPU froxel bounds must stay matched (`0.72`
+  currently) or candidate discovery clips the cursor. Frame constants pack
+  current and previous cursor world anchors so the TAA resolve can reproject
+  cursor hits with object motion instead of camera-only motion. Keep heavy SDF
+  evaluators outside generic packed-id hit helpers, and keep this profile
+  analytic/cheap: sampled profile-segment distance, numeric slope probing, and
+  fractional `pow` all stalled D3D12 pipeline compilation. The earlier
+  spinning-top profile read as a space station or candle flame; keep it as
+  evidence, not live cursor doctrine.
 
 ## Hot Context
 
