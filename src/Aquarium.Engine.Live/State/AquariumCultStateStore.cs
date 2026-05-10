@@ -92,6 +92,10 @@ public sealed class AquariumCultStateStore : IDisposable
         state.BloomVeilIntensity = normalized.BloomVeilIntensity;
         state.MediumCompositeIntensity = normalized.MediumCompositeIntensity;
         state.MediumDebugStep = normalized.MediumDebugStep;
+        state.MediumFogDensity = normalized.MediumFogDensity;
+        state.MediumFogHeightFalloff = normalized.MediumFogHeightFalloff;
+        state.MediumNoiseScale = normalized.MediumNoiseScale;
+        state.MediumNoiseContrast = normalized.MediumNoiseContrast;
         state.SaveGeneration++;
         cache.AddAsync(state, new CultRecordHandle<AquariumGraphicsSettingsState>(GraphicsSettingsKey)).GetAwaiter().GetResult();
         backingStore.PushAll();

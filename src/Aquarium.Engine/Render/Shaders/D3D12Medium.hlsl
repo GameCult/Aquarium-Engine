@@ -19,6 +19,10 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
     float mediumDebugStep;
+    float mediumFogDensity;
+    float mediumFogHeightFalloff;
+    float mediumNoiseScale;
+    float mediumNoiseContrast;
     float4 cursorWorlds;
 };
 
@@ -232,7 +236,8 @@ float gridFogDensity(float3 p)
         return 0.0;
     }
 
-    float3 domain = float3(p.xy - gridCenter, p.z * 1.7) * 0.18;
+    float noiseScale = max(mediumNoiseScale, 0.001);
+    float3 domain = float3(p.xy - gridCenter, p.z * 1.7) * (0.18 * noiseScale);
     float3 flow = float3(0.11, -0.07, 0.05) * timeSeconds;
     float3 warp = float3(
         triNoise3d(domain + flow + 13.1),
@@ -249,16 +254,18 @@ float gridFogDensity(float3 p)
     float textureWeight = saturate(0.34 + billow * 1.44);
     float deepening = 1.0 - exp(-max(depthBelowGrid, 0.0) * 1.45);
     float strata = lerp(0.78, 1.28, triNoise3d(float3(domain.xy * 0.48, p.z * 0.22) + flow.zxy * 0.5));
-    return saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * lerp(0.58, 1.82, textureWeight) * strata);
+    float detail = lerp(1.0, lerp(0.58, 1.82, textureWeight) * strata, mediumNoiseContrast);
+    return saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening) * detail);
 }
 
 float globalFogDensity(float3 p)
 {
-    float upwardDecay = exp(-max(p.z, 0.0) * 0.16);
+    float upwardDecay = exp(-max(p.z, 0.0) * max(mediumFogHeightFalloff, 0.0));
     float belowGridLift = lerp(1.0, 1.42, saturate(-p.z * 0.035));
-    float3 domain = float3((p.xy - gridCenter) * 0.045, p.z * 0.065);
+    float noiseScale = max(mediumNoiseScale, 0.001);
+    float3 domain = float3((p.xy - gridCenter) * 0.045, p.z * 0.065) * noiseScale;
     float slow = triNoise3d(domain + float3(0.018, -0.011, 0.006) * timeSeconds);
-    float breakup = lerp(0.72, 1.18, slow);
+    float breakup = lerp(1.0, lerp(0.72, 1.18, slow), mediumNoiseContrast);
     return GLOBAL_FOG_DENSITY * upwardDecay * belowGridLift * breakup;
 }
 
@@ -270,7 +277,7 @@ float gridFogExtinctionApprox(float3 p)
     float depthRamp = smoothstep(0.035, 0.72, depthBelowGrid);
     float deepening = 1.0 - exp(-max(depthBelowGrid, 0.0) * 1.45);
     float gridDensity = saturate(radialFade * depthRamp * lerp(0.42, 1.0, deepening));
-    return gridDensity + globalFogDensity(p) * (GLOBAL_FOG_EXTINCTION / GRID_FOG_EXTINCTION);
+    return (gridDensity + globalFogDensity(p) * (GLOBAL_FOG_EXTINCTION / GRID_FOG_EXTINCTION)) * mediumFogDensity;
 }
 
 float2 rotate2(float2 value, float angle)
@@ -334,6 +341,9 @@ void registeredMediumCoefficients(float3 p, out float density, out float sigmaT,
         sigmaS += fieldSigmaT * fieldAlbedo;
     }
 
+    density *= mediumFogDensity;
+    sigmaT *= mediumFogDensity;
+    sigmaS *= mediumFogDensity;
     density = saturate(density);
     sigmaT = max(sigmaT, 0.0);
     sigmaS = min(max(sigmaS, 0.0), sigmaT);

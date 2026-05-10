@@ -34,6 +34,18 @@ public sealed class AquariumGraphicsSettingsState
     [Key(7)]
     public long SaveGeneration { get; set; }
 
+    [Key(8)]
+    public float MediumFogDensity { get; set; } = GraphicsSettings.Default.MediumFogDensity;
+
+    [Key(9)]
+    public float MediumFogHeightFalloff { get; set; } = GraphicsSettings.Default.MediumFogHeightFalloff;
+
+    [Key(10)]
+    public float MediumNoiseScale { get; set; } = GraphicsSettings.Default.MediumNoiseScale;
+
+    [Key(11)]
+    public float MediumNoiseContrast { get; set; } = GraphicsSettings.Default.MediumNoiseContrast;
+
     public static AquariumGraphicsSettingsState FromSettings(GraphicsSettings settings)
     {
         var normalized = settings.Normalized();
@@ -44,12 +56,26 @@ public sealed class AquariumGraphicsSettingsState
             BloomIntensity = normalized.BloomIntensity,
             BloomVeilIntensity = normalized.BloomVeilIntensity,
             MediumCompositeIntensity = normalized.MediumCompositeIntensity,
-            MediumDebugStep = normalized.MediumDebugStep
+            MediumDebugStep = normalized.MediumDebugStep,
+            MediumFogDensity = normalized.MediumFogDensity,
+            MediumFogHeightFalloff = normalized.MediumFogHeightFalloff,
+            MediumNoiseScale = normalized.MediumNoiseScale,
+            MediumNoiseContrast = normalized.MediumNoiseContrast
         };
     }
 
     public GraphicsSettings ToSettings()
     {
-        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity, MediumDebugStep).Normalized();
+        return new GraphicsSettings(
+            RenderDebugMode,
+            SceneExposure,
+            BloomIntensity,
+            BloomVeilIntensity,
+            MediumCompositeIntensity,
+            MediumDebugStep,
+            MediumFogDensity,
+            MediumFogHeightFalloff,
+            MediumNoiseScale,
+            MediumNoiseContrast).Normalized();
     }
 }

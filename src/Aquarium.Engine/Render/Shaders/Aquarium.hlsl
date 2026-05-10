@@ -19,6 +19,10 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
     float mediumDebugStep;
+    float mediumFogDensity;
+    float mediumFogHeightFalloff;
+    float mediumNoiseScale;
+    float mediumNoiseContrast;
     float4 cursorWorlds;
 };
 

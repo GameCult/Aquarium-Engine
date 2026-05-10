@@ -558,3 +558,10 @@ reusing field identity/travel/control.
   before applying froxel transmittance/scattering. Miss rays now see a dim
   teal/blue sky radiance with sparse stars instead of a black void; this is
   background radiance only and must not become ambient lighting for surfaces.
+- D3D12 medium debug knobs: persisted GraphicsSettings now expose Medium
+  sliders for Fog Density, Fog Falloff, Noise Scale, and Noise Contrast. Append
+  new CultCache fields after existing MessagePack/Cult schema slots; moving
+  `SaveGeneration` from key 7 broke persisted graphics-settings compatibility,
+  and the schema guardrails correctly rejected it. These knobs feed the D3D12
+  frame constants and modulate D3D12Medium/Post coefficient debug plus D3D12Scene
+  per-pixel medium detail.

@@ -19,6 +19,10 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float mediumCompositeIntensity;
     float mediumDebugStep;
+    float mediumFogDensity;
+    float mediumFogHeightFalloff;
+    float mediumNoiseScale;
+    float mediumNoiseContrast;
     float4 cursorWorlds;
 };
 
@@ -193,7 +197,8 @@ float triNoise3d(float3 p)
 
 float mediumRayDetail(float3 p)
 {
-    float3 domain = float3(p.xy - gridCenter, p.z * 1.55) * 0.145;
+    float noiseScale = max(mediumNoiseScale, 0.001);
+    float3 domain = float3(p.xy - gridCenter, p.z * 1.55) * (0.145 * noiseScale);
     float3 flow = float3(0.10, -0.075, 0.045) * timeSeconds;
     float3 warp = float3(
         triNoise3d(domain + flow + 4.1),
@@ -209,7 +214,7 @@ float mediumRayDetail(float3 p)
     float textureWeight = saturate(0.30 + low * 0.88 + filament * 0.72 - high * 0.18);
     float veil = lerp(0.60, 1.85, textureWeight);
     float strata = lerp(0.82, 1.24, triNoise3d(float3(domain.xy * 0.42, p.z * 0.18) - flow.zxy * 0.45));
-    return veil * strata;
+    return lerp(1.0, veil * strata, mediumNoiseContrast);
 }
 
 float3 skyRadiance(float3 rayDirection)

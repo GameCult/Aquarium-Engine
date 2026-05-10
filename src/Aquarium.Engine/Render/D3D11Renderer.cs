@@ -274,7 +274,7 @@ public sealed class D3D11Renderer : IAquariumRenderer
             MaxLOD = float.MaxValue,
         });
         frameConstantBuffer = device.CreateBuffer(
-            112,
+            128,
             BindFlags.ConstantBuffer,
             ResourceUsage.Default,
             CpuAccessFlags.None,
@@ -343,6 +343,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
             BloomVeilIntensity,
             MediumCompositeIntensity,
             MediumDebugStep,
+            MediumFogDensity,
+            MediumFogHeightFalloff,
+            MediumNoiseScale,
+            MediumNoiseContrast,
             new float4(frame.CursorWorld.X, frame.CursorWorld.Y, frame.CursorWorld.X, frame.CursorWorld.Y));
 
         BuildFroxelPrimitiveTable(frame);
@@ -392,6 +396,14 @@ public sealed class D3D11Renderer : IAquariumRenderer
 
     public int MediumDebugStep { get; set; } = GraphicsSettings.Default.MediumDebugStep;
 
+    public float MediumFogDensity { get; set; } = GraphicsSettings.Default.MediumFogDensity;
+
+    public float MediumFogHeightFalloff { get; set; } = GraphicsSettings.Default.MediumFogHeightFalloff;
+
+    public float MediumNoiseScale { get; set; } = GraphicsSettings.Default.MediumNoiseScale;
+
+    public float MediumNoiseContrast { get; set; } = GraphicsSettings.Default.MediumNoiseContrast;
+
     public bool DebugUiVisible
     {
         get => debugUi.IsVisible;
@@ -412,7 +424,17 @@ public sealed class D3D11Renderer : IAquariumRenderer
 
     public GraphicsSettings CaptureGraphicsSettings()
     {
-        return new GraphicsSettings(RenderDebugMode, SceneExposure, BloomIntensity, BloomVeilIntensity, MediumCompositeIntensity, MediumDebugStep).Normalized();
+        return new GraphicsSettings(
+            RenderDebugMode,
+            SceneExposure,
+            BloomIntensity,
+            BloomVeilIntensity,
+            MediumCompositeIntensity,
+            MediumDebugStep,
+            MediumFogDensity,
+            MediumFogHeightFalloff,
+            MediumNoiseScale,
+            MediumNoiseContrast).Normalized();
     }
 
     public void ApplyGraphicsSettings(GraphicsSettings settings)
@@ -424,6 +446,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
         BloomVeilIntensity = normalized.BloomVeilIntensity;
         MediumCompositeIntensity = normalized.MediumCompositeIntensity;
         MediumDebugStep = normalized.MediumDebugStep;
+        MediumFogDensity = normalized.MediumFogDensity;
+        MediumFogHeightFalloff = normalized.MediumFogHeightFalloff;
+        MediumNoiseScale = normalized.MediumNoiseScale;
+        MediumNoiseContrast = normalized.MediumNoiseContrast;
     }
 
     private DebugUi CreateDebugUi()
@@ -439,6 +465,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
                 .Slider("Bloom Veil", () => BloomVeilIntensity, value => BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.")
                 .Section("Medium")
                 .Slider("Composite", () => MediumCompositeIntensity, value => MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene.")
+                .Slider("Fog Density", () => MediumFogDensity, value => MediumFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity), GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity, "0.###", "Scales registered medium density/extinction for diagnosis.")
+                .Slider("Fog Falloff", () => MediumFogHeightFalloff, value => MediumFogHeightFalloff = Math.Clamp(value, GraphicsSettings.MinMediumFogHeightFalloff, GraphicsSettings.MaxMediumFogHeightFalloff), GraphicsSettings.MinMediumFogHeightFalloff, GraphicsSettings.MaxMediumFogHeightFalloff, "0.###", "Global fog exponential decay along world Z+.")
+                .Slider("Noise Scale", () => MediumNoiseScale, value => MediumNoiseScale = Math.Clamp(value, GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale), GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale, "0.###", "World-space procedural medium noise frequency.")
+                .Slider("Noise Contrast", () => MediumNoiseContrast, value => MediumNoiseContrast = Math.Clamp(value, GraphicsSettings.MinMediumNoiseContrast, GraphicsSettings.MaxMediumNoiseContrast), GraphicsSettings.MinMediumNoiseContrast, GraphicsSettings.MaxMediumNoiseContrast, "0.###", "How aggressively procedural noise modulates visible density.")
                 .Slider("Ray Step", () => MediumDebugStep, value => MediumDebugStep = Math.Clamp(value, GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep), GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep, "Selects the medium raymarch sample shown by ray debug views.", () => RenderDebugMode is 9 or 10));
     }
 
@@ -1122,6 +1152,10 @@ public sealed class D3D11Renderer : IAquariumRenderer
         float BloomVeilIntensity,
         float MediumCompositeIntensity,
         float MediumDebugStep,
+        float MediumFogDensity,
+        float MediumFogHeightFalloff,
+        float MediumNoiseScale,
+        float MediumNoiseContrast,
         float4 CursorWorlds);
 
     private readonly record struct FroxelCell(int X, int Y, int Z);
