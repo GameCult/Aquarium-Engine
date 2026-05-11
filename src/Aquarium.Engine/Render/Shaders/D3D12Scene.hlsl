@@ -307,21 +307,30 @@ float sdSuperellipsoid(float3 p, float3 scale, float exponent)
     return (value - 1.0) * min(scale.x, min(scale.y, scale.z));
 }
 
+float sdEllipsoid(float3 p, float3 radius)
+{
+    float3 safeRadius = max(radius, 0.001);
+    float k0 = length(p / safeRadius);
+    float k1 = length(p / (safeRadius * safeRadius));
+    return k0 * (k0 - 1.0) / max(k1, 0.001);
+}
+
 float smoothUnion(float a, float b, float radius)
 {
     float h = saturate(0.5 + 0.5 * (b - a) / radius);
     return lerp(b, a, h) - radius * h * (1.0 - h);
 }
 
-float harmonic5(float2 direction, float phase)
+float imaginationPetalSdf(float3 local, float angle, float activity, float heartbeat)
 {
-    float x = direction.x;
-    float y = direction.y;
-    float x2 = x * x;
-    float y2 = y * y;
-    float cos5 = x * (x2 * x2 - 10.0 * x2 * y2 + 5.0 * y2 * y2);
-    float sin5 = y * (5.0 * x2 * x2 - 10.0 * x2 * y2 + y2 * y2);
-    return cos5 * cos(phase) + sin5 * sin(phase);
+    float2 radial = float2(cos(angle), sin(angle));
+    float2 tangent = float2(-radial.y, radial.x);
+    float phase = timeSeconds * 1.15 + angle * 1.7 + heartbeat * 6.28318;
+    float3 petalCenter = float3(radial * (0.24 + activity * 0.08), 0.03 * sin(phase));
+    float3 p = local - petalCenter;
+    float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
+    float3 petalRadius = float3(0.44 + activity * 0.05, 0.20, 0.58 + 0.06 * sin(phase));
+    return sdEllipsoid(q, petalRadius);
 }
 
 AgentSurface agentBodySdf(float3 local, AgentVisual agent)
@@ -345,18 +354,24 @@ AgentSurface agentImaginationSdf(float3 local, AgentVisual agent)
 {
     float activity = agent.state.x;
     float heartbeat = agent.state.y;
-    float radial = max(length(local.xy), 0.0001);
-    float2 direction = local.xy / radial;
-    float lobeWave = harmonic5(direction, timeSeconds * 1.7);
-    float verticalWave = sin(local.z * 7.0 + heartbeat * 6.28318);
-    float polar = 0.58 + lobeWave * (0.07 + activity * 0.09);
-    float lobe = length(local) - polar * (1.0 + 0.06 * verticalWave);
+    float core = sdSuperellipsoid(local, float3(0.48 + activity * 0.08, 0.48 + activity * 0.08, 0.54), 1.18);
+    float phase = timeSeconds * 0.42;
+    float petal0 = imaginationPetalSdf(local, phase, activity, heartbeat);
+    float petal1 = imaginationPetalSdf(local, phase + 1.2566371, activity, heartbeat);
+    float petal2 = imaginationPetalSdf(local, phase + 2.5132741, activity, heartbeat);
+    float petal3 = imaginationPetalSdf(local, phase + 3.7699112, activity, heartbeat);
+    float petal4 = imaginationPetalSdf(local, phase + 5.0265482, activity, heartbeat);
+    float bloom = smoothUnion(core, petal0, 0.18);
+    bloom = smoothUnion(bloom, petal1, 0.18);
+    bloom = smoothUnion(bloom, petal2, 0.18);
+    bloom = smoothUnion(bloom, petal3, 0.18);
+    bloom = smoothUnion(bloom, petal4, 0.18);
     float ring = sdTorus(local, float2(0.72 + activity * 0.08, 0.032));
     float halo = sdTorus(local.zxy, float2(0.50, 0.024));
     float detail = min(ring, halo);
     AgentSurface surface;
-    surface.distanceValue = smoothUnion(lobe, detail, 0.035);
-    surface.materialId = lobe <= detail ? 2.0 : 2.4;
+    surface.distanceValue = smoothUnion(bloom, detail, 0.035);
+    surface.materialId = bloom <= detail ? 2.0 : 2.4;
     surface.costTier = 2.0;
     return surface;
 }
