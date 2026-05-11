@@ -1,3 +1,15 @@
+#ifndef BODY_TRACE_STEPS
+#define BODY_TRACE_STEPS 128
+#endif
+
+#ifndef BODY_TRACE_STEP_SCALE
+#define BODY_TRACE_STEP_SCALE 0.055
+#endif
+
+#ifndef BODY_TRACE_MIN_STEP
+#define BODY_TRACE_MIN_STEP 0.0009
+#endif
+
 float3 bodyNormal(float3 p, int agentIndex)
 {
     float epsilon = 0.006;
@@ -30,7 +42,7 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
     surface = bodySurface(origin + direction * travel, agentIndex);
 
     [loop]
-    for (int stepIndex = 0; stepIndex < 72; stepIndex++)
+    for (int stepIndex = 0; stepIndex < BODY_TRACE_STEPS; stepIndex++)
     {
         if (travel > endTravel)
         {
@@ -40,13 +52,13 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
         float3 p = origin + direction * travel;
         surface = bodySurface(p, agentIndex);
         stepCount = (float)(stepIndex + 1);
-        if (abs(surface.distanceValue) < max(0.0016, travel * 0.00018))
+        if (abs(surface.distanceValue) < max(BODY_TRACE_MIN_STEP, travel * 0.00018))
         {
             normal = bodyNormal(p, agentIndex);
             return true;
         }
 
-        travel += max(abs(surface.distanceValue) * 0.12, 0.0016);
+        travel += max(abs(surface.distanceValue) * BODY_TRACE_STEP_SCALE, BODY_TRACE_MIN_STEP);
     }
 
     return false;
@@ -72,7 +84,7 @@ SceneOut D3D12BodyProxyPS(AgentProxyVertexOut input)
     SceneOut output;
     output.colorTravel = float4(shadeBody(uv, travel, p, normal, agentIndex, surface), min(travel, farDistance + 1.0));
     output.metadata = float4(surface.fieldId, normal);
-    output.control = float4(surface.materialId, 1.0, stepCount / 72.0, surface.lodTier + surface.costTier * 0.1);
+    output.control = float4(surface.materialId, 1.0, stepCount / (float)BODY_TRACE_STEPS, surface.lodTier + surface.costTier * 0.1);
     output.eventColor = float4(0.0, 0.0, 0.0, 0.0);
     output.eventMetadata = float4(FIELD_ID_GRID, farDistance + 1.0, 0.0, 0.0);
     output.depth = saturate(travel / max(farDistance, 0.001));

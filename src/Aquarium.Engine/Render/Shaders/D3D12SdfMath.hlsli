@@ -68,13 +68,13 @@ float sdHibiscusCursorPetal(float3 local, float angle, float timeSeconds)
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
     float phase = timeSeconds * 0.95 + angle * 1.7;
-    float3 center = float3(radial * 0.30, 0.12 + 0.030 * sin(phase));
+    float3 center = float3(radial * 0.36, 0.08 + 0.030 * sin(phase));
     float3 p = local - center;
     float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
     float flare = saturate((q.x + 0.28) * 1.25);
     float ruffle = 0.035 * sin(q.y * 28.0 + q.x * 7.0 + phase) * flare;
     float curl = 0.075 * sin(q.x * 3.8 + phase) * flare;
-    float petal = sdEllipsoid(q + float3(0.0, ruffle, curl), float3(0.80, 0.24, 0.30));
+    float petal = sdEllipsoid(q + float3(0.0, ruffle, curl), float3(0.86, 0.25, 0.24));
     return petal;
 }
 
@@ -86,18 +86,19 @@ float sdHibiscusCursor(float3 local, float timeSeconds)
     float petal2 = sdHibiscusCursorPetal(local, 5.42 + sway * 0.4, timeSeconds);
     float petals = min(petal0, min(petal1, petal2));
 
-    float throat = sdEllipsoid(local - float3(0.0, 0.0, -0.03), float3(0.34, 0.30, 0.22));
-    float column = sdCapsuleSegment(local, float3(0.02, 0.0, 0.06), float3(-0.22, 0.72, 0.58), 0.035);
-    float bead0 = sdSphere(local - float3(-0.31, 0.83, 0.64), 0.060);
-    float bead1 = sdSphere(local - float3(-0.18, 0.78, 0.68), 0.045);
-    float bead2 = sdSphere(local - float3(-0.38, 0.69, 0.60), 0.040);
-    float stamen = min(column, min(bead0, min(bead1, bead2)));
+    float throat = sdEllipsoid(local - float3(0.0, 0.0, -0.02), float3(0.38, 0.34, 0.20));
+    float column = sdCapsuleSegment(local, float3(0.0, 0.0, 0.02), float3(0.0, 0.0, 0.82), 0.055);
+    float bead0 = sdSphere(local - float3(0.00, 0.00, 0.88), 0.070);
+    float bead1 = sdSphere(local - float3(0.10, 0.02, 0.74), 0.050);
+    float bead2 = sdSphere(local - float3(-0.09, -0.03, 0.70), 0.046);
+    float bead3 = sdSphere(local - float3(0.04, -0.10, 0.78), 0.042);
+    float stamen = min(column, min(min(bead0, bead1), min(bead2, bead3)));
 
-    float calyx = sdEllipsoid(local - float3(0.0, 0.0, -0.78), float3(0.20, 0.18, 0.18));
-    float contactStem = sdCapsuleSegment(local, float3(0.0, 0.0, -1.0), float3(0.0, 0.0, -0.70), 0.030);
+    float calyx = sdEllipsoid(local - float3(0.0, 0.0, -0.70), float3(0.24, 0.22, 0.16));
+    float contactStem = sdCapsuleSegment(local, float3(0.0, 0.0, -1.0), float3(0.0, 0.0, -0.66), 0.038);
 
     float blossom = smoothUnion(petals, throat, 0.10);
-    blossom = smoothUnion(blossom, stamen, 0.045);
+    blossom = smoothUnion(blossom, stamen, 0.065);
     float base = smoothUnion(calyx, contactStem, 0.045);
     return smoothUnion(blossom, base, 0.070);
 }

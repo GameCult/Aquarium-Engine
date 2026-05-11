@@ -76,8 +76,8 @@ float3 cursorEmissionRadiance(float3 p, float3 normal)
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     float petal = 0.55 + 0.45 * cos(atan2(local.y, local.x) * 3.0 - timeSeconds * 1.8);
     float throat = exp(-dot(local.xy, local.xy) * 7.0) * smoothstep(0.30, -0.18, local.z);
-    float stamen = smoothstep(0.015, -0.035, sdCapsuleSegment(local, float3(0.02, 0.0, 0.06), float3(-0.22, 0.72, 0.58), 0.06));
-    float calyx = smoothstep(0.08, -0.02, sdEllipsoid(local - float3(0.0, 0.0, -0.78), float3(0.24, 0.22, 0.22)));
+    float stamen = smoothstep(0.018, -0.035, sdCapsuleSegment(local, float3(0.0, 0.0, 0.02), float3(0.0, 0.0, 0.82), 0.075));
+    float calyx = smoothstep(0.08, -0.02, sdEllipsoid(local - float3(0.0, 0.0, -0.70), float3(0.28, 0.26, 0.20)));
     float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.0);
     float3 petalColor = lerp(float3(1.25, 0.12, 0.56), float3(1.0, 0.42, 0.88), petal);
     float3 throatColor = float3(1.0, 0.76, 0.22);
