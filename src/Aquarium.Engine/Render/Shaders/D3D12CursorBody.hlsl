@@ -5,6 +5,80 @@ static const int BODY_INDEX = 8;
 
 static const float CURSOR_RADIUS = 0.56;
 
+float2 hibiscusPetalCenter(float u)
+{
+    float radial = 0.92 * u * u * (1.0 - 0.10 * u);
+    float height = -0.10 + 0.82 * u;
+    return float2(radial, height);
+}
+
+float sdHibiscusPetalRibbon(float3 q)
+{
+    float u = saturate((q.z + 0.10) / 0.82);
+    float2 center = hibiscusPetalCenter(u);
+    float widthGrowth = smoothstep(0.08, 1.0, u);
+    float width = lerp(0.030, 0.42, widthGrowth);
+    float thickness = lerp(0.010, 0.046, widthGrowth);
+    float fold = 0.055 * q.y * q.y / max(width * width, 0.001);
+    float radialDistance = abs(q.x - center.x - fold) - thickness;
+    float verticalDistance = max(-0.10 - q.z, q.z - 0.72);
+    float sideDistance = abs(q.y) - width;
+    return max(max(radialDistance, verticalDistance), sideDistance);
+}
+
+float sdHibiscusCursorPetal(float3 local, float angle, float timeSeconds)
+{
+    float2 radial = float2(cos(angle), sin(angle));
+    float2 tangent = float2(-radial.y, radial.x);
+    float sway = 0.030 * sin(timeSeconds * 0.95 + angle * 1.7);
+    float3 center = float3(radial * 0.20, 0.07 + sway);
+    float3 p = local - center;
+    float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
+    return sdHibiscusPetalRibbon(q);
+}
+
+float sdHibiscusSepal(float3 local, float angle)
+{
+    float2 radial = float2(cos(angle), sin(angle));
+    float3 a = float3(0.0, 0.0, -0.46);
+    float3 b = float3(radial * 0.26, -0.22);
+    return sdTaperedCapsuleSegment(local, a, b, 0.058, 0.022);
+}
+
+float sdHibiscusStamen(float3 local)
+{
+    float column = sdQuadraticTube(local, float3(0.0, 0.0, 0.02), float3(-0.12, 0.08, 0.43), float3(0.13, 0.04, 0.86), 0.048, 0.032);
+    float bead0 = sdSphere(local - float3(0.14, 0.04, 0.92), 0.064);
+    float bead1 = sdSphere(local - float3(0.18, 0.12, 0.72), 0.046);
+    float bead2 = sdSphere(local - float3(-0.12, 0.04, 0.62), 0.044);
+    float beads = min(bead0, min(bead1, bead2));
+    return min(column, beads);
+}
+
+float sdHibiscusCursor(float3 local, float timeSeconds)
+{
+    float sway = 0.10 * sin(timeSeconds * 0.85);
+    float petal0 = sdHibiscusCursorPetal(local, 1.45 + sway, timeSeconds);
+    float petal1 = sdHibiscusCursorPetal(local, 2.62 + sway * 0.7, timeSeconds);
+    float petal2 = sdHibiscusCursorPetal(local, 3.88 + sway * 0.5, timeSeconds);
+    float petal3 = sdHibiscusCursorPetal(local, 5.12 + sway * 0.4, timeSeconds);
+    float petal4 = sdHibiscusCursorPetal(local, 0.22 + sway * 0.6, timeSeconds);
+    float petals = min(min(petal0, petal1), min(min(petal2, petal3), petal4));
+
+    float throatSphere = sdSphere(local - float3(0.0, 0.0, -0.05), 0.24);
+    float throatTop = local.z - 0.07;
+    float throat = max(throatSphere, throatTop);
+    float stamen = sdHibiscusStamen(local);
+
+    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.62), float3(0.0, 0.0, -0.18), 0.014, 0.120);
+    float sepals = min(sdHibiscusSepal(local, 1.57), min(sdHibiscusSepal(local, 3.66), sdHibiscusSepal(local, 5.75)));
+    float calyx = smoothUnion(calyxCore, sepals, 0.035);
+
+    float blossom = smoothUnion(petals, throat, 0.10);
+    blossom = smoothUnion(blossom, stamen, 0.065);
+    return smoothUnion(blossom, calyx, 0.120);
+}
+
 float cursorHibiscusSdf(float3 p)
 {
     AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
@@ -22,52 +96,6 @@ BodySurface bodySurface(float3 p, int agentIndex)
     surface.lodTier = 0.0;
     surface.costTier = 1.0;
     return surface;
-}
-
-float3 cursorSpecularBodyLightRadiance(float3 p, float3 normal)
-{
-    static const float MinimumRoughness = 0.045;
-    static const float CursorRoughness = 0.22;
-
-    float3 viewDirection = normalize(cameraPosition - p);
-    float ndv = saturate(dot(normal, viewDirection));
-    float roughness = max(CursorRoughness, MinimumRoughness);
-    float alpha = roughness * roughness;
-    float alpha2 = alpha * alpha;
-    float k = (roughness + 1.0);
-    k = (k * k) * 0.125;
-    float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
-    float3 f0 = float3(1.0, 0.38, 0.72);
-    float3 result = 0.0;
-    [loop]
-    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
-    {
-        BodyLight light = bodyLights[i];
-        float3 radiance = light.radianceFieldId.rgb;
-        if (dot(radiance, radiance) <= 0.000001)
-        {
-            continue;
-        }
-
-        float3 toLight = light.centerRadius.xyz - p;
-        float distanceSquared = max(dot(toLight, toLight), 0.01);
-        float3 lightDirection = toLight * rsqrt(distanceSquared);
-        float radius = max(light.centerRadius.w, 0.001);
-        float3 irradiance = radiance * saturate((radius * radius) / distanceSquared) * 7.0;
-        float3 halfVector = normalize(lightDirection + viewDirection);
-        float ndl = saturate(dot(normal, lightDirection));
-        float ndh = saturate(dot(normal, halfVector));
-        float vdh = saturate(dot(viewDirection, halfVector));
-        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
-        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
-        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
-        float geometry = geometryL * geometryV;
-        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
-        float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-        result += specular * irradiance * ndl;
-    }
-
-    return result;
 }
 
 float3 cursorEmissionRadiance(float3 p, float3 normal)
@@ -94,7 +122,7 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentInde
     static const float CursorRoughness = 0.22;
     float3 cursorF0 = float3(1.0, 0.38, 0.72);
     return cursorEmissionRadiance(p, normal)
-        + cursorSpecularBodyLightRadiance(p, normal)
+        + bodyLightSpecularRadiance(p, normal, CursorRoughness, cursorF0, 7.0)
         + studioPmremSpecularRadiance(p, normal, CursorRoughness, cursorF0);
 }
 

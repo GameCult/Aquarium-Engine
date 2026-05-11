@@ -180,6 +180,50 @@ float3 bodyLightIrradianceAt(float3 p, float3 normal)
     return irradiance;
 }
 
+float3 bodyLightSpecularRadiance(float3 p, float3 normal, float roughness, float3 f0, float intensity)
+{
+    static const float MinimumRoughness = 0.045;
+
+    float3 viewDirection = normalize(cameraPosition - p);
+    float ndv = saturate(dot(normal, viewDirection));
+    float safeRoughness = max(roughness, MinimumRoughness);
+    float alpha = safeRoughness * safeRoughness;
+    float alpha2 = alpha * alpha;
+    float k = (safeRoughness + 1.0);
+    k = (k * k) * 0.125;
+    float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
+    float3 result = 0.0;
+
+    [loop]
+    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
+    {
+        BodyLight light = bodyLights[i];
+        float3 radiance = light.radianceFieldId.rgb;
+        if (dot(radiance, radiance) <= 0.000001)
+        {
+            continue;
+        }
+
+        float3 toLight = light.centerRadius.xyz - p;
+        float distanceSquared = max(dot(toLight, toLight), 0.01);
+        float3 lightDirection = toLight * rsqrt(distanceSquared);
+        float radius = max(light.centerRadius.w, 0.001);
+        float3 irradiance = radiance * saturate((radius * radius) / distanceSquared) * intensity;
+        float3 halfVector = normalize(lightDirection + viewDirection);
+        float ndl = saturate(dot(normal, lightDirection));
+        float ndh = saturate(dot(normal, halfVector));
+        float vdh = saturate(dot(viewDirection, halfVector));
+        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
+        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
+        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
+        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
+        float3 specular = (distribution * geometryL * geometryV) * fresnel / max(4.0 * ndl * ndv, 0.00001);
+        result += specular * irradiance * ndl;
+    }
+
+    return result;
+}
+
 float3 fresnelSchlickRoughness(float cosine, float3 f0, float roughness)
 {
     return f0 + (max(1.0 - roughness, f0) - f0) * pow(1.0 - cosine, 5.0);
