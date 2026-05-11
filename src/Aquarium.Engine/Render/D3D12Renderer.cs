@@ -25,8 +25,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int GridHeightTextureSize = 128;
     private const Format GridHeightFormat = Format.R16_Float;
     private const Format SceneDepthFormat = Format.D32_Float;
-    private const int AgentVisualCount = 7;
-    private const int SelfObjectIndex = AgentVisualCount - 2;
+    private const int RoleAgentCount = 7;
+    private const int AgentVisualCount = RoleAgentCount + 2;
+    private const int SelfObjectIndex = RoleAgentCount;
     private const int CursorObjectIndex = AgentVisualCount - 1;
     private const int GridHeightBrushCount = AgentVisualCount - 1;
     private const int BodyLightCount = 8;
@@ -41,7 +42,17 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
-    private const string BodiesShaderRelativePath = "Render/Shaders/D3D12Bodies.hlsl";
+    private const string BodyCommonShaderRelativePath = "Render/Shaders/D3D12BodyCommon.hlsli";
+    private const string BodyProxyShaderRelativePath = "Render/Shaders/D3D12BodyProxy.hlsli";
+    private const string FaceAgentShaderRelativePath = "Render/Shaders/D3D12FaceAgent.hlsl";
+    private const string ImaginationAgentShaderRelativePath = "Render/Shaders/D3D12ImaginationAgent.hlsl";
+    private const string EyesAgentShaderRelativePath = "Render/Shaders/D3D12EyesAgent.hlsl";
+    private const string BodyAgentShaderRelativePath = "Render/Shaders/D3D12BodyAgent.hlsl";
+    private const string HandsAgentShaderRelativePath = "Render/Shaders/D3D12HandsAgent.hlsl";
+    private const string SoulAgentShaderRelativePath = "Render/Shaders/D3D12SoulAgent.hlsl";
+    private const string LifeAgentShaderRelativePath = "Render/Shaders/D3D12LifeAgent.hlsl";
+    private const string SelfBodyShaderRelativePath = "Render/Shaders/D3D12SelfBody.hlsl";
+    private const string CursorBodyShaderRelativePath = "Render/Shaders/D3D12CursorBody.hlsl";
     private const string SdfMathShaderRelativePath = "Render/Shaders/D3D12SdfMath.hlsli";
     private const string AgentCharactersShaderRelativePath = "Render/Shaders/D3D12AgentCharacters.hlsli";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
@@ -82,7 +93,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? gridHeightBasePipelineState;
     private ID3D12PipelineState? gridHeightBrushPipelineState;
     private ID3D12PipelineState? scenePipelineState;
-    private ID3D12PipelineState? agentProxyPipelineState;
+    private readonly ID3D12PipelineState?[] bodyProxyPipelineStates = new ID3D12PipelineState?[AgentVisualCount];
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
     private ID3D12PipelineState? bloomBlurHorizontalPipelineState;
@@ -426,6 +437,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState is not null
         && gridHeightBrushPipelineState is not null
         && scenePipelineState is not null
+        && bodyProxyPipelineStates.All(pipeline => pipeline is not null)
         && bloomPrefilterPipelineState is not null
         && bloomDownsamplePipelineState is not null
         && bloomBlurHorizontalPipelineState is not null
@@ -602,8 +614,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrush.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
         var scene = CreateScenePipelineState(paths.Scene);
         scene.Name = "Aquarium D3D12 Scene Pipeline";
-        var agentProxy = CreateAgentProxyPipelineState(paths.Bodies);
-        agentProxy.Name = "Aquarium D3D12 Agent Proxy Pipeline";
+        var bodyProxies = new ID3D12PipelineState[AgentVisualCount];
+        for (var index = 0; index < AgentVisualCount; index++)
+        {
+            bodyProxies[index] = CreateAgentProxyPipelineState(paths.BodyShaders[index]);
+            bodyProxies[index].Name = $"Aquarium D3D12 Body Proxy Pipeline {index}";
+        }
+
         var bloomPrefilter = CreateBloomPrefilterPipelineState(paths.Post);
         bloomPrefilter.Name = "Aquarium D3D12 Bloom Prefilter Pipeline";
         var bloomDownsample = CreateBloomDownsamplePipelineState(paths.Post);
@@ -619,7 +636,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gridHeightBase,
             gridHeightBrush,
             scene,
-            agentProxy,
+            bodyProxies,
             bloomPrefilter,
             bloomDownsample,
             bloomBlurHorizontal,
@@ -895,8 +912,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.CommandList.DrawInstanced(3, 1, 0, 0);
 
-            context.CommandList.SetPipelineState(agentProxyPipelineState!);
-            context.CommandList.DrawInstanced(6, AgentVisualCount, 0, 0);
+            for (var bodyIndex = 0; bodyIndex < AgentVisualCount; bodyIndex++)
+            {
+                context.CommandList.SetPipelineState(bodyProxyPipelineStates[bodyIndex]!);
+                context.CommandList.DrawInstanced(6, 1, 0, (uint)bodyIndex);
+            }
         }
         finally
         {
@@ -1422,7 +1442,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 gridHeightBasePipelineState!,
                 gridHeightBrushPipelineState!,
                 scenePipelineState!,
-                agentProxyPipelineState!,
+                bodyProxyPipelineStates.Select(pipeline => pipeline!).ToArray(),
                 bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
                 bloomBlurHorizontalPipelineState!,
@@ -1436,7 +1456,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = pipelines.GridHeightBase;
         gridHeightBrushPipelineState = pipelines.GridHeightBrush;
         scenePipelineState = pipelines.Scene;
-        agentProxyPipelineState = pipelines.AgentProxy;
+        for (var index = 0; index < AgentVisualCount; index++)
+        {
+            bodyProxyPipelineStates[index] = pipelines.BodyProxies[index];
+        }
         bloomPrefilterPipelineState = pipelines.BloomPrefilter;
         bloomDownsamplePipelineState = pipelines.BloomDownsample;
         bloomBlurHorizontalPipelineState = pipelines.BloomBlurHorizontal;
@@ -1450,7 +1473,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = null;
         gridHeightBrushPipelineState = null;
         scenePipelineState = null;
-        agentProxyPipelineState = null;
+        Array.Clear(bodyProxyPipelineStates);
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
         bloomBlurHorizontalPipelineState = null;
@@ -1681,7 +1704,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private ID3D12PipelineState CreateAgentProxyPipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "D3D12AgentProxyVS", "D3D12AgentProxyPS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
+        return CreateFullscreenPipelineState(path, "D3D12AgentProxyVS", "D3D12BodyProxyPS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -1853,7 +1876,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private static float AgentRoleId(int index)
     {
-        ReadOnlySpan<float> roleIds = [1.0f, 2.0f, 3.0f, 4.0f, 5.0f];
+        ReadOnlySpan<float> roleIds = [1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f];
         return roleIds[Math.Clamp(index, 0, roleIds.Length - 1)];
     }
 
@@ -1960,18 +1983,24 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Vector4 CenterRadius3,
         Vector4 CenterRadius4,
         Vector4 CenterRadius5,
+        Vector4 CenterRadius6,
+        Vector4 CenterRadius7,
         Vector4 Shape0,
         Vector4 Shape1,
         Vector4 Shape2,
         Vector4 Shape3,
         Vector4 Shape4,
         Vector4 Shape5,
+        Vector4 Shape6,
+        Vector4 Shape7,
         Vector4 Wave0,
         Vector4 Wave1,
         Vector4 Wave2,
         Vector4 Wave3,
         Vector4 Wave4,
-        Vector4 Wave5)
+        Vector4 Wave5,
+        Vector4 Wave6,
+        Vector4 Wave7)
     {
         public void Set(int index, Vector4 centerRadius, Vector4 shape, Vector4 wave)
         {
@@ -2007,6 +2036,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
                     Shape5 = shape;
                     Wave5 = wave;
                     break;
+                case 6:
+                    CenterRadius6 = centerRadius;
+                    Shape6 = shape;
+                    Wave6 = wave;
+                    break;
+                case 7:
+                    CenterRadius7 = centerRadius;
+                    Shape7 = shape;
+                    Wave7 = wave;
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(index), index, "Grid height brush index is outside the fixed brush table.");
             }
@@ -2038,22 +2077,37 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private sealed record D3D12ShaderPaths(
         string Grid,
         string Scene,
-        string Bodies,
+        string BodyCommon,
+        string BodyProxy,
+        IReadOnlyList<string> BodyShaders,
         string SdfMath,
         string AgentCharacters,
         string Post)
     {
-        public IReadOnlyList<string> All { get; } = [Grid, Scene, Bodies, SdfMath, AgentCharacters, Post];
+        public IReadOnlyList<string> All { get; } = [Grid, Scene, BodyCommon, BodyProxy, ..BodyShaders, SdfMath, AgentCharacters, Post];
 
         public static D3D12ShaderPaths FromRoot(string root)
         {
+            string shaderPath(string relativePath) => Path.Combine(root, Path.GetFileName(relativePath));
             return new D3D12ShaderPaths(
-                Path.Combine(root, Path.GetFileName(GridShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(SceneShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(BodiesShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(SdfMathShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(AgentCharactersShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(PostShaderRelativePath)));
+                shaderPath(GridShaderRelativePath),
+                shaderPath(SceneShaderRelativePath),
+                shaderPath(BodyCommonShaderRelativePath),
+                shaderPath(BodyProxyShaderRelativePath),
+                [
+                    shaderPath(FaceAgentShaderRelativePath),
+                    shaderPath(ImaginationAgentShaderRelativePath),
+                    shaderPath(EyesAgentShaderRelativePath),
+                    shaderPath(BodyAgentShaderRelativePath),
+                    shaderPath(HandsAgentShaderRelativePath),
+                    shaderPath(SoulAgentShaderRelativePath),
+                    shaderPath(LifeAgentShaderRelativePath),
+                    shaderPath(SelfBodyShaderRelativePath),
+                    shaderPath(CursorBodyShaderRelativePath),
+                ],
+                shaderPath(SdfMathShaderRelativePath),
+                shaderPath(AgentCharactersShaderRelativePath),
+                shaderPath(PostShaderRelativePath));
         }
     }
 
@@ -2061,7 +2115,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState GridHeightBase,
         ID3D12PipelineState GridHeightBrush,
         ID3D12PipelineState Scene,
-        ID3D12PipelineState AgentProxy,
+        IReadOnlyList<ID3D12PipelineState> BodyProxies,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
         ID3D12PipelineState BloomBlurHorizontal,
@@ -2075,7 +2129,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
-            AgentProxy.Dispose();
+            foreach (var bodyProxy in BodyProxies)
+            {
+                bodyProxy.Dispose();
+            }
+
             Scene.Dispose();
             GridHeightBrush.Dispose();
             GridHeightBase.Dispose();

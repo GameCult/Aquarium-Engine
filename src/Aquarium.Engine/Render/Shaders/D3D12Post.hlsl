@@ -62,7 +62,7 @@ struct ResolveOut
 };
 
 static const float SUN_RADIUS = 1.12;
-static const int AGENT_VISUAL_COUNT = 5;
+static const int AGENT_VISUAL_COUNT = 7;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;

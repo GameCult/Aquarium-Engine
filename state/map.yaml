@@ -15,7 +15,17 @@ current_model:
     renderer: src/Aquarium.Engine/Render/D3D12Renderer.cs
     grid_shader: src/Aquarium.Engine/Render/Shaders/D3D12Grid.hlsl
     scene_shader: src/Aquarium.Engine/Render/Shaders/D3D12Scene.hlsl
-    bodies_shader: src/Aquarium.Engine/Render/Shaders/D3D12Bodies.hlsl
+    body_common_include: src/Aquarium.Engine/Render/Shaders/D3D12BodyCommon.hlsli
+    body_proxy_include: src/Aquarium.Engine/Render/Shaders/D3D12BodyProxy.hlsli
+    face_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12FaceAgent.hlsl
+    imagination_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12ImaginationAgent.hlsl
+    eyes_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12EyesAgent.hlsl
+    body_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12BodyAgent.hlsl
+    hands_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12HandsAgent.hlsl
+    soul_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12SoulAgent.hlsl
+    life_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12LifeAgent.hlsl
+    self_body_shader: src/Aquarium.Engine/Render/Shaders/D3D12SelfBody.hlsl
+    cursor_body_shader: src/Aquarium.Engine/Render/Shaders/D3D12CursorBody.hlsl
     sdf_math_include: src/Aquarium.Engine/Render/Shaders/D3D12SdfMath.hlsli
     agent_characters_include: src/Aquarium.Engine/Render/Shaders/D3D12AgentCharacters.hlsli
     post_shader: src/Aquarium.Engine/Render/Shaders/D3D12Post.hlsl
@@ -60,10 +70,10 @@ renderer_state:
     - Deferred scalar Grid height target rendered from additive brush passes.
     - Self Grid brush uses a widened 17-world-unit gravity bowl plus an Aetheria-style radial cosine wave; CPU, Grid shader, scene placement, and temporal reprojection share the same brush equation.
     - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
-    - Fullscreen scene pass owns background and Grid only; D3D12Bodies owns bounded instanced proxy draws, body SDF tracing, body lighting, and travel-derived depth.
+    - Fullscreen scene pass owns background and Grid only; each visible body owns a separate proxy pipeline and shader file, with shared proxy plumbing factored into HLSL includes.
     - Reusable SDF primitives live in D3D12SdfMath.hlsli; current role character organs live in D3D12AgentCharacters.hlsli.
     - Cursor is a luminous three-lobed hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
-    - SDF/analytic bodies for Self, CPU-authored agent visuals, and the cursor locator upload current and previous centers through `AgentVisualGpu`; Body plus Imagination use LOD 1 role SDFs.
+    - SDF/analytic bodies for Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor locator upload current and previous centers through `AgentVisualGpu`; Body plus Imagination use LOD 1 role SDFs.
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.

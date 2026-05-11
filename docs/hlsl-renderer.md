@@ -8,10 +8,12 @@ explicit frame graph.
 1. `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
 2. `D3D12Scene.hlsl` traces the background and Grid into scene-linear HDR
    targets.
-3. `D3D12Bodies.hlsl` draws one bounded proxy quad per visible body and
-   raymarches only that object. Reusable SDF functions live in
-   `D3D12SdfMath.hlsli`; current role character SDFs live in
-   `D3D12AgentCharacters.hlsli`.
+3. Each visible body has its own proxy shader and pipeline:
+   `D3D12FaceAgent.hlsl`, `D3D12ImaginationAgent.hlsl`,
+   `D3D12EyesAgent.hlsl`, `D3D12BodyAgent.hlsl`, `D3D12HandsAgent.hlsl`,
+   `D3D12SoulAgent.hlsl`, `D3D12LifeAgent.hlsl`, `D3D12SelfBody.hlsl`, and
+   `D3D12CursorBody.hlsl`. Shared proxy mechanics live in
+   `D3D12BodyCommon.hlsli` and `D3D12BodyProxy.hlsli`.
 4. `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
    exposure and ACES, then presents.
 5. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
@@ -35,15 +37,15 @@ and fade out on flat surfaces.
 
 The fullscreen scene pass owns environment and Grid only. Bodies are not folded
 into that pass. After the Grid writes scene color and travel-derived depth,
-each body gets an instanced proxy quad whose vertex shader computes a
-conservative screen rectangle from the uploaded body center and bound radius.
-The proxy pixel shader raymarches only that object and writes travel-derived
-depth so the Grid and nearer bodies arbitrate visibility through the depth
-target.
+each body gets its own proxy draw and shader pipeline. The shared proxy vertex
+shader computes a conservative screen rectangle from the uploaded body center
+and bound radius. The body-specific pixel shader raymarches only that object
+and writes travel-derived depth so the Grid and nearer bodies arbitrate
+visibility through the depth target.
 
 ## Solids
 
-Self, the cursor, and role bodies are uploaded through `AgentVisualGpu`,
+Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor are uploaded through `AgentVisualGpu`,
 including current center, previous center, role id, activity, heartbeat,
 pressure, expression, object kind, and LOD tier. The first visual slice keeps
 the fixed orbit fallback, renders Body and Imagination as LOD 1 role SDFs inside

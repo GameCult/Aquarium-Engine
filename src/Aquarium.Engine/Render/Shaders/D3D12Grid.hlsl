@@ -22,9 +22,9 @@ cbuffer AquariumFrame : register(b0)
 
 cbuffer GridHeightBrushes : register(b1)
 {
-    float4 brushCenterRadius[6];
-    float4 brushShape[6];
-    float4 brushWave[6];
+    float4 brushCenterRadius[8];
+    float4 brushShape[8];
+    float4 brushWave[8];
 };
 
 struct VertexOut
