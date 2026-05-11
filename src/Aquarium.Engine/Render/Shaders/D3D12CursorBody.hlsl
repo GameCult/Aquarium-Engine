@@ -75,11 +75,16 @@ float3 cursorEmissionRadiance(float3 p, float3 normal)
     AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     float petal = 0.55 + 0.45 * cos(atan2(local.y, local.x) * 3.0 - timeSeconds * 1.8);
-    float throat = exp(-dot(local.xy, local.xy) * 7.0) * smoothstep(0.46, -0.28, local.z);
+    float throat = exp(-dot(local.xy, local.xy) * 7.0) * smoothstep(0.30, -0.18, local.z);
+    float stamen = smoothstep(0.015, -0.035, sdCapsuleSegment(local, float3(0.02, 0.0, 0.06), float3(-0.22, 0.72, 0.58), 0.06));
+    float calyx = smoothstep(0.08, -0.02, sdEllipsoid(local - float3(0.0, 0.0, -0.78), float3(0.24, 0.22, 0.22)));
     float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.0);
     float3 petalColor = lerp(float3(1.25, 0.12, 0.56), float3(1.0, 0.42, 0.88), petal);
     float3 throatColor = float3(1.0, 0.76, 0.22);
-    return petalColor * (0.82 + rim * 0.75) + throatColor * throat * 1.7;
+    float3 stamenColor = float3(1.0, 0.58, 0.22);
+    float3 calyxColor = float3(0.20, 0.72, 0.16);
+    float3 blossom = petalColor * (0.82 + rim * 0.75) + throatColor * throat * 1.7 + stamenColor * stamen * 1.35;
+    return lerp(blossom, calyxColor * (0.55 + rim * 0.25), calyx);
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentIndex, BodySurface surface)

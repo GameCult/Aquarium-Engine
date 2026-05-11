@@ -12,6 +12,14 @@ float sdTorus(float3 p, float2 radius)
     return length(q) - radius.y;
 }
 
+float sdCapsuleSegment(float3 p, float3 a, float3 b, float radius)
+{
+    float3 pa = p - a;
+    float3 ba = b - a;
+    float h = saturate(dot(pa, ba) / max(dot(ba, ba), 0.0001));
+    return length(pa - ba * h) - radius;
+}
+
 float sdSuperellipsoid(float3 p, float3 scale, float exponent)
 {
     float3 q = abs(p) / scale;
@@ -59,25 +67,39 @@ float sdHibiscusCursorPetal(float3 local, float angle, float timeSeconds)
 {
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
-    float phase = timeSeconds * 1.35 + angle * 0.7;
-    float3 center = float3(radial * 0.18, 0.04 + 0.035 * sin(phase));
+    float phase = timeSeconds * 0.95 + angle * 1.7;
+    float3 center = float3(radial * 0.30, 0.12 + 0.030 * sin(phase));
     float3 p = local - center;
     float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
-    float taper = saturate((q.z + 1.0) * 0.55);
-    float edgeCurl = 0.035 * sin(q.x * 8.0 + phase) * taper;
-    return sdEllipsoid(q + float3(0.0, 0.0, edgeCurl), float3(0.62, 0.19, 0.72));
+    float flare = saturate((q.x + 0.28) * 1.25);
+    float ruffle = 0.035 * sin(q.y * 28.0 + q.x * 7.0 + phase) * flare;
+    float curl = 0.075 * sin(q.x * 3.8 + phase) * flare;
+    float petal = sdEllipsoid(q + float3(0.0, ruffle, curl), float3(0.80, 0.24, 0.30));
+    return petal;
 }
 
 float sdHibiscusCursor(float3 local, float timeSeconds)
 {
-    float petal0 = sdHibiscusCursorPetal(local, 0.35 + timeSeconds * 0.12, timeSeconds);
-    float petal1 = sdHibiscusCursorPetal(local, 2.444395 + timeSeconds * 0.12, timeSeconds);
-    float petal2 = sdHibiscusCursorPetal(local, 4.53879 + timeSeconds * 0.12, timeSeconds);
+    float sway = 0.10 * sin(timeSeconds * 0.85);
+    float petal0 = sdHibiscusCursorPetal(local, 1.58 + sway, timeSeconds);
+    float petal1 = sdHibiscusCursorPetal(local, 3.58 + sway * 0.6, timeSeconds);
+    float petal2 = sdHibiscusCursorPetal(local, 5.42 + sway * 0.4, timeSeconds);
     float petals = min(petal0, min(petal1, petal2));
-    float throat = sdEllipsoid(local - float3(0.0, 0.0, -0.12), float3(0.28, 0.28, 0.50));
-    float body = smoothUnion(petals, throat, 0.075);
-    float contactTip = length(float2(length(local.xy) * 1.22, local.z + 1.0)) - 0.035;
-    return smoothUnion(body, contactTip, 0.05);
+
+    float throat = sdEllipsoid(local - float3(0.0, 0.0, -0.03), float3(0.34, 0.30, 0.22));
+    float column = sdCapsuleSegment(local, float3(0.02, 0.0, 0.06), float3(-0.22, 0.72, 0.58), 0.035);
+    float bead0 = sdSphere(local - float3(-0.31, 0.83, 0.64), 0.060);
+    float bead1 = sdSphere(local - float3(-0.18, 0.78, 0.68), 0.045);
+    float bead2 = sdSphere(local - float3(-0.38, 0.69, 0.60), 0.040);
+    float stamen = min(column, min(bead0, min(bead1, bead2)));
+
+    float calyx = sdEllipsoid(local - float3(0.0, 0.0, -0.78), float3(0.20, 0.18, 0.18));
+    float contactStem = sdCapsuleSegment(local, float3(0.0, 0.0, -1.0), float3(0.0, 0.0, -0.70), 0.030);
+
+    float blossom = smoothUnion(petals, throat, 0.10);
+    blossom = smoothUnion(blossom, stamen, 0.045);
+    float base = smoothUnion(calyx, contactStem, 0.045);
+    return smoothUnion(blossom, base, 0.070);
 }
 
 #endif
