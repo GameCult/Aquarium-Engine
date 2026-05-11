@@ -107,14 +107,13 @@ All role placement and role-local SDF orientation uses Aquarium world space:
 - `+Y`: Grid forward.
 - `+Z`: Grid up.
 - `gridCenter`: camera target on the XY plane.
-- `selfAnchor`: `gridCenter` unless a future swarm-level anchor overrides it.
+- `selfAnchor`: `gridCenter`.
 - `cameraFacingDir`: normalized horizontal vector from `gridCenter` toward the
   camera. This is the "room/user side" direction.
 - `cameraRightDir`: normalized horizontal camera right vector.
 
 Each role has a stable home orbit slot around `selfAnchor`. These slots are
-authoritative defaults for native Aquarium until Epiphany publishes explicit
-world anchors:
+Aquarium-owned spatial projections of semantic Epiphany roles:
 
 | Organ | Role id | Angle | Ring | Home formula |
 | --- | --- | ---: | ---: | --- |
@@ -137,14 +136,14 @@ not rotate every time the camera does.
 
 ## Derived Spatial Anchors
 
-The renderer must derive named anchors before evaluating per-role motion. If a
-source is missing, fall through to the next entry. No shader path gets to invent
-its own private direction.
+The renderer must derive named anchors before evaluating per-role motion.
+Epiphany does not publish world-space graph, job, artifact, or role anchors.
+It publishes semantic state. Aquarium owns the visible frame and projects that
+semantic state into deterministic local anchors around role bodies.
 
 ```text
 roleAnchor(roleId) =
   role home orbit slot
-  unless AgentVisualState.explicitWorldAnchor is present for that role
 
 userAnchor =
   selfAnchor + cameraFacingDir * agentOrbitRadius * 1.15
@@ -153,16 +152,21 @@ artifactAnchor(roleId) =
   roleAnchor(roleId) + normalize(roleAnchor(roleId) - selfAnchor) * 3.5
   + cameraRightDir * 2.0
 
+evidenceAnchor =
+  artifactAnchor("research"), when Eyes has evidence ids, artifacts, graph
+  query results, or retrieved context
+  else roleAnchor("research") + roleForward("research") * 3.0
+
+implementationArtifactAnchor =
+  artifactAnchor("implementation"), when Hands has changed files,
+  implementation artifacts, or active implementation jobs
+  else roleAnchor("implementation") + roleForward("implementation") * 3.0
+
 reviewAnchor =
   roleAnchor("verification")
 
 continuityAnchor =
   roleAnchor("reorientation")
-
-evidenceAnchor =
-  selected graph node world anchor, if a graph projection selected one
-  else artifactAnchor("research"), if Eyes has artifacts or evidence ids
-  else roleAnchor("research") + roleForward("research") * 3.0
 
 targetAnchor =
   roleAnchor(targetRole), if targetRole is a known role id
@@ -172,8 +176,8 @@ targetAnchor =
   else roleAnchor(roleId) + roleForward(roleId) * 3.0
 
 workAnchor =
-  active implementation job explicit world anchor, if present
-  else artifactAnchor("implementation"), if changed files or artifacts exist
+  implementationArtifactAnchor, if changed files, implementation artifacts,
+  or active implementation jobs exist
   else coordinator target role anchor, if targetRole is present
   else reviewAnchor, if implementation is waiting on verification/review
   else roleAnchor("implementation") + tangentClockwise("implementation") * 4.0
@@ -187,11 +191,10 @@ target.
 orbiting role. For Self, it is `cameraFacingDir`. If a role is exactly at
 `selfAnchor`, use `cameraFacingDir`.
 
-`AgentVisualState.explicitWorldAnchor` is not part of the first native
-implementation. It is reserved for a later CultNet field that publishes a graph
-node, project label, or object anchor in Aquarium world coordinates. Until that
-field exists, `roleAnchor` is always the home orbit slot and `workAnchor` uses
-the fallback chain above.
+These anchors are not data contracts with Epiphany. They are Aquarium's
+diegetic layout rules for semantic surfaces. If a future Aquarium feature
+creates local graph-node or artifact objects, those objects may become anchors
+inside Aquarium, but Epiphany still does not own their spatial arrangement.
 
 State-derived vectors:
 
@@ -310,7 +313,7 @@ State mapping:
   home on accepted plans.
 - Hands should wander least while blocked and lean toward active work when
   running.
-- Eyes can make short focus darts toward evidence-bearing anchors.
+- Eyes can make short focus darts toward Aquarium's local evidence anchor.
 
 Implementation invariant: expressive wandering and vertical well pulses must be
 part of the same CPU-visible placement model used for body centers, shadows,
@@ -481,8 +484,9 @@ Movement:
 - High confidence narrows aperture and steadies the lens.
 - No evidence means no sparkle. The lens still watches, but it does not fake a
   finding.
-- Focus dart direction is `evidenceDirection`. `evidenceAnchor` is the
-  artifact anchor for Eyes until graph nodes publish explicit world anchors.
+- Focus dart direction is `evidenceDirection`. `evidenceAnchor` is Aquarium's
+  local projection for evidence-bearing surfaces; Epiphany only supplies the
+  semantic evidence/artifact/context state.
 
 Surfaces:
 
@@ -512,11 +516,11 @@ Math:
 
 - Squashed ellipsoid core with smooth-union support lobes.
 - Graph ribs as capsule networks over the surface. First implementation uses
-  five deterministic ribs between fixed normalized surface points:
+  five deterministic Aquarium-owned ribs between fixed normalized surface points:
   north-south, east-west, northwest-center-southeast,
-  northeast-center-southwest, and one equatorial ring segment. Future graph
-  projections may replace rib endpoints only when they publish explicit world
-  or role-local anchors.
+  northeast-center-southwest, and one equatorial ring segment. Semantic graph
+  size or frontier count may brighten/fill these ribs, but Epiphany graph nodes
+  do not define their world positions.
 - Node beads at rib intersections.
 - Subtle displacement from low-frequency sine waves for breathing mass.
 - Material ids: matte green body, glossy rib enamel, bright checkpoint nodes,
@@ -529,10 +533,10 @@ Movement:
 - Evidence gaps open small dark fissures between ribs.
 - High load makes the mass sag; high confidence makes ribs align and glow
   steadily.
-- Connective wake direction points from Body toward any `frontierNodeIds`
-  world anchor when available, otherwise toward Self. This makes missing graph
-  anchors obvious: the wake falls back inward instead of pretending the graph
-  has a location.
+- Connective wake direction points from Body toward Self when modeling is
+  regathering/checkpointing, and toward `artifactAnchor("modeling")` when a
+  modeling result or state patch exists. `frontierNodeIds` affect rib count or
+  brightness, not world direction.
 
 Surfaces:
 
@@ -586,8 +590,10 @@ gripPosB     = handsCenter.xy - handsForward * 0.18 - handsRight * 0.34
 ```
 
 `workDirection` is not semantic mood. It is derived from `workAnchor` in the
-coordinate contract above. If all work anchors are missing, it falls back to the
-clockwise orbit tangent, so the shape remains deterministic and debuggable.
+coordinate contract above. `workAnchor` is Aquarium's local projection of
+implementation artifacts/jobs, coordinator target, or review dependency. If
+none of those semantic states exist, it falls back to the clockwise orbit
+tangent, so the shape remains deterministic and debuggable.
 
 Surfaces:
 
