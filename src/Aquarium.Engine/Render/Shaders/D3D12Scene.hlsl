@@ -47,6 +47,9 @@ static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int BODY_LIGHT_COUNT = 8;
 static const float STUDIO_PMREM_MAX_LOD = 8.0;
 static const float STUDIO_PMREM_SPECULAR_INTENSITY = 0.34;
+static const float GRID_FLAT_REFLECTION_MAX_LOD = 5.2;
+static const float GRID_FLAT_SLOPE_START = 0.018;
+static const float GRID_FLAT_SLOPE_END = 0.16;
 
 struct VertexOut
 {
@@ -436,9 +439,12 @@ float3 studioPmremDirection(float3 worldDirection)
 
 float3 gridMirrorRadiance(float3 p, float3 direction, out float3 normal)
 {
-    normal = terrainNormal(p);
+    float2 gradient = terrainGradient(p.xy);
+    normal = normalize(float3(-gradient.x, -gradient.y, 1.0));
     float3 reflectionDirection = reflect(direction, normal);
-    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(reflectionDirection), 0.0).rgb;
+    float flatness = 1.0 - smoothstep(GRID_FLAT_SLOPE_START, GRID_FLAT_SLOPE_END, length(gradient));
+    float lod = flatness * GRID_FLAT_REFLECTION_MAX_LOD;
+    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(reflectionDirection), lod).rgb;
 }
 
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
