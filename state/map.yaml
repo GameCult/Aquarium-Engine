@@ -56,7 +56,7 @@ renderer_state:
     - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
     - SDF/analytic solids for Self, planets, and the cursor locator.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
-    - Studio2 PMREM DDS cubemap is loaded as a D3D12 TextureCube and sampled for roughness-mip PBR specular reflections.
+    - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.

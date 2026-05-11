@@ -22,6 +22,7 @@ cbuffer AquariumFrame : register(b0)
 
 Texture2D<float4> gridHeightTexture : register(t0);
 TextureCube<float4> studioPmremTexture : register(t22);
+TextureCube<float4> studioIrradianceTexture : register(t23);
 SamplerState gridSampler : register(s0);
 
 struct BodyLight
@@ -47,6 +48,7 @@ static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int BODY_LIGHT_COUNT = 8;
 static const float STUDIO_PMREM_MAX_LOD = 9.0;
 static const float STUDIO_PMREM_SPECULAR_INTENSITY = 0.34;
+static const float STUDIO_IRRADIANCE_INTENSITY = 0.74;
 static const float GRID_FLAT_REFLECTION_MAX_LOD = 3.0;
 static const float BACKGROUND_PMREM_LOD = 3.0;
 static const float BACKGROUND_PMREM_CONE = 0.16;
@@ -634,6 +636,16 @@ float3 studioPmremSpecularRadiance(float3 p, float3 normal, float roughness, flo
     return radiance * fresnel * STUDIO_PMREM_SPECULAR_INTENSITY;
 }
 
+float3 studioIrradianceDiffuseRadiance(float3 p, float3 normal, float3 albedo, float roughness, float3 f0)
+{
+    float3 viewDirection = normalize(cameraPosition - p);
+    float ndv = saturate(dot(normal, viewDirection));
+    float3 fresnel = fresnelSchlickRoughness(ndv, f0, roughness);
+    float3 diffuseShare = 1.0 - fresnel;
+    float3 irradiance = studioIrradianceTexture.SampleLevel(gridSampler, studioPmremDirection(normal), 0.0).rgb;
+    return diffuseShare * albedo * irradiance * (STUDIO_IRRADIANCE_INTENSITY / PI);
+}
+
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)
 {
     float fieldId = primitiveFieldId(primitiveId);
@@ -658,6 +670,7 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
     float3 dielectricF0 = 0.04;
     return emission
         + albedo * bodyLightIrradianceAt(p, normal) / PI
+        + studioIrradianceDiffuseRadiance(p, normal, albedo, roughness, dielectricF0)
         + studioPmremSpecularRadiance(p, normal, roughness, dielectricF0);
 }
 

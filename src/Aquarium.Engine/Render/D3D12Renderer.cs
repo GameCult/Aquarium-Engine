@@ -41,6 +41,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
     private const string StudioPmremRelativePath = "Assets/Textures/studio2_pmrem.dds";
+    private const string StudioIrradianceRelativePath = "Assets/Textures/studio2_irradiance.dds";
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -95,6 +96,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12StructuredBuffer bodyLightBuffer;
     private readonly D3D12CubeTexture studioPmremTexture;
+    private readonly D3D12CubeTexture studioIrradianceTexture;
     private readonly BodyLightGpu[] bodyLights = new BodyLightGpu[BodyLightCount];
     private readonly GridHeightBrushCpu[] gridHeightBrushes = new GridHeightBrushCpu[GridHeightBrushCount];
     private Viewport viewport;
@@ -192,9 +194,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fence.Name = "Aquarium D3D12 Frame Fence";
         commandQueue.ExecuteCommandList(commandList);
         WaitForGpu();
-        ReportStartupProgress(startupProgress, "Loading studio PMREM cubemap");
+        ReportStartupProgress(startupProgress, "Loading studio IBL cubemaps");
         studioPmremTexture = LoadStudioPmremTexture();
         resourceRegistry.Add("studio-pmrem-cubemap", studioPmremTexture);
+        studioIrradianceTexture = LoadStudioIrradianceTexture();
+        resourceRegistry.Add("studio-irradiance-cubemap", studioIrradianceTexture);
         ReportStartupProgress(startupProgress, "Creating D3D12 render pipelines");
         fullscreenRootSignature = CreateFullscreenRootSignature();
         fullscreenRootSignature.Name = "Aquarium D3D12 Fullscreen Root Signature";
@@ -316,6 +320,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         bodyLightBuffer.CreateShaderResourceView(device, frameResources.BodyLightDescriptor);
         frameResources.StudioPmremDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         studioPmremTexture.CreateShaderResourceView(device, frameResources.StudioPmremDescriptor);
+        frameResources.StudioIrradianceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        studioIrradianceTexture.CreateShaderResourceView(device, frameResources.StudioIrradianceDescriptor);
         frameResources.GridHeightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         gridHeightRenderTarget.CreateShaderResourceView(device, frameResources.GridHeightDescriptor);
         frameResources.SceneDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -432,6 +438,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         overlayDevice.Dispose();
         DisposePipelineStates();
         fullscreenRootSignature.Dispose();
+        studioIrradianceTexture.Dispose();
         studioPmremTexture.Dispose();
         bodyLightBuffer.Dispose();
         DisposeBloomRenderTargets();
@@ -469,16 +476,26 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private D3D12CubeTexture LoadStudioPmremTexture()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, StudioPmremRelativePath);
+        return LoadStudioCubeTexture(StudioPmremRelativePath, "Studio PMREM", "Aquarium D3D12 Studio PMREM Cubemap");
+    }
+
+    private D3D12CubeTexture LoadStudioIrradianceTexture()
+    {
+        return LoadStudioCubeTexture(StudioIrradianceRelativePath, "Studio irradiance", "Aquarium D3D12 Studio Irradiance Cubemap");
+    }
+
+    private D3D12CubeTexture LoadStudioCubeTexture(string relativePath, string label, string resourceName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, relativePath);
         if (!File.Exists(path))
         {
-            throw new FileNotFoundException("Studio PMREM cubemap asset was not copied to the runtime asset directory.", path);
+            throw new FileNotFoundException($"{label} cubemap asset was not copied to the runtime asset directory.", path);
         }
 
         var frameResources = frames[frameIndex];
         frameResources.CommandAllocator.Reset();
         commandList.Reset(frameResources.CommandAllocator, null);
-        var texture = D3D12CubeTexture.LoadRgba16FloatDds(device, commandList, path, "Aquarium D3D12 Studio PMREM Cubemap", out var uploadResource);
+        var texture = D3D12CubeTexture.LoadRgba16FloatDds(device, commandList, path, resourceName, out var uploadResource);
         commandList.Close();
         commandQueue.ExecuteCommandList(commandList);
         WaitForGpu();
@@ -793,6 +810,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.GridHeightDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.BodyLightDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(14, frameResources.StudioPmremDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(15, frameResources.StudioIrradianceDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -1459,6 +1477,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             22,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var studioIrradianceRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            23,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -1476,6 +1500,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([historyEventColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyEventMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([studioPmremRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([studioIrradianceRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -1810,6 +1835,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot BodyLightDescriptor { get; set; }
 
         public D3D12DescriptorSlot StudioPmremDescriptor { get; set; }
+
+        public D3D12DescriptorSlot StudioIrradianceDescriptor { get; set; }
 
         public D3D12DescriptorSlot GridHeightDescriptor { get; set; }
 

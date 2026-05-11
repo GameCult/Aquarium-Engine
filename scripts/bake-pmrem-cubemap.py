@@ -177,6 +177,24 @@ def prefilter_face(env: np.ndarray, face: int, size: int, roughness: float, samp
     return result / np.maximum(weight_sum, 1e-6)
 
 
+def irradiance_face(env: np.ndarray, face: int, size: int, sample_count: int) -> np.ndarray:
+    n = face_directions(face, size)
+    tangent, bitangent = tangent_basis(n)
+    result = np.zeros((size, size, 3), dtype=np.float32)
+
+    for xi1, xi2 in hammersley(sample_count):
+        radius = math.sqrt(float(xi1))
+        phi = 2.0 * math.pi * float(xi2)
+        direction = normalize(
+            tangent * (math.cos(phi) * radius)
+            + bitangent * (math.sin(phi) * radius)
+            + n * math.sqrt(max(0.0, 1.0 - float(xi1)))
+        )
+        result += sample_latlong(env, direction)
+
+    return result * (math.pi / sample_count)
+
+
 def dds_header(width: int, height: int, mip_count: int) -> bytes:
     flags = 0x1 | 0x2 | 0x4 | 0x8 | 0x1000 | 0x20000
     caps = 0x1000 | 0x8 | 0x400000
@@ -223,6 +241,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--mode", choices=["specular", "irradiance"], default="specular")
     parser.add_argument("--size", type=int, default=256)
     parser.add_argument("--samples", type=int, default=128)
     args = parser.parse_args()
@@ -231,6 +250,14 @@ def main() -> None:
         raise ValueError("--size must be a power of two")
 
     env = read_radiance_hdr(args.input)
+    if args.mode == "irradiance":
+        print(f"irradiance: {args.size}x{args.size}, samples={args.samples}")
+        write_dds(
+            args.output,
+            [[irradiance_face(env, face, args.size, args.samples) for face in range(6)]])
+        print(f"wrote {args.output}")
+        return
+
     mip_count = int(math.log2(args.size)) + 1
     mip_faces: list[list[np.ndarray]] = []
     for mip_index in range(mip_count):
