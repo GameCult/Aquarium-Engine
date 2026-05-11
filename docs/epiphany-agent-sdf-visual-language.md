@@ -56,6 +56,164 @@ verticalLift, buoyancy, returnHomeStrength
 traitActivations: map of canonical_state variable -> current_activation
 ```
 
+## Normalization Rules
+
+The renderer should convert loose surface strings into bounded scalars before
+the shader sees them. First implementation rules:
+
+```text
+statusWeight("running")     = 1.00
+statusWeight("ready")       = 0.72
+statusWeight("needed")      = 0.66
+statusWeight("review")      = 0.62
+statusWeight("waiting")     = 0.38
+statusWeight("completed")   = 0.34
+statusWeight("blocked")     = 0.18
+statusWeight("unavailable") = 0.08
+statusWeight(other)         = 0.22
+
+activity =
+  saturate(statusWeight(status) + min(jobCount, 3) * 0.08)
+
+blocked =
+  status in {"blocked", "unavailable"} or blockingReason exists
+
+completed =
+  status == "completed" or roleResult.status == "completed"
+
+hasPatch =
+  roleResult.finding.statePatch exists
+
+risk =
+  saturate(0.2 * count(finding.risks)
+         + 0.16 * count(finding.evidenceGaps)
+         + (blocked ? 0.25 : 0.0)
+         + pressureWeight(pressure.level))
+
+confidence =
+  finding.confidence if numeric
+  else 1.0 - saturate(0.5 * risk)
+```
+
+`pressureWeight` maps `unknown -> 0.15`, `low -> 0.1`, `medium -> 0.35`,
+`high -> 0.65`, `critical -> 0.9`. Unknown is not zero; missing telemetry is
+itself a small continuity smell.
+
+## Coordinate Contract
+
+All role placement and role-local SDF orientation uses Aquarium world space:
+
+- `+X`: Grid right.
+- `+Y`: Grid forward.
+- `+Z`: Grid up.
+- `gridCenter`: camera target on the XY plane.
+- `selfAnchor`: `gridCenter` unless a future swarm-level anchor overrides it.
+- `cameraFacingDir`: normalized horizontal vector from `gridCenter` toward the
+  camera. This is the "room/user side" direction.
+- `cameraRightDir`: normalized horizontal camera right vector.
+
+Each role has a stable home orbit slot around `selfAnchor`. These slots are
+authoritative defaults for native Aquarium until Epiphany publishes explicit
+world anchors:
+
+| Organ | Role id | Angle | Ring | Home formula |
+| --- | --- | ---: | ---: | --- |
+| Self | `coordinator` | 0 deg | 0.00 | `selfAnchor` |
+| Face | `face` | toward camera | 0.58 | `selfAnchor + cameraFacingDir * r` |
+| Imagination | `imagination` | 135 deg | 0.78 | `selfAnchor + polar(135) * r` |
+| Eyes | `research` | 35 deg | 0.86 | `selfAnchor + polar(35) * r` |
+| Body | `modeling` | 215 deg | 0.66 | `selfAnchor + polar(215) * r` |
+| Hands | `implementation` | 270 deg | 0.82 | `selfAnchor + polar(270) * r` |
+| Soul | `verification` | 325 deg | 0.78 | `selfAnchor + polar(325) * r` |
+| Life | `reorientation` | 80 deg | 0.62 | `selfAnchor + polar(80) * r` |
+
+`r` is the current agent-orbit radius, independent of Grid visual radius. A
+good first value is `min(gridRadius * 0.48, 22)`, clamped to `[10, 24]`.
+
+`polar(angle)` means `float2(cos(angle), sin(angle))` in the XY plane. The Face
+slot is camera-relative because Face is literally the public mouth; it should
+prefer the room side. All other slots are world-stable so spatial memory does
+not rotate every time the camera does.
+
+## Derived Spatial Anchors
+
+The renderer must derive named anchors before evaluating per-role motion. If a
+source is missing, fall through to the next entry. No shader path gets to invent
+its own private direction.
+
+```text
+roleAnchor(roleId) =
+  role home orbit slot
+  unless AgentVisualState.explicitWorldAnchor is present for that role
+
+userAnchor =
+  selfAnchor + cameraFacingDir * agentOrbitRadius * 1.15
+
+artifactAnchor(roleId) =
+  roleAnchor(roleId) + normalize(roleAnchor(roleId) - selfAnchor) * 3.5
+  + cameraRightDir * 2.0
+
+reviewAnchor =
+  roleAnchor("verification")
+
+continuityAnchor =
+  roleAnchor("reorientation")
+
+evidenceAnchor =
+  selected graph node world anchor, if a graph projection selected one
+  else artifactAnchor("research"), if Eyes has artifacts or evidence ids
+  else roleAnchor("research") + roleForward("research") * 3.0
+
+targetAnchor =
+  roleAnchor(targetRole), if targetRole is a known role id
+  else evidenceAnchor, if recommendedAction == "graphQuery"
+  else continuityAnchor, if recommendedAction contains "reorient"
+  else reviewAnchor, if requiresReview
+  else roleAnchor(roleId) + roleForward(roleId) * 3.0
+
+workAnchor =
+  active implementation job explicit world anchor, if present
+  else artifactAnchor("implementation"), if changed files or artifacts exist
+  else coordinator target role anchor, if targetRole is present
+  else reviewAnchor, if implementation is waiting on verification/review
+  else roleAnchor("implementation") + tangentClockwise("implementation") * 4.0
+```
+
+`tangentClockwise(role)` is the XY tangent around `selfAnchor` at that role's
+home slot. It gives an idle directional bias without pretending there is a real
+target.
+
+`roleForward(role)` is `normalize(roleAnchor(role) - selfAnchor)` for every
+orbiting role. For Self, it is `cameraFacingDir`. If a role is exactly at
+`selfAnchor`, use `cameraFacingDir`.
+
+`AgentVisualState.explicitWorldAnchor` is not part of the first native
+implementation. It is reserved for a later CultNet field that publishes a graph
+node, project label, or object anchor in Aquarium world coordinates. Until that
+field exists, `roleAnchor` is always the home orbit slot and `workAnchor` uses
+the fallback chain above.
+
+State-derived vectors:
+
+```text
+homeVector       = homeOrbitSlot - currentPosition
+outwardVector    = normalize(homeOrbitSlot - selfAnchor)
+targetVector     = targetAnchor - currentPosition
+targetDirection  = normalizeOr(targetVector.xy, outwardVector)
+workDirection    = normalizeOr(workAnchor.xy - handsPosition.xy,
+                               tangentClockwise("implementation"))
+evidenceDirection = normalizeOr(evidenceAnchor.xy - eyesPosition.xy,
+                                roleForward("research"))
+routeDirection   = normalizeOr(roleAnchor(targetRole).xy - selfPosition.xy,
+                               roleForward("coordinator"))
+roleExpressionDirection =
+  normalizeOr(targetAnchor.xy - currentPosition.xy, roleForward(roleId))
+```
+
+`normalizeOr(value, fallback)` returns the fallback when the vector length is
+below epsilon. This rule matters; near-zero direction vectors should not turn
+into flickering NaNs with a nice color palette.
+
 ## SDF Rules
 
 - Each organ gets a distinct SDF family, not only a color swap.
@@ -91,6 +249,55 @@ Recommended controls:
 - `gravityWellPulse`: temporary change to the agent's Grid brush height.
 - `verticalLift`: additional body-center lift derived from the local well pulse.
 - `buoyancy`: role-specific damping/overshoot for vertical response.
+
+Baseline placement integration:
+
+```text
+desiredOffset =
+  roleExpressionDirection * expressionAmount * wanderRadius
+
+expressiveOffset =
+  dampedSpring(expressiveOffset, desiredOffset, returnHomeStrength, damping)
+
+brushCenter =
+  homeOrbitSlot + expressiveOffset
+
+gridHeight =
+  sampleSharedGridBrushes(brushCenter.xy)
+
+bodyCenter =
+  float3(brushCenter.xy, gridHeight + 2 * bodyRadius + verticalLift)
+```
+
+Baseline role constants:
+
+| Organ | Wander radius | Return strength | Buoyancy |
+| --- | ---: | ---: | ---: |
+| Self | 1.2 | 0.90 | 0.45 |
+| Face | 3.2 | 0.62 | 0.85 |
+| Imagination | 4.4 | 0.48 | 0.95 |
+| Eyes | 2.4 | 0.78 | 0.52 |
+| Body | 1.8 | 0.86 | 0.38 |
+| Hands | 2.2 | 0.80 | 0.48 |
+| Soul | 1.6 | 0.92 | 0.32 |
+| Life | 2.0 | 0.84 | 0.55 |
+
+The Grid brush uses the same `brushCenter` and `gravityWellPulse`. Vertical lift
+is not an unrelated bob:
+
+```text
+gravityWellPulse =
+  heartbeatPulse * heartbeatLiftScale
+  + actionPulse * actionLiftScale
+  - pressureSink * pressureSinkScale
+
+verticalLift =
+  gravityWellPulse * buoyancy
+```
+
+The exact brush equation can change with the Grid implementation, but CPU
+placement and shader placement must call the same equation or the agent will
+visibly detach from its own well.
 
 State mapping:
 
@@ -138,7 +345,9 @@ Math:
 Movement:
 
 - Slow center pulse from heartbeat phase.
-- Selected target role lights one gate and sends a traveling pulse along the
+- `targetRole` resolves through `roleAnchor(targetRole)`. The active routing
+  gate is the torus arc whose tangent points closest to `routeDirection`.
+- Selected target role lights that gate and sends a traveling pulse along the
   matching arc.
 - `requiresReview` adds a narrow dark seam around the core.
 - `canAutoRun` sharpens and brightens the active gate.
@@ -180,6 +389,8 @@ Movement:
 
 - `hasBubble` opens the mouth and releases a small bead pulse.
 - Drafts orbit close and dim; posts orbit farther and brighter.
+- Speaking drift direction is `normalize(userAnchor - facePosition)`, capped by
+  Face's `wanderRadius`.
 - Heartbeat primary state makes the lantern brighten from inside.
 - Silence closes the mouth but keeps a slow listening breath.
 
@@ -211,7 +422,8 @@ Math:
 - Ribbon petals as torus-knot or swept-capsule loops around the seed.
 - Smooth min unions for petal roots; sharp-ish material boundary near petal
   tips.
-- Harmonic count `k` driven by planning pressure and activity.
+- Harmonic count `k = 4 + floor(activity * 3) + min(backlogCount, 3)`.
+  `amplitude = lerp(0.08, 0.28, activity)`.
 - Material ids: opal seed, pearlescent petals, emissive idea sparks, cool
   backlog shadow.
 
@@ -223,6 +435,9 @@ Movement:
   bloom.
 - Uncertainty/evidence gaps add small branching petallets that fade rather than
   becoming permanent complexity.
+- Exploratory wander direction is the weighted sum of `outwardVector` and
+  `tangentClockwise("imagination")`; accepted plans set `expressionAmount`
+  toward zero so the flower returns home.
 
 Surfaces:
 
@@ -250,7 +465,7 @@ claim ownership of the answer.
 
 Math:
 
-- Lens from intersection of two spheres or a flattened ellipsoid with high
+- Lens from intersection of two spheres with high
   specular material.
 - Aperture blades as repeated wedge/capsule SDFs around the front normal.
 - Evidence sparks as small orbiting spheres or star-like octahedra gated by
@@ -266,6 +481,8 @@ Movement:
 - High confidence narrows aperture and steadies the lens.
 - No evidence means no sparkle. The lens still watches, but it does not fake a
   finding.
+- Focus dart direction is `evidenceDirection`. `evidenceAnchor` is the
+  artifact anchor for Eyes until graph nodes publish explicit world anchors.
 
 Surfaces:
 
@@ -294,8 +511,12 @@ diagram shrine.
 Math:
 
 - Squashed ellipsoid core with smooth-union support lobes.
-- Graph ribs as capsule networks over the surface, using a small fixed pattern
-  at first and future graph projections later.
+- Graph ribs as capsule networks over the surface. First implementation uses
+  five deterministic ribs between fixed normalized surface points:
+  north-south, east-west, northwest-center-southeast,
+  northeast-center-southwest, and one equatorial ring segment. Future graph
+  projections may replace rib endpoints only when they publish explicit world
+  or role-local anchors.
 - Node beads at rib intersections.
 - Subtle displacement from low-frequency sine waves for breathing mass.
 - Material ids: matte green body, glossy rib enamel, bright checkpoint nodes,
@@ -308,6 +529,10 @@ Movement:
 - Evidence gaps open small dark fissures between ribs.
 - High load makes the mass sag; high confidence makes ribs align and glow
   steadily.
+- Connective wake direction points from Body toward any `frontierNodeIds`
+  world anchor when available, otherwise toward Self. This makes missing graph
+  anchors obvious: the wake falls back inward instead of pretending the graph
+  has a location.
 
 Surfaces:
 
@@ -334,7 +559,7 @@ then settles. No grand aura. Hands earns drama by producing diff.
 
 Math:
 
-- Capsule/ellipsoid core elongated along the current work direction.
+- Capsule/ellipsoid core elongated along `workDirection`.
 - Two or three gripper lobes as smooth-union capsules around the core.
 - Tool edge as a thin prism/capsule ridge with high-metalness material.
 - Small impact sparks as short-lived bead SDFs near the leading edge.
@@ -343,10 +568,26 @@ Math:
 
 Movement:
 
-- Running/continuing work leans the core toward the current target.
+- Running/continuing work leans the core toward `workAnchor`.
 - Changed files or artifacts trigger quick acknowledgement pops.
 - Blocked state retracts grippers and dims the tool edge.
 - Verification pass or accepted result relaxes the shape back into idle.
+
+Hands spatial rule:
+
+```text
+handsForward = workDirection
+handsRight   = float2(-handsForward.y, handsForward.x)
+coreLength   = lerp(1.15, 1.65, activity)
+coreRadius   = lerp(0.46, 0.38, activity)
+toolEdgePos  = handsCenter.xy + handsForward * coreLength * 0.48
+gripPosA     = handsCenter.xy - handsForward * 0.18 + handsRight * 0.34
+gripPosB     = handsCenter.xy - handsForward * 0.18 - handsRight * 0.34
+```
+
+`workDirection` is not semantic mood. It is derived from `workAnchor` in the
+coordinate contract above. If all work anchors are missing, it falls back to the
+clockwise orbit tangent, so the shape remains deterministic and debuggable.
 
 Surfaces:
 
@@ -376,7 +617,8 @@ Math:
   small radius.
 - Inner core sphere visible through material contrast, not real transparency
   dependency.
-- Risk seam as a thin torus/capsule ring around the crystal.
+- Risk seam as a thin torus/capsule ring around the crystal. Ring thickness is
+  `lerp(0.015, 0.09, risk)`.
 - Finding marks as tiny engraved line SDFs or bright dots on facets.
 - Material ids: cool crystal facets, white inner core, red risk seam, blue
   confidence edge, dark rejected mark.
@@ -388,6 +630,9 @@ Movement:
 - Confidence brightens blue edges and steadies rotation.
 - Failed or blocked findings produce short angular fractures; accepted findings
   heal them into clean facet lines.
+- Review-facing posture points the risk seam normal toward
+  `roleAnchor(coordinator)` when `requiresReview` is true, otherwise toward
+  `outwardVector`.
 
 Surfaces:
 
@@ -428,6 +673,9 @@ Movement:
 - Regather opens a dark seam and pulls beads inward.
 - Resume steadies the ember and releases beads along the old path.
 - Sleep/incubation slows orbit and dims the shell while preserving the ember.
+- Memory bead trail follows a logarithmic spiral centered on Life's
+  `bodyCenter.xy`. Regather reverses bead phase toward the seed; resume advances
+  phase outward along `continuityAnchor -> lifePosition` tangent.
 
 Surfaces:
 
