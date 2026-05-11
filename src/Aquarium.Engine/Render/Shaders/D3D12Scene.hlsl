@@ -21,6 +21,7 @@ cbuffer AquariumFrame : register(b0)
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
+TextureCube<float4> studioPmremTexture : register(t22);
 SamplerState gridSampler : register(s0);
 
 struct BodyLight
@@ -53,6 +54,8 @@ static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.56;
 static const int BODY_LIGHT_COUNT = 8;
+static const float STUDIO_PMREM_MAX_LOD = 8.0;
+static const float STUDIO_PMREM_SPECULAR_INTENSITY = 0.34;
 
 struct VertexOut
 {
@@ -624,6 +627,22 @@ float3 cursorSpecularBodyLightRadiance(float3 p, float3 normal)
     return result;
 }
 
+float3 fresnelSchlickRoughness(float cosine, float3 f0, float roughness)
+{
+    return f0 + (max(1.0 - roughness, f0) - f0) * pow(1.0 - cosine, 5.0);
+}
+
+float3 studioPmremSpecularRadiance(float3 p, float3 normal, float roughness, float3 f0)
+{
+    float3 viewDirection = normalize(cameraPosition - p);
+    float ndv = saturate(dot(normal, viewDirection));
+    float3 reflectionDirection = reflect(-viewDirection, normal);
+    float lod = saturate(roughness) * STUDIO_PMREM_MAX_LOD;
+    float3 radiance = studioPmremTexture.SampleLevel(gridSampler, reflectionDirection, lod).rgb;
+    float3 fresnel = fresnelSchlickRoughness(ndv, f0, roughness);
+    return radiance * fresnel * STUDIO_PMREM_SPECULAR_INTENSITY;
+}
+
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)
 {
     float fieldId = primitiveFieldId(primitiveId);
@@ -635,12 +654,20 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        return emission + cursorSpecularBodyLightRadiance(p, normal);
+        static const float CursorRoughness = 0.16;
+        float3 cursorF0 = float3(0.95, 0.62, 0.26);
+        return emission
+            + cursorSpecularBodyLightRadiance(p, normal)
+            + studioPmremSpecularRadiance(p, normal, CursorRoughness, cursorF0);
     }
 
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return emission + albedo * bodyLightIrradianceAt(p, normal) / PI;
+    float roughness = lerp(0.46, 0.72, hash21(float2(primitiveId, 11.9)));
+    float3 dielectricF0 = 0.04;
+    return emission
+        + albedo * bodyLightIrradianceAt(p, normal) / PI
+        + studioPmremSpecularRadiance(p, normal, roughness, dielectricF0);
 }
 
 SceneOut D3D12ScenePS(VertexOut input)
