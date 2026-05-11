@@ -55,6 +55,7 @@ renderer_state:
     - Direct-traced Grid linework as a non-terminating stochastic event lane before the nearest solid.
     - SDF/analytic solids for Self, planets, and the cursor locator.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
+    - Studio3 PMREM DDS cubemap is baked from the Epiphany HDR latlong for future roughness-mip PBR reflections.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
