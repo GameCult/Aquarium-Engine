@@ -417,11 +417,16 @@ bool traceGridSurfaceDirect(float3 origin, float3 direction, float intervalStart
     return false;
 }
 
+float3 studioPmremDirection(float3 worldDirection)
+{
+    return normalize(float3(worldDirection.x, worldDirection.z, worldDirection.y));
+}
+
 float3 gridMirrorRadiance(float3 p, float3 direction, out float3 normal)
 {
     normal = terrainNormal(p);
     float3 reflectionDirection = reflect(direction, normal);
-    return studioPmremTexture.SampleLevel(gridSampler, reflectionDirection, 0.0).rgb;
+    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(reflectionDirection), 0.0).rgb;
 }
 
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
@@ -570,7 +575,7 @@ float3 studioPmremSpecularRadiance(float3 p, float3 normal, float roughness, flo
     float ndv = saturate(dot(normal, viewDirection));
     float3 reflectionDirection = reflect(-viewDirection, normal);
     float lod = saturate(roughness) * STUDIO_PMREM_MAX_LOD;
-    float3 radiance = studioPmremTexture.SampleLevel(gridSampler, reflectionDirection, lod).rgb;
+    float3 radiance = studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(reflectionDirection), lod).rgb;
     float3 fresnel = fresnelSchlickRoughness(ndv, f0, roughness);
     return radiance * fresnel * STUDIO_PMREM_SPECULAR_INTENSITY;
 }
