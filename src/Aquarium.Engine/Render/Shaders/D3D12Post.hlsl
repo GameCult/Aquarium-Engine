@@ -62,7 +62,8 @@ struct ResolveOut
 };
 
 static const float SUN_RADIUS = 1.12;
-static const int AGENT_VISUAL_COUNT = 7;
+static const int ROLE_AGENT_COUNT = 7;
+static const int AGENT_VISUAL_COUNT = ROLE_AGENT_COUNT + 2;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
@@ -178,7 +179,7 @@ float gridHeightAt(float2 world, float sampleTime)
     height += gridBrushHeight(world, 0.0, SELF_GRAVITY_RADIUS, 2.85, -1.34, 0.18, 6.28318530718, 0.82, 1.25, sampleTime);
 
     [unroll]
-    for (int index = 0; index < AGENT_VISUAL_COUNT; index++)
+    for (int index = 0; index < ROLE_AGENT_COUNT; index++)
     {
         float radius = planetRadius(index);
         height += gridBrushHeight(world, planetAnchorAt(index, sampleTime), 3.8 + radius * 2.5, 2.1, -0.42, 0.022, 2.4, 1.35, 0.0, sampleTime);
@@ -227,8 +228,8 @@ float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
 
     if (abs(fieldId - FIELD_ID_CURSOR) < 0.25)
     {
-        float3 currentCenter = bodyCenterAtGridHeight(cursorWorlds.xy, 0.56, timeSeconds);
-        float3 previousCenter = bodyCenterAtGridHeight(cursorWorlds.zw, 0.56, previousTimeSeconds);
+        float3 currentCenter = float3(cursorWorlds.xy, 0.56);
+        float3 previousCenter = float3(cursorWorlds.zw, 0.56);
         return previousCenter + (worldPosition - currentCenter);
     }
 

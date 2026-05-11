@@ -27,9 +27,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format SceneDepthFormat = Format.D32_Float;
     private const int RoleAgentCount = 7;
     private const int AgentVisualCount = RoleAgentCount + 2;
-    private const int SelfObjectIndex = RoleAgentCount;
+    private const int SelfObjectIndex = 0;
+    private const int RoleAgentBaseIndex = 1;
     private const int CursorObjectIndex = AgentVisualCount - 1;
-    private const int GridHeightBrushCount = AgentVisualCount - 1;
+    private const int GridHeightBrushCount = RoleAgentCount + 1;
     private const int BodyLightCount = 8;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
@@ -915,7 +916,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             for (var bodyIndex = 0; bodyIndex < AgentVisualCount; bodyIndex++)
             {
                 context.CommandList.SetPipelineState(bodyProxyPipelineStates[bodyIndex]!);
-                context.CommandList.DrawInstanced(6, 1, 0, (uint)bodyIndex);
+                context.CommandList.DrawInstanced(6, 1, 0, 0);
             }
         }
         finally
@@ -1117,7 +1118,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             0.82f,
             1.25f);
 
-        for (var index = 0; index < SelfObjectIndex; index++)
+        for (var index = 0; index < RoleAgentCount; index++)
         {
             var radius = AgentRadius(index);
             var center = AgentAnchor(index, frame.TimeSeconds);
@@ -1137,8 +1138,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private void BuildAgentVisualTable(AquariumFrame frame)
     {
         Array.Clear(agentVisuals);
-        for (var index = 0; index < SelfObjectIndex; index++)
+        var selfCenter = BodyCenterAtGridHeight(frame, Vector2.Zero, SunRadius);
+        agentVisuals[SelfObjectIndex] = new AgentVisualGpu(
+            new Vector4(selfCenter, SunRadius),
+            new Vector4(selfCenter, 0.0f),
+            new Vector4(1.0f, 1.0f, 0.0f, 0.0f),
+            new Vector4(0.0f, SelfObjectIndex, 1.0f, 0.0f));
+
+        for (var index = 0; index < RoleAgentCount; index++)
         {
+            var visualIndex = RoleAgentBaseIndex + index;
             var radius = AgentRadius(index);
             var center = AgentCenterAtGridHeight(index, frame.TimeSeconds);
             var previousCenter = AgentCenterAtGridHeight(index, previousTimeSeconds);
@@ -1149,19 +1158,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             var expression = Math.Abs(roleId - 2.0f) < 0.01f || Math.Abs(roleId - 4.0f) < 0.01f ? 0.72f : 0.38f;
             var lod = 1.0f;
 
-            agentVisuals[index] = new AgentVisualGpu(
+            agentVisuals[visualIndex] = new AgentVisualGpu(
                 new Vector4(center, radius),
                 new Vector4(previousCenter, roleId),
                 new Vector4(activity, heartbeat, pressure, expression),
-                new Vector4(lod, index, 0.0f, 0.0f));
+                new Vector4(lod, visualIndex, 0.0f, 0.0f));
         }
-
-        var selfCenter = BodyCenterAtGridHeight(frame, Vector2.Zero, SunRadius);
-        agentVisuals[SelfObjectIndex] = new AgentVisualGpu(
-            new Vector4(selfCenter, SunRadius),
-            new Vector4(selfCenter, 0.0f),
-            new Vector4(1.0f, 1.0f, 0.0f, 0.0f),
-            new Vector4(0.0f, SelfObjectIndex, 1.0f, 0.0f));
 
         var cursorCenter = new Vector3(frame.CursorWorld, CursorBodyRadius);
         var previousCursorCenter = new Vector3(previousCursorWorld, CursorBodyRadius);
@@ -1893,7 +1895,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             * MathF.Sin((world.X * -0.04f + world.Y * 0.07f) - timeSeconds * 0.19f)
             * 0.035f;
         height += GridBrushHeight(world, Vector2.Zero, SelfGravityRadius, 2.85f, -1.34f, 0.18f, MathF.Tau, 0.82f, 1.25f, timeSeconds);
-        for (var index = 0; index < SelfObjectIndex; index++)
+        for (var index = 0; index < RoleAgentCount; index++)
         {
             var radius = AgentRadius(index);
             height += GridBrushHeight(world, AgentAnchor(index, timeSeconds), 3.8f + radius * 2.5f, 2.1f, -0.42f, 0.022f, 2.4f, 1.35f, 0.0f, timeSeconds);
@@ -2095,6 +2097,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 shaderPath(BodyCommonShaderRelativePath),
                 shaderPath(BodyProxyShaderRelativePath),
                 [
+                    shaderPath(SelfBodyShaderRelativePath),
                     shaderPath(FaceAgentShaderRelativePath),
                     shaderPath(ImaginationAgentShaderRelativePath),
                     shaderPath(EyesAgentShaderRelativePath),
@@ -2102,7 +2105,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
                     shaderPath(HandsAgentShaderRelativePath),
                     shaderPath(SoulAgentShaderRelativePath),
                     shaderPath(LifeAgentShaderRelativePath),
-                    shaderPath(SelfBodyShaderRelativePath),
                     shaderPath(CursorBodyShaderRelativePath),
                 ],
                 shaderPath(SdfMathShaderRelativePath),

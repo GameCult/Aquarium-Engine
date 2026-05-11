@@ -44,7 +44,7 @@ StructuredBuffer<AgentVisual> agentVisuals : register(t24);
 
 static const int ROLE_AGENT_COUNT = 7;
 static const int AGENT_VISUAL_COUNT = ROLE_AGENT_COUNT + 2;
-static const int SELF_OBJECT_INDEX = ROLE_AGENT_COUNT;
+static const int SELF_OBJECT_INDEX = 0;
 static const int CURSOR_OBJECT_INDEX = AGENT_VISUAL_COUNT - 1;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_GRID = 4.0;
@@ -244,7 +244,7 @@ AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instance
         float2(-1.0, 1.0),
     };
 
-    AgentVisual agent = agentVisuals[instanceId];
+    AgentVisual agent = agentVisuals[BODY_INDEX];
     float3 forward;
     float3 right;
     float3 up;
@@ -260,6 +260,6 @@ AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instance
 
     AgentProxyVertexOut output;
     output.position = float4(clipCenter + corners[vertexId] * clipRadius, 0.0, 1.0);
-    output.agentIndex = (float)instanceId;
+    output.agentIndex = (float)BODY_INDEX;
     return output;
 }

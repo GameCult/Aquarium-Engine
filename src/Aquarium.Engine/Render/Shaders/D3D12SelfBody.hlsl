@@ -1,3 +1,5 @@
+static const int BODY_INDEX = 0;
+
 #include "D3D12BodyCommon.hlsli"
 #include "D3D12SdfMath.hlsli"
 
