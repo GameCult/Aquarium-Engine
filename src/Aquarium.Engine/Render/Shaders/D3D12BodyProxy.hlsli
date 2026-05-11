@@ -1,5 +1,5 @@
 #ifndef BODY_TRACE_STEPS
-#define BODY_TRACE_STEPS 128
+#define BODY_TRACE_STEPS 384
 #endif
 
 #ifndef BODY_TRACE_STEP_SCALE
@@ -85,13 +85,13 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
         float3 p = origin + direction * travel;
         surface = bodySurface(p, agentIndex);
         stepCount = (float)(stepIndex + 1);
-        if (previousDistance > 0.0 && surface.distanceValue <= 0.0)
+        if (surface.distanceValue <= 0.0)
         {
-            return refineBodyHit(origin, direction, agentIndex, previousTravel, travel, travel, normal, surface);
-        }
+            if (previousDistance > 0.0)
+            {
+                return refineBodyHit(origin, direction, agentIndex, previousTravel, travel, travel, normal, surface);
+            }
 
-        if (abs(surface.distanceValue) < max(BODY_TRACE_MIN_STEP, travel * 0.00018))
-        {
             normal = bodyNormal(p, agentIndex);
             return true;
         }
