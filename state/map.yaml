@@ -4,14 +4,16 @@ project:
   upstream: https://github.com/GameCult/Aquarium-Engine
   purpose: >
     Native C# engine core for the Epiphany Aquarium client. The engine owns the
-    Win32/D3D11 host, HLSL renderer, input loop, live runtime boundary,
-    CultCache-backed state, and future diegetic UI/runtime integration.
+    Win32 host, D3D12 renderer, input loop, live runtime boundary,
+    CultCache-backed state, and diegetic UI/runtime integration.
 
 current_model:
   host:
     window: src/Aquarium.Engine/Platform/Win32Window.cs
-    renderer: src/Aquarium.Engine/Render/D3D11Renderer.cs
-    shader: src/Aquarium.Engine/Render/Shaders/Aquarium.hlsl
+    renderer: src/Aquarium.Engine/Render/D3D12Renderer.cs
+    grid_shader: src/Aquarium.Engine/Render/Shaders/D3D12Grid.hlsl
+    scene_shader: src/Aquarium.Engine/Render/Shaders/D3D12Scene.hlsl
+    post_shader: src/Aquarium.Engine/Render/Shaders/D3D12Post.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
     debug_ui: src/Aquarium.Engine/Render/Ui/DebugUi.cs
     runtime_loader: src/Aquarium.Engine/Live/LiveRuntimeLoader.cs
@@ -31,63 +33,40 @@ current_model:
     renderer: docs/hlsl-renderer.md
     runtime_surface: docs/cult-runtime-surface.md
     native_spine: docs/vortice-spine.md
-    sdf_field_renderer_plan: docs/sdf-field-renderer-plan.md
     tsr_inspired_taa_spec: docs/tsr-inspired-taa-spec.md
     input: docs/input.md
-    volumetrics_research: research/volumetrics/synthesis.md
-    recent_volumetrics_and_gpu_sdf: research/volumetrics/recent-volumetrics-and-gpu-sdf.md
-    volumetrics_transcript_addendum: research/volumetrics/transcript-addendum.md
     hdr_pbr_presentation: research/rendering/hdr-pbr-presentation.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
   - Grid radius follows twice the clamped camera zoom distance, then clamps to [20, 80]; pitch/yaw/projection do not resize it.
   - Body anchors remain world-space and independent of the moving Grid window.
-  - World-space domains own Grid texture/weather sampling.
-  - SDF clouds are local world media, not skybox content; they can exist above, below, around, or enclosing the camera.
   - Visible scene lighting is diegetic; no default ambient/global fill.
   - Overlay text is DirectWrite final-pixel UI; scene text needs renderer-owned billboards.
   - CultCache persists live app state through reload.
   - Global GraphicsSettings persists renderer debug/HDR presentation knobs through restart and live reload.
   - Failed shader/live-runtime reloads must leave the last good frame alive.
-  - Live-runtime reload success requires host acknowledgement of the exact live DLL path, not merely a pointer update.
   - Closed visible dev windows can be reopened from the last good slot without rebuilding.
 
 renderer_state:
   current:
-    - D3D11 swapchain through Vortice.
-    - Fullscreen HLSL raymarch for Grid terrain, Self, and planets.
-    - Deferred Grid height render target.
-    - Primitive froxel/bin table for body broad phase.
-    - Stable planet-local displaced SDF domains.
-    - DirectWrite overlay text after scene rendering.
-    - Direct2D/DirectWrite debug UI panel with code-first controls bound to renderer state.
-    - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, bloom veil, and medium composite intensity.
-    - Field instance structured buffer feeding blue-noise-decorrelated D3D12 medium density, transport, raw light injection, and four-iteration ping-ponged froxel propagation for irradiance plus dominant-light direction.
-    - D3D12 default renderer behind IAquariumRenderer with device/queue/swapchain, per-frame command allocators, fences, static/transient descriptor arenas, upload ring constants, RTV/SRV/UAV render targets, structured field buffers, tracked barriers, command events, resize descriptor-arena rebuild, migrated Grid height brushes, view-froxel solid bins, HDR/bloom/present, temporal history lanes, and DirectWrite overlay bridge.
-    - D3D12 Grid linework is direct-traced as a non-terminating stochastic event lane before the nearest solid; the failed transparent-froxel Grid bin experiment is dead and must stay out of live code.
-    - Splash screen with bundled app icon and GameCult typefaces.
+    - D3D12 default renderer behind IAquariumRenderer with explicit device/queue/swapchain, command allocators, fences, descriptor arenas, upload ring constants, tracked render targets, command events, resize rebuild, HDR/bloom/present, temporal diagnostics, and DirectWrite overlay bridge.
+    - Deferred scalar Grid height target rendered from additive brush passes.
+    - Direct-traced Grid linework as a non-terminating stochastic event lane before the nearest solid.
+    - SDF/analytic solids for Self, planets, and the cursor locator.
+    - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
+    - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
+    - D3D11 scene renderer, runtime volumetrics, cloud/fog research, and the SDF-field renderer plan are shelved and removed from live repo state.
   next:
-    - Replace CPU bootstrap view-froxel binning with GPU/raster binning before primitive/event counts scale.
-    - Evolve the dominant-light direction field into richer probe lighting once multiple emitters, crossing beams, or glossy SDFs need more than one direction. Until then, the one-direction smear is accepted as an artistic approximation.
-    - Promote field instances from fixed renderer table to a CPU-owned registry with per-field debug controls.
+    - Finish pruning leftover medium-era render-target/history scaffolding from D3D12Scene/Post/Renderer without regressing Grid, solids, HDR, TAA diagnostics, or overlay UI.
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
-    - Add volumetrics as an explicit renderer-owned field pass, starting from Wronski/Hillaire-style frustum volume lighting with Self as the first emitter.
-    - Evolve solids and clouds toward one SDF field registry with material and medium regimes.
-    - Extend TSR-inspired temporal resolve with general animated-field velocity, richer reactive masks, and true volumetric history.
-    - Move Grid gradients into the Grid target for cheaper terrain normals.
-    - Rebuild lighting as an Aquarium-owned field before adding richer fog.
-    - Add diegetic labels and object-local menus after the renderer and text contracts are stable.
+    - Promote field/body instances from fixed renderer tables to a CPU-owned registry with typed controls.
+    - Add diegetic labels and object-local menus after renderer and text contracts are stable.
 
 next_actions:
   - Keep main as the live development branch.
   - Verify publish output after every packaging-affecting change.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
-  - Use research/volumetrics/synthesis.md before designing fog, atmospheric scattering, clouds, or sparse volume storage.
-  - Use research/volumetrics/recent-volumetrics-and-gpu-sdf.md before designing GPU SDF, cloud traversal, learned field storage, or radiance caching.
-  - Check research/volumetrics/transcript-addendum.md before relying on slide decks as evidence; video transcripts can change the renderer lesson.
-  - Follow docs/sdf-field-renderer-plan.md when adding SDF solids, SDF clouds, or hybrid field objects.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
-  - Follow docs/tsr-inspired-taa-spec.md when changing jitter, history, stochastic coverage, or temporal rejection.
+  - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics or stochastic event handling.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.
-  - Port only proven synth concepts into C# when audio returns; keep external prototypes as references, not engine baggage.

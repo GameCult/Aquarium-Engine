@@ -25,7 +25,6 @@ Later gates add:
 - explicit velocity
 - reactive mask
 - transparency/composition mask
-- volumetric accumulation terms
 - resurrection history
 
 ## Current Pass Contract
@@ -52,7 +51,7 @@ For the first implementation, motion is camera-derived:
    distance from the previous camera, not against current-frame travel.
 
 This is sufficient for camera motion and stochastic Grid coverage. It is not the
-final answer for animated bodies, field animation, or volumetrics.
+final answer for animated bodies or field animation.
 
 ## Rejection
 
@@ -91,7 +90,6 @@ more history.
   scene we are building.
 - Do not vendor Unreal TSR code. Study behavior and build a clean-room resolver.
 - Do not hide missing renderer signals with larger blend weights.
-- Do not treat volumetrics as ordinary opaque surface history.
 - Do not make the Grid a final-image HUD layer; it is diegetic scene UI and must
   respect nearer solids.
 
@@ -137,10 +135,9 @@ Still missing:
 - separate field ids once the SDF field registry exists
 - reactive/coverage masks
 - richer disocclusion classification
-- a general velocity buffer for non-rigid fields, deformation, and future
-  volumetrics
+- a general velocity buffer for non-rigid fields and deformation
 
-### Gate 3: Volumetric Temporal Contract
+### Gate 3: Stochastic Event Control
 
 Current Gate 3A implementation:
 
@@ -151,7 +148,7 @@ Current Gate 3A implementation:
 ```text
 x = reactive strength
 y = stochastic/composition coverage
-z = medium opacity placeholder
+z = reserved
 w = reserved
 ```
 
@@ -166,15 +163,13 @@ Current Gate 3B implementation:
   history
 - resolve samples previous-frame temporal control at the reprojected UV
 - coverage discontinuity reduces history
-- medium-opacity discontinuity reduces history, even though real volumetrics do
-  not write the channel yet
 - current temporal control is written into the history set for the next frame
 
 Current Gate 3C implementation:
 
 - temporal-control history `w` stores accepted history age in frames
 - validation grows age when reprojected history survives the travel, field,
-  normal, color, coverage, and medium-opacity checks
+  normal, color, and coverage checks
 - history authority ramps with age, so newly accepted history can contribute but
   does not immediately get the same weight as stable history
 - age resets to zero on validation failure
@@ -260,22 +255,15 @@ Current Gate 3M implementation:
 
 - final presentation no longer blends temporal color history for any surface
 - the history, metadata, and control ping-pongs remain for debug views and for
-  the future volumetric temporal contract
+  future stochastic-event work
 - mode `0` is current-frame color after analytic Grid reconstruction and
   tonemapping; modes `2` through `4` show what the diagnostic temporal path
   would have sampled, aged, and weighted
 
-This is intentionally still a surface/stochastic coverage contract. It prepares
-the resolver for volumetrics without lying that a single hit depth describes a
-whole participating medium.
-
 Still missing:
 
-- local volume history separate from opaque/surface history
-- accumulated extinction/transmittance history
 - reactive reset for lighting and density changes
-- dominant depth or moment pair for volume reprojection
-- separate history policy for opaque surfaces, stochastic surfaces, and media
+- separate history policy for opaque surfaces and stochastic surfaces
 
 ### Gate 4: TSR Features Worth Stealing In Spirit
 
@@ -291,8 +279,8 @@ Current debug view controls:
 - `2` reprojected history color used by the resolver
 - `3` accepted history age
 - `4` history weight
-- `5` current temporal control: reactive in red, Grid support/coverage in green,
-  reserved medium opacity in blue
+- `5` current temporal control: reactive in red and Grid support/coverage in
+  green
 - `6` current field identity palette for Grid, Self, and planets
 - `7` bloom/veil contribution after exposure and before tonemapping
 - `8` exposed luminance bands

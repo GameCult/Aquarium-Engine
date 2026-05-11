@@ -786,12 +786,6 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     result.eventCoverage = 0.0;
     result.eventColor = 0.0;
 
-    float transmittance = 1.0;
-    float3 inScattering = 0.0;
-    float densityTravelSum = 0.0;
-    float densitySum = 0.0;
-    float densityAccumulation = 0.0;
-
     SolidHit nearestSolid;
     nearestSolid.hit = false;
     nearestSolid.travel = farDistance;
@@ -825,11 +819,6 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         gridHit = gridAlpha > 0.001;
     }
 
-    integrateMediumRange(uv, origin, direction, 0.0, stopTravel, transmittance, inScattering, densityAccumulation, densityTravelSum, densitySum);
-    float mediumOpacity = saturate(1.0 - transmittance);
-    float mediumDensityMean = saturate(densityAccumulation / (float)MEDIUM_FROXEL_SLICE_COUNT);
-    float mediumTravel = densitySum > 0.0001 ? min(densityTravelSum / densitySum, stopTravel) : farDistance + 1.0;
-
     if (gridHit)
     {
         result.eventTravel = gridTravel;
@@ -841,30 +830,11 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     {
         float3 p = origin + direction * nearestSolid.travel;
         float3 bodyColor = shadeBody(uv, nearestSolid.travel, p, nearestSolid.normal, nearestSolid.primitiveId);
-        result.color = bodyColor * transmittance + inScattering;
+        result.color = bodyColor;
         result.travel = nearestSolid.travel;
         result.fieldId = nearestSolid.fieldId;
         result.normal = nearestSolid.normal;
         result.coverage = 1.0;
-        result.mediumOpacity = mediumOpacity;
-        result.densityMean = mediumDensityMean;
-        result.mediumTravel = mediumTravel;
-        result.mediumColor = inScattering;
-    }
-    else
-    {
-        result.color = result.color * transmittance + inScattering;
-        result.mediumOpacity = mediumOpacity;
-        result.densityMean = mediumDensityMean;
-        result.mediumTravel = mediumTravel;
-        result.mediumColor = inScattering;
-        if (result.mediumOpacity > 0.015)
-        {
-            result.fieldId = FIELD_ID_MEDIUM;
-            result.normal = -direction;
-            result.coverage = saturate(max(result.mediumOpacity, result.densityMean * 4.0));
-            result.travel = mediumTravel;
-        }
     }
 
     return result;
@@ -886,12 +856,30 @@ float3 primitiveEmissionRadiance(float fieldId)
     return 0.0;
 }
 
-float3 cursorSpecularFroxelRadiance(float2 uv, float travel, float3 p, float3 normal)
+float3 selfRadiance()
+{
+    return float3(10.0, 8.7, 4.2);
+}
+
+float3 selfIrradianceAt(float3 p, float3 normal)
+{
+    float3 toSelf = float3(0.0, 0.0, 2.2) - p;
+    float distanceSquared = max(dot(toSelf, toSelf), 0.01);
+    float3 lightDirection = toSelf * rsqrt(distanceSquared);
+    float cosine = saturate(dot(normal, lightDirection));
+    float solidAngle = saturate((SUN_RADIUS * SUN_RADIUS) / distanceSquared);
+    return selfRadiance() * cosine * solidAngle * 6.0;
+}
+
+float3 cursorSpecularSelfRadiance(float3 p, float3 normal)
 {
     static const float MinimumRoughness = 0.045;
     static const float CursorRoughness = 0.16;
 
     float3 viewDirection = normalize(cameraPosition - p);
+    float3 toSelf = float3(0.0, 0.0, 2.2) - p;
+    float distanceSquared = max(dot(toSelf, toSelf), 0.01);
+    float3 lightDirection = toSelf * rsqrt(distanceSquared);
     float ndv = saturate(dot(normal, viewDirection));
     float roughness = max(CursorRoughness, MinimumRoughness);
     float alpha = roughness * roughness;
@@ -900,9 +888,7 @@ float3 cursorSpecularFroxelRadiance(float2 uv, float travel, float3 p, float3 no
     k = (k * k) * 0.125;
     float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
     float3 f0 = float3(0.95, 0.62, 0.26);
-    float3 irradiance = froxelIrradianceAt(uv, travel);
-    float3 lightDirection;
-    float directionConfidence = froxelDominantLightAt(uv, travel, lightDirection);
+    float3 irradiance = selfRadiance() * saturate((SUN_RADIUS * SUN_RADIUS) / distanceSquared) * 7.0;
     float3 halfVector = normalize(lightDirection + viewDirection);
     float ndl = saturate(dot(normal, lightDirection));
     float ndh = saturate(dot(normal, halfVector));
@@ -913,17 +899,7 @@ float3 cursorSpecularFroxelRadiance(float2 uv, float travel, float3 p, float3 no
     float geometry = geometryL * geometryV;
     float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
     float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-    float3 directSpecular = specular * irradiance * ndl * directionConfidence;
-
-    float3 viewFresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
-    float3 fieldRadiance = irradiance * INV_FOUR_PI;
-    float3 reflectedView = reflect(-viewDirection, normal);
-    float reflectedLight = pow(saturate(dot(reflectedView, lightDirection)), lerp(4.0, 14.0, directionConfidence));
-    float litMediumHemisphere = pow(saturate(dot(normal, -lightDirection)), 1.7) * directionConfidence;
-    float grazingReflection = pow(1.0 - ndv, 2.5);
-    float environmentWeight = 0.025 + reflectedLight * 0.28 + litMediumHemisphere * 0.18 + grazingReflection * 0.06;
-    float3 mediumSpecular = fieldRadiance * viewFresnel * environmentWeight;
-    return directSpecular + mediumSpecular;
+    return specular * irradiance * ndl;
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)
@@ -935,20 +911,14 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
         return emission;
     }
 
-    float3 irradiance = froxelIrradianceAt(uv, travel);
-    float irradianceLuma = dot(irradiance, float3(0.2126, 0.7152, 0.0722));
-
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        return emission + cursorSpecularFroxelRadiance(uv, travel, p, normal);
+        return emission + cursorSpecularSelfRadiance(p, normal);
     }
 
-    float3 lightDirection;
-    float directionConfidence = froxelDominantLightAt(uv, travel, lightDirection);
-    float lambert = lerp(1.0, saturate(dot(normal, lightDirection)), directionConfidence);
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return emission + albedo * irradianceLuma * lambert / PI;
+    return emission + albedo * selfIrradianceAt(p, normal) / PI;
 }
 
 SceneOut D3D12ScenePS(VertexOut input)
@@ -959,17 +929,12 @@ SceneOut D3D12ScenePS(VertexOut input)
 
     RayMarchResult result = traverseRay(input.uv, screenUv, cameraPosition, rayDirection);
 
-    if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
-    {
-        result.color = lerp(float3(0.006, 0.016, 0.026), float3(0.32, 0.86, 1.0), saturate(result.densityMean * 6.0));
-    }
-
     SceneOut output;
     output.colorTravel = float4(result.color, min(result.travel, farDistance + 1.0));
     output.metadata = float4(result.fieldId, result.normal);
-    output.control = float4(0.0, result.coverage, result.mediumOpacity, result.densityMean);
-    output.mediumPacket = float4(FIELD_ID_MEDIUM, result.mediumTravel, result.mediumOpacity, result.densityMean);
-    output.mediumColor = float4(result.mediumColor, result.mediumOpacity);
+    output.control = float4(0.0, result.coverage, 0.0, 0.0);
+    output.mediumPacket = 0.0;
+    output.mediumColor = 0.0;
     output.eventColor = float4(result.eventColor, result.eventCoverage);
     output.eventMetadata = float4(FIELD_ID_GRID, result.eventTravel, result.eventCoverage, 0.0);
     return output;

@@ -1,116 +1,48 @@
-# D3D12 Migration
+# D3D12 Renderer
 
-Aquarium is moving to D3D12 before the transparent stochastic surface pipeline
-gets real machinery. D3D12 is now the default renderer; D3D11 remains only as a
-temporary visual reference until the old backend is deleted.
+D3D12 is the live renderer. The old D3D11 scene backend has been removed; the
+only remaining D3D11 use is the narrow D3D11On12 bridge required for native
+DirectWrite/Direct2D overlay text.
 
 ## Current State
 
-- `--renderer d3d12` is the default renderer and owns the live scene.
-- `--renderer d3d11` still selects the old reference backend while it exists.
-- D3D12 creates a device, command queue, flip-discard
-  swapchain, RTV heap, per-backbuffer command allocators, command list,
-  fence-backed present loop, static and transient shader-visible descriptor
-  arenas, per-frame upload buffers, renderer-owned Grid height, medium, HDR
-  scene, and bloom render targets, a fullscreen root signature, named objects,
-  command-list events, and explicit tracked resource transitions.
-- The first real migrated pass is the Grid height pass. D3D12 uploads Aquarium
-  frame constants plus a fixed body brush table, renders a base Grid field, then
-  draws one additive up-facing gravity quad per body into a 128x128
-  scalar `R16_Float` Grid height target.
-- D3D12 now owns the first field-resource upload path: CPU-built froxel
-  primitive ids and field instances upload through the per-frame upload ring,
-  copy into default-heap structured buffers, and bind as transient SRVs for the
-  diagnostic shader. This proves the backend can feed real Aquarium field data
-  without reading directly from upload memory.
-- The D3D12 medium path renders a packed frustum froxel atlas into diagnostic,
-  transport, and light-injection render targets from the field instance buffer,
-  then runs a propagation pass into the light texture consumed by fog integration
-  and solid diffuse shading. Render debug mode `11` displays D3D12 froxel
-  density and mode `12` displays propagated froxel light, matching the renderer
-  path rather than a temporary bring-up view.
-- The D3D12 scene pass now renders Self, planets, cursor, medium transport, and
-  a separate Grid event lane through the D3D12 frame graph. Grid line
-  transparency is no longer baked into the medium froxel atlas. The scene pass
-  traces the Grid height sheet directly up to the nearest solid, samples the
-  height texture at the hit position, evaluates cartesian lines, height
-  isolines, and gradient-angle field lines there, then emits premultiplied event
-  radiance without terminating the ray.
-- Solid discovery is view-froxel binned. Each camera ray queries primitive ids
-  from its low-resolution screen/depth tube, refines exact sphere or cursor-SDF
-  hits, stops the solid search once later slices cannot beat the nearest opaque
-  hit, and integrates medium only to that solid travel. Future SDF surfaces
-  should replace the primitive evaluator inside this binned solid path.
-- Transparent Grid froxel binning was cut after it produced angle-dependent
-  soup. The durable live contract is a stochastic-event history lane: Grid emits
-  event color and metadata; future particles and billboard-like surfaces should
-  emit the same kind of events from their own producer rather than becoming fake
-  opaque depth or alpha-blended side channels.
-- D3D12 presentation is HDR-linear until the present pass. The scene renders to
+- D3D12 owns the device, command queue, flip-discard swapchain, RTV heap,
+  per-backbuffer command allocators, command list, fence-backed present loop,
+  static and transient shader-visible descriptor arenas, upload buffers,
+  renderer-owned Grid height, HDR scene, bloom, temporal diagnostic targets,
+  named objects, command-list events, and explicit tracked transitions.
+- The Grid height pass uploads Aquarium frame constants plus a fixed body brush
+  table, renders a base Grid field, then draws one additive up-facing gravity
+  quad per body into a 128x128 scalar `R16_Float` target.
+- The scene pass traces Self, planets, the cursor locator, and a separate Grid
+  event lane. Grid line transparency is direct-traced against the height sheet
+  before the nearest solid and emitted as premultiplied event radiance.
+- Presentation is scene-linear until the post pass. The scene renders to
   `R16G16B16A16_Float`, a three-level bloom pyramid performs firefly-safe
   downsample plus separable blur, and final presentation applies exposure,
-  bloom/veil, and ACES. Debug mode `7` shows bloom and `8` shows exposed
-  luminance.
-- The D3D12 scene pass writes the first temporal diagnostic spine: color/travel,
-  field id/normal metadata, and temporal control render targets. The present
-  shader can inspect current temporal control in debug mode `5` and field
-  identity in debug mode `6`. Resolve now writes ping-pong history color,
-  metadata, and control targets, with previous-camera reprojection and
-  field/travel/normal/color/coverage/medium validation for opaque current scene
-  hits. Debug mode `3` shows history age and mode `4` shows history weight.
-  Medium-only pixels use a density-weighted ray centroid as their temporal
-  anchor and a `FIELD_ID_MEDIUM` identity, with continuity weighted by medium
-  opacity and coverage rather than surface normals. The Grid writes separate
-  event support and travel, so future particles can share temporal support
-  without becoming fake alpha surfaces or opaque depth hits.
-- D3D12 debug modes `9` and `10` are direct ray-step medium previews, not
-  repainted atlas views. The resolve shader samples the field instance buffer
-  for the requested `MediumDebugStep`, so density/transmittance diagnostics can
-  be compared against the froxel atlas in mode `11`.
-- D3D12 now has the same native debug overlay controls as D3D11. DirectWrite
-  and Direct2D are kept for crisp overlay text through the documented D3D11On12
-  bridge: D3D12 renders the frame, then the overlay acquires the swapchain
-  backbuffer, draws debug UI, releases it to Present, and does not participate
-  in scene/medium rendering. Diegetic text remains a future renderer-owned
-  MSDF/SDF path.
-- D3D12 reports once-per-second CPU timing averages for total frame work,
-  command-list recording, and the DirectWrite overlay bridge. These are CPU
-  timings, not GPU timestamp queries, but they keep the bridge from hiding in
-  folklore while the frame graph is still small.
-- D3D12 shader and PSO creation runs off the main thread. Startup creates the
-  device, swapchain, resources, and root signature, starts a background pipeline
-  build from the editable shader source directory, and presents a lightweight
-  loading frame until the first pipeline set is ready. Runtime shader edits to
-  `D3D12Grid.hlsl`, `D3D12Medium.hlsl`, `D3D12Scene.hlsl`, `D3D12Post.hlsl`,
-  or `D3D12Smoke.hlsl` trigger a background rebuild; successful builds swap in
-  on the render thread after a GPU wait, and failures keep the previous
-  pipeline set.
+  bloom/veil, and ACES.
+- The scene pass writes color/travel, field id/normal metadata, temporal
+  control, and event targets. The present shader writes ping-pong history and
+  exposes debug views for raw scene, history, control, identity, bloom, and
+  exposed luminance.
+- DirectWrite and Direct2D remain for crisp overlay text through D3D11On12:
+  D3D12 renders the frame, then the overlay acquires the swapchain backbuffer,
+  draws debug UI, releases it to Present, and never participates in world
+  rendering.
+- Shader and PSO creation runs off the main thread. Startup holds the splash
+  until the first pipeline set is ready. Runtime shader edits to
+  `D3D12Grid.hlsl`, `D3D12Scene.hlsl`, or `D3D12Post.hlsl` trigger a background
+  rebuild; successful builds swap in after a GPU wait and failures keep the
+  previous pipeline set.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
-  static shader/RTV descriptor arenas, then recreates backbuffer views and
-  dependent render targets. Descriptor exhaustion on resize is no longer a
-  bring-up policy.
-- `IAquariumRenderer` is the host boundary. The host should not learn backend
-  internals as the D3D12 renderer grows teeth.
-- `docs/d3d12-best-practices-audit.md` and `research/d3d12/synthesis.md`
-  capture the current D3D12 doctrine and audit.
-
-## Migration Order
-
-1. Keep D3D11 as the visual reference only until the D3D12 default survives
-   visible use.
-2. Move shared renderer contracts behind explicit backend-neutral types.
-3. Port the Grid height pass after preserving D3D11 as the reference output.
-4. Keep capacity diagnostics loud while the backend is still small enough to
-   make mistakes obvious.
-5. Keep replacing placeholder evaluators inside the unified traversal with real
-   field/SDF/particle implementations instead of adding side-channel passes.
+  descriptor arenas, and recreates backbuffer views plus dependent render
+  targets.
 
 ## Invariants
 
-- No hidden D3D11 dependency should leak into shared renderer contracts.
+- `IAquariumRenderer` is the host boundary. The host should not learn renderer
+  internals as D3D12 grows teeth.
 - D3D12 work must be validated by actual headless runs, not just compilation.
-- D3D11 output remains the comparison target until D3D12 survives visible use
-  and the old backend is deleted.
-- Transparent surfaces are still events/candidates, not canonical depth.
+- Transparent-looking Grid output is an event lane, not canonical opaque depth.
 - DirectWrite overlay text belongs behind the narrow D3D11On12 bridge. Do not
-  use it for diegetic/world text or let it leak into the renderer's scene graph.
+  use it for diegetic/world text or let it leak into the scene graph.

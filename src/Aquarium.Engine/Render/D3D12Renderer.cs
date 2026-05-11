@@ -43,8 +43,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const float CursorBodyBoundRadius = 0.72f;
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
-    private const string SmokeShaderRelativePath = "Render/Shaders/D3D12Smoke.hlsl";
-    private const string MediumShaderRelativePath = "Render/Shaders/D3D12Medium.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
     private const string DitherTextureRelativePath = "Assets/Textures/Aetheria-LDR_LLL1_0.r8";
@@ -60,11 +58,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(6, "Lane Identity"),
         new(7, "Bloom"),
         new(8, "Exposed Luminance"),
-        new(9, "Medium Ray Density"),
-        new(10, "Medium Ray Transmittance"),
-        new(11, "Froxel Density"),
-        new(12, "Froxel Light"),
-        new(13, "Froxel Light Direction"),
     ];
 
     private readonly IDXGIFactory4 factory;
@@ -83,11 +76,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? gridHeightBasePipelineState;
     private ID3D12PipelineState? gridHeightBrushPipelineState;
     private ID3D12PipelineState? scenePipelineState;
-    private ID3D12PipelineState? mediumVolumePipelineState;
-    private ID3D12PipelineState? mediumLightPropagationPipelineState;
-    private ID3D12PipelineState? mediumDensityDebugPipelineState;
-    private ID3D12PipelineState? mediumLightDebugPipelineState;
-    private ID3D12PipelineState? mediumLightDirectionDebugPipelineState;
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
     private ID3D12PipelineState? bloomBlurHorizontalPipelineState;
@@ -182,9 +170,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.width = width;
         this.height = height;
+        UpdateMediumDimensions();
         shaderSourceRoot = ResolveShaderSourceRoot(shaderPath);
         shaderPaths = D3D12ShaderPaths.FromRoot(shaderSourceRoot);
-        UpdateMediumDimensions();
         ReportStartupProgress(startupProgress, "Creating D3D12 device and swapchain");
 
         factory = DXGI.CreateDXGIFactory2<IDXGIFactory4>(false);
@@ -306,17 +294,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 .Section("HDR")
                 .Slider("Exposure", () => settings.SceneExposure, value => settings = (settings with { SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure) }).Normalized(), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.")
                 .Slider("Bloom Intensity", () => settings.BloomIntensity, value => settings = (settings with { BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity) }).Normalized(), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.")
-                .Slider("Bloom Veil", () => settings.BloomVeilIntensity, value => settings = (settings with { BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity) }).Normalized(), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.")
-                .Section("Medium")
-                .Slider("Composite", () => settings.MediumCompositeIntensity, value => settings = (settings with { MediumCompositeIntensity = Math.Clamp(value, GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity) }).Normalized(), GraphicsSettings.MinMediumCompositeIntensity, GraphicsSettings.MaxMediumCompositeIntensity, "0.###", "Blends registered medium transport into the final scene.")
-                .Slider("Atmosphere Density", () => settings.MediumFogDensity, value => settings = (settings with { MediumFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity) }).Normalized(), GraphicsSettings.MinMediumFogDensity, GraphicsSettings.MaxMediumFogDensity, "0.###", "Scales global atmosphere density/extinction.")
-                .Slider("Grid Density", () => settings.MediumGridFogDensity, value => settings = (settings with { MediumGridFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumGridFogDensity, GraphicsSettings.MaxMediumGridFogDensity) }).Normalized(), GraphicsSettings.MinMediumGridFogDensity, GraphicsSettings.MaxMediumGridFogDensity, "0.###", "Scales Grid-height fog density/extinction.")
-                .Slider("Primitive Density", () => settings.MediumPrimitiveFogDensity, value => settings = (settings with { MediumPrimitiveFogDensity = Math.Clamp(value, GraphicsSettings.MinMediumPrimitiveFogDensity, GraphicsSettings.MaxMediumPrimitiveFogDensity) }).Normalized(), GraphicsSettings.MinMediumPrimitiveFogDensity, GraphicsSettings.MaxMediumPrimitiveFogDensity, "0.###", "Scales SDF/cloud primitive medium density/extinction.")
-                .Slider("Fog Falloff", () => settings.MediumFogHeightFalloff, value => settings = (settings with { MediumFogHeightFalloff = Math.Clamp(value, GraphicsSettings.MinMediumFogHeightFalloff, GraphicsSettings.MaxMediumFogHeightFalloff) }).Normalized(), GraphicsSettings.MinMediumFogHeightFalloff, GraphicsSettings.MaxMediumFogHeightFalloff, "0.###", "Global fog exponential decay along world Z+.")
-                .Slider("Noise Frequency", () => settings.MediumNoiseScale, value => settings = (settings with { MediumNoiseScale = Math.Clamp(value, GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale) }).Normalized(), GraphicsSettings.MinMediumNoiseScale, GraphicsSettings.MaxMediumNoiseScale, "0.###", "World-space procedural medium noise frequency.")
-                .Slider("Noise Contrast", () => settings.MediumNoiseContrast, value => settings = (settings with { MediumNoiseContrast = Math.Clamp(value, GraphicsSettings.MinMediumNoiseContrast, GraphicsSettings.MaxMediumNoiseContrast) }).Normalized(), GraphicsSettings.MinMediumNoiseContrast, GraphicsSettings.MaxMediumNoiseContrast, "0.###", "How aggressively procedural noise modulates visible density.")
-                .Slider("Noise Speed", () => settings.MediumNoiseSpeed, value => settings = (settings with { MediumNoiseSpeed = Math.Clamp(value, GraphicsSettings.MinMediumNoiseSpeed, GraphicsSettings.MaxMediumNoiseSpeed) }).Normalized(), GraphicsSettings.MinMediumNoiseSpeed, GraphicsSettings.MaxMediumNoiseSpeed, "0.###", "Animation speed for procedural medium noise.")
-                .Slider("Ray Step", () => settings.MediumDebugStep, value => settings = (settings with { MediumDebugStep = Math.Clamp(value, GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep) }).Normalized(), GraphicsSettings.MinMediumDebugStep, GraphicsSettings.MaxMediumDebugStep, "Selects the medium raymarch sample shown by ray debug views.", () => RenderDebugMode is 9 or 10));
+                .Slider("Bloom Veil", () => settings.BloomVeilIntensity, value => settings = (settings with { BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity) }).Normalized(), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy."));
     }
 
     public void Render(AquariumFrame frame, int width, int height)
@@ -368,15 +346,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             settings.SceneExposure,
             settings.BloomIntensity,
             settings.BloomVeilIntensity,
-            settings.MediumCompositeIntensity,
-            settings.MediumDebugStep,
-            settings.MediumFogDensity,
-            settings.MediumFogHeightFalloff,
-            settings.MediumNoiseScale,
-            settings.MediumNoiseContrast,
-            settings.MediumGridFogDensity,
-            settings.MediumPrimitiveFogDensity,
-            settings.MediumNoiseSpeed,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
             0.0f,
             new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -473,16 +451,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         commandList.BeginEvent("Aquarium D3D12 Frame");
         UploadFieldResources(commandList, frameResources);
         RenderGridHeight(commandList, frameResources);
-        if (ShouldRenderMediumVolume())
-        {
-            RenderMediumVolume(commandList, frameResources);
-        }
-        else
-        {
-            ClearMediumVolume(commandList);
-        }
-
-        PropagateMediumLight(commandList, frameResources);
         RenderSceneAndPresent(new D3D12PassContext(commandList, frameResources.BackBuffer, frameResources.BackBufferRenderTargetView.Cpu), frameResources);
         commandList.EndEvent();
         commandList.Close();
@@ -517,11 +485,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState is not null
         && gridHeightBrushPipelineState is not null
         && scenePipelineState is not null
-        && mediumVolumePipelineState is not null
-        && mediumLightPropagationPipelineState is not null
-        && mediumDensityDebugPipelineState is not null
-        && mediumLightDebugPipelineState is not null
-        && mediumLightDirectionDebugPipelineState is not null
         && bloomPrefilterPipelineState is not null
         && bloomDownsamplePipelineState is not null
         && bloomBlurHorizontalPipelineState is not null
@@ -722,16 +685,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrush.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
         var scene = CreateScenePipelineState(paths.Scene);
         scene.Name = "Aquarium D3D12 Scene Pipeline";
-        var mediumVolume = CreateMediumVolumePipelineState(paths.Medium);
-        mediumVolume.Name = "Aquarium D3D12 Medium Volume Pipeline";
-        var mediumLightPropagation = CreateMediumLightPropagationPipelineState(paths.Medium);
-        mediumLightPropagation.Name = "Aquarium D3D12 Medium Light Propagation Pipeline";
-        var mediumDensityDebug = CreateMediumDensityDebugPipelineState(paths.Smoke);
-        mediumDensityDebug.Name = "Aquarium D3D12 Medium Density Debug Pipeline";
-        var mediumLightDebug = CreateMediumLightDebugPipelineState(paths.Smoke);
-        mediumLightDebug.Name = "Aquarium D3D12 Medium Light Debug Pipeline";
-        var mediumLightDirectionDebug = CreateMediumLightDirectionDebugPipelineState(paths.Smoke);
-        mediumLightDirectionDebug.Name = "Aquarium D3D12 Medium Light Direction Debug Pipeline";
         var bloomPrefilter = CreateBloomPrefilterPipelineState(paths.Post);
         bloomPrefilter.Name = "Aquarium D3D12 Bloom Prefilter Pipeline";
         var bloomDownsample = CreateBloomDownsamplePipelineState(paths.Post);
@@ -747,11 +700,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gridHeightBase,
             gridHeightBrush,
             scene,
-            mediumVolume,
-            mediumLightPropagation,
-            mediumDensityDebug,
-            mediumLightDebug,
-            mediumLightDirectionDebug,
             bloomPrefilter,
             bloomDownsample,
             bloomBlurHorizontal,
@@ -1136,49 +1084,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         context.CommandList.BeginEvent("Present Pass");
         try
         {
-            var showMediumDensity = RenderDebugMode == 11;
-            var showMediumLight = RenderDebugMode == 12;
-            var showMediumLightDirection = RenderDebugMode == 13;
             var historyReadIndex = temporalFrameIndex & 1;
             var historyWriteIndex = 1 - historyReadIndex;
-
-            if (showMediumDensity || showMediumLight || showMediumLightDirection)
-            {
-                var sourceDescriptor = showMediumDensity
-                    ? frameResources.MediumTargetsDescriptor
-                    : showMediumLight
-                        ? frameResources.MediumLightDescriptor
-                        : frameResources.MediumLightDirectionDescriptor;
-                var pipelineState = showMediumDensity
-                    ? mediumDensityDebugPipelineState!
-                    : showMediumLight
-                        ? mediumLightDebugPipelineState!
-                        : mediumLightDirectionDebugPipelineState!;
-                if (showMediumDensity)
-                {
-                    mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-                }
-                else if (showMediumLight)
-                {
-                    mediumLightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-                }
-                else
-                {
-                    mediumLightDirectionRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-                }
-
-                context.BackBuffer.Transition(context.CommandList, ResourceStates.RenderTarget);
-                context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
-                context.CommandList.SetPipelineState(pipelineState);
-                context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-                context.CommandList.SetGraphicsRootDescriptorTable(1, sourceDescriptor.Gpu);
-                context.CommandList.RSSetViewports(viewport);
-                context.CommandList.RSSetScissorRects(scissorRect);
-                context.CommandList.OMSetRenderTargets(context.RenderTargetView, null);
-                context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-                context.CommandList.DrawInstanced(3, 1, 0, 0);
-                return;
-            }
 
             sceneRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
@@ -1296,162 +1203,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             activeCommandList.EndEvent();
         }
-    }
-
-    private void RenderMediumVolume(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
-    {
-        var mediumViewport = new Viewport(0.0f, 0.0f, mediumVolumeWidth, mediumVolumeHeight);
-        var mediumScissorRect = new RawRect(0, 0, mediumVolumeWidth, mediumVolumeHeight);
-
-        activeCommandList.BeginEvent("Medium Volume Pass");
-        try
-        {
-            gridHeightRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-            mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
-            activeCommandList.SetPipelineState(mediumVolumePipelineState!);
-            activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(18, frameResources.GridHeightDescriptor.Gpu);
-            activeCommandList.SetGraphicsRootDescriptorTable(22, frameResources.DitherDescriptor.Gpu);
-            activeCommandList.RSSetViewports(mediumViewport);
-            activeCommandList.RSSetScissorRects(mediumScissorRect);
-            activeCommandList.OMSetRenderTargets(
-            [
-                mediumVolumeRenderTarget.RenderTargetView.Cpu,
-                mediumTransportRenderTarget.RenderTargetView.Cpu,
-                mediumLightInjectionRenderTarget.RenderTargetView.Cpu,
-                mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu,
-            ],
-            null);
-            activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-            activeCommandList.DrawInstanced(3, 1, 0, 0);
-        }
-        finally
-        {
-            activeCommandList.EndEvent();
-        }
-    }
-
-    private void PropagateMediumLight(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
-    {
-        var mediumViewport = new Viewport(0.0f, 0.0f, mediumVolumeWidth, mediumVolumeHeight);
-        var mediumScissorRect = new RawRect(0, 0, mediumVolumeWidth, mediumVolumeHeight);
-
-        activeCommandList.BeginEvent("Medium Light Propagation Pass");
-        try
-        {
-            mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-            mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-            mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-            mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-            activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
-            activeCommandList.SetPipelineState(mediumLightPropagationPipelineState!);
-            activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            activeCommandList.RSSetViewports(mediumViewport);
-            activeCommandList.RSSetScissorRects(mediumScissorRect);
-            activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-
-            DrawMediumLightPropagationIteration(
-                activeCommandList,
-                frameResources.MediumInjectionTargetsDescriptor,
-                frameResources.MediumInjectionLightDirectionDescriptor,
-                mediumLightScratchRenderTarget,
-                mediumLightDirectionScratchRenderTarget);
-
-            for (var iteration = 1; iteration < MediumLightPropagationIterationCount; iteration++)
-            {
-                var sourceTargets = (iteration & 1) == 1
-                    ? frameResources.MediumScratchTargetsDescriptor
-                    : frameResources.MediumTargetsDescriptor;
-                var sourceDirection = (iteration & 1) == 1
-                    ? frameResources.MediumScratchLightDirectionDescriptor
-                    : frameResources.MediumLightDirectionDescriptor;
-                var targetLight = (iteration & 1) == 1
-                    ? mediumLightRenderTarget
-                    : mediumLightScratchRenderTarget;
-                var targetDirection = (iteration & 1) == 1
-                    ? mediumLightDirectionRenderTarget
-                    : mediumLightDirectionScratchRenderTarget;
-
-                DrawMediumLightPropagationIteration(
-                    activeCommandList,
-                    sourceTargets,
-                    sourceDirection,
-                    targetLight,
-                    targetDirection);
-            }
-        }
-        finally
-        {
-            activeCommandList.EndEvent();
-        }
-    }
-
-    private void DrawMediumLightPropagationIteration(
-        ID3D12GraphicsCommandList activeCommandList,
-        D3D12DescriptorSlot sourceTargetsDescriptor,
-        D3D12DescriptorSlot sourceLightDirectionDescriptor,
-        D3D12RenderTarget targetLight,
-        D3D12RenderTarget targetLightDirection)
-    {
-        targetLight.Transition(activeCommandList, ResourceStates.RenderTarget);
-        targetLightDirection.Transition(activeCommandList, ResourceStates.RenderTarget);
-        activeCommandList.ClearRenderTargetView(targetLight.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-        activeCommandList.ClearRenderTargetView(targetLightDirection.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-        activeCommandList.SetGraphicsRootDescriptorTable(5, sourceTargetsDescriptor.Gpu);
-        activeCommandList.SetGraphicsRootDescriptorTable(21, sourceLightDirectionDescriptor.Gpu);
-        activeCommandList.OMSetRenderTargets(
-        [
-            targetLight.RenderTargetView.Cpu,
-            targetLightDirection.RenderTargetView.Cpu,
-        ],
-        null);
-        activeCommandList.DrawInstanced(3, 1, 0, 0);
-        targetLight.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-        targetLightDirection.Transition(activeCommandList, ResourceStates.PixelShaderResource);
-    }
-
-    private void ClearMediumVolume(ID3D12GraphicsCommandList activeCommandList)
-    {
-        activeCommandList.BeginEvent("Clear Medium Volume");
-        try
-        {
-            mediumVolumeRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumTransportRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightDirectionInjectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightScratchRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightDirectionScratchRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            mediumLightDirectionRenderTarget.Transition(activeCommandList, ResourceStates.RenderTarget);
-            activeCommandList.ClearRenderTargetView(mediumVolumeRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 1.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumTransportRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightScratchRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightDirectionScratchRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightDirectionInjectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-            activeCommandList.ClearRenderTargetView(mediumLightDirectionRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 0.0f));
-        }
-        finally
-        {
-            activeCommandList.EndEvent();
-        }
-    }
-
-    private bool ShouldRenderMediumVolume()
-    {
-        return true;
     }
 
     private void BuildGridHeightBrushes(AquariumFrame frame)
@@ -1987,12 +1738,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 gridHeightBasePipelineState!,
                 gridHeightBrushPipelineState!,
                 scenePipelineState!,
-                mediumVolumePipelineState!,
-            mediumLightPropagationPipelineState!,
-            mediumDensityDebugPipelineState!,
-            mediumLightDebugPipelineState!,
-            mediumLightDirectionDebugPipelineState!,
-            bloomPrefilterPipelineState!,
+                bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
                 bloomBlurHorizontalPipelineState!,
                 bloomBlurVerticalPipelineState!,
@@ -2005,11 +1751,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = pipelines.GridHeightBase;
         gridHeightBrushPipelineState = pipelines.GridHeightBrush;
         scenePipelineState = pipelines.Scene;
-        mediumVolumePipelineState = pipelines.MediumVolume;
-        mediumLightPropagationPipelineState = pipelines.MediumLightPropagation;
-        mediumDensityDebugPipelineState = pipelines.MediumDensityDebug;
-        mediumLightDebugPipelineState = pipelines.MediumLightDebug;
-        mediumLightDirectionDebugPipelineState = pipelines.MediumLightDirectionDebug;
         bloomPrefilterPipelineState = pipelines.BloomPrefilter;
         bloomDownsamplePipelineState = pipelines.BloomDownsample;
         bloomBlurHorizontalPipelineState = pipelines.BloomBlurHorizontal;
@@ -2023,11 +1764,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = null;
         gridHeightBrushPipelineState = null;
         scenePipelineState = null;
-        mediumVolumePipelineState = null;
-        mediumLightPropagationPipelineState = null;
-        mediumDensityDebugPipelineState = null;
-        mediumLightDebugPipelineState = null;
-        mediumLightDirectionDebugPipelineState = null;
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
         bloomBlurHorizontalPipelineState = null;
@@ -2273,35 +2009,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState CreateScenePipelineState(string path)
     {
         return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12ScenePS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
-    }
-
-    private ID3D12PipelineState CreateMediumVolumePipelineState(string path)
-    {
-        return CreateFullscreenPipelineState(
-            path,
-            "FullscreenTriangleVS",
-            "MediumVolumePS",
-            [MediumVolumeFormat, MediumVolumeFormat, MediumVolumeFormat, MediumVolumeFormat]);
-    }
-
-    private ID3D12PipelineState CreateMediumLightPropagationPipelineState(string path)
-    {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "MediumLightPropagatePS", [MediumVolumeFormat, MediumVolumeFormat]);
-    }
-
-    private ID3D12PipelineState CreateMediumDensityDebugPipelineState(string path)
-    {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumDensityDebugPS", Format.B8G8R8A8_UNorm);
-    }
-
-    private ID3D12PipelineState CreateMediumLightDebugPipelineState(string path)
-    {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumLightDebugPS", Format.B8G8R8A8_UNorm);
-    }
-
-    private ID3D12PipelineState CreateMediumLightDirectionDebugPipelineState(string path)
-    {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12MediumLightDirectionDebugPS", Format.B8G8R8A8_UNorm);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -2618,19 +2325,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private sealed record D3D12ShaderPaths(
         string Grid,
-        string Smoke,
-        string Medium,
         string Scene,
         string Post)
     {
-        public IReadOnlyList<string> All { get; } = [Grid, Smoke, Medium, Scene, Post];
+        public IReadOnlyList<string> All { get; } = [Grid, Scene, Post];
 
         public static D3D12ShaderPaths FromRoot(string root)
         {
             return new D3D12ShaderPaths(
                 Path.Combine(root, Path.GetFileName(GridShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(SmokeShaderRelativePath)),
-                Path.Combine(root, Path.GetFileName(MediumShaderRelativePath)),
                 Path.Combine(root, Path.GetFileName(SceneShaderRelativePath)),
                 Path.Combine(root, Path.GetFileName(PostShaderRelativePath)));
         }
@@ -2640,11 +2343,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState GridHeightBase,
         ID3D12PipelineState GridHeightBrush,
         ID3D12PipelineState Scene,
-        ID3D12PipelineState MediumVolume,
-        ID3D12PipelineState MediumLightPropagation,
-        ID3D12PipelineState MediumDensityDebug,
-        ID3D12PipelineState MediumLightDebug,
-        ID3D12PipelineState MediumLightDirectionDebug,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
         ID3D12PipelineState BloomBlurHorizontal,
@@ -2658,11 +2356,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
-            MediumLightDirectionDebug.Dispose();
-            MediumLightDebug.Dispose();
-            MediumDensityDebug.Dispose();
-            MediumLightPropagation.Dispose();
-            MediumVolume.Dispose();
             Scene.Dispose();
             GridHeightBrush.Dispose();
             GridHeightBase.Dispose();

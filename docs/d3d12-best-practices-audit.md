@@ -2,111 +2,57 @@
 
 ## Verdict
 
-The current D3D12 path is acceptable as a bring-up scaffold. It proves the right
-classes of machinery: per-frame command allocators, fence-protected reuse,
-shader-visible descriptors, persistent mapped constants, explicit render target
-state, a migrated Grid height pass, an offscreen target path, SRV sampling, UAV
-binding, and resize-safe descriptor arena rebuild.
-
-It is not yet a production renderer architecture. The next risk is porting real
-passes without keeping D3D11 as the comparison target and without promoting the
-resource graph beyond smoke-pass scaffolding.
+The current D3D12 path is a solid foundation for Aquarium's focused client
+renderer. It proves per-frame command allocators, fence-protected reuse,
+shader-visible descriptors, persistent mapped constants, explicit render-target
+state, brush-rendered Grid height, HDR/bloom presentation, temporal diagnostic
+targets, async shader pipeline builds, and a narrow DirectWrite overlay bridge.
 
 ## Good Current Decisions
 
-- `D3D12Renderer` keeps D3D11 intact as the visual reference backend.
 - Command allocators are per swapchain frame and waited on before reset.
 - Shader-visible descriptor slots are not overwritten while in flight.
 - Constant upload memory is persistently mapped, 256-byte aligned, and allocated
   through a per-frame upload ring.
-- Offscreen render target state is tracked and transitions are skipped when
-  redundant.
-- Backbuffer state is tracked through the same transition helper style instead
-  of raw assumed barriers.
-- D3D12 objects are named, and command-list events mark the frame, smoke pass,
-  and copy pass for PIX/graphics diagnostics.
+- Offscreen render target state is tracked and redundant transitions are
+  skipped.
+- Backbuffer state flows through the same transition helper style instead of raw
+  assumed barriers.
+- D3D12 objects are named, and command-list events mark the frame for
+  PIX/graphics diagnostics.
 - Shader-visible descriptors are split into static and per-frame transient
   arenas. Transient arenas reset only after the owning frame fence clears.
 - D3D12 resources are registered by name, and capacity diagnostics report upload,
   transient descriptor, static descriptor, and RTV usage.
-- Render targets may create SRVs, and the smoke path now samples its offscreen
-  target in a second fullscreen pass instead of copying it as an opaque resource.
-- D3D12 renders the Grid height target as a proper brush pass: frame constants
-  plus a fixed body brush table feed a base field draw followed by one additive
-  up-facing gravity quad per body. The target is scalar `R16_Float`: height is
-  one value, and the format still supports the additive render-target blending
-  the brush pass needs.
-- D3D12 uploads the live froxel primitive table and field instance table into
-  default-heap structured buffers each frame, using the upload ring only as the
-  copy source. Their SRVs are created in the transient descriptor heap used by
-  the consuming pass, avoiding impossible static+transient heap co-binding.
-- D3D12 renders the first medium froxel atlas from the field instance buffer
-  into diagnostic and transport render targets. Mode `11` exposes froxel
-  density, so the debug path now follows the renderer being built rather than a
-  Grid-height bring-up convenience.
-- D3D12 final mode now draws a real scene pass instead of the smoke diagnostic:
-  Self, planets, medium transport, and the Grid event lane flow through D3D12.
-  The Grid is traced directly as a non-terminating transparent event before the
-  nearest solid; it is not baked into the medium atlas, alpha-blended as a
-  surface, or allowed to own canonical scene depth.
-- The D3D12 scene shader uses the view-froxel primitive table as the solid
-  broad phase, then integrates medium up to the nearest opaque hit. Current
-  solids are still analytic spheres plus the cursor SDF, but the ownership
-  boundary is now clear: future SDF evaluators replace the primitive hit
-  evaluator inside the same binned solid path.
-- Transparent Grid output writes a separate stochastic-event color/metadata
-  lane for temporal resolve. Future particles and billboard-like surfaces should
-  join that event lane with their own candidate generation, not resurrect the
-  removed transparent-froxel Grid experiment.
-- Renderer calls receive current window dimensions, and the D3D12 backend can
-  recreate swapchain buffers plus dependent smoke resources on resize.
-- Resize waits for the GPU, disposes swapchain-dependent targets, rebuilds
-  static shader and RTV descriptor arenas, and then recreates backbuffer/smoke
-  descriptors from a clean ownership state.
-- Render targets can create UAV descriptors. The D3D12 smoke pass binds a
-  transient per-frame UAV descriptor and writes a diagnostic target from the
-  pixel shader, proving CBV and UAV tables can share the active transient heap.
-  UAV-capable resource creation is separate from persistent UAV descriptor
-  ownership, so diagnostic-only transient UAVs do not consume static heap slots.
-- The D3D12 smoke path exercises shader compilation, root signature, PSO,
-  descriptor table, RTV/UAV binding, barriers, copy, and present.
+- The Grid height target is a proper brush pass into scalar `R16_Float`.
+- The Grid event lane is direct-traced and temporally inspectable; it is not
+  alpha-blended over the final frame or allowed to own canonical scene depth.
+- HDR bloom is pre-tonemap, multi-level, and separable.
+- The D3D11On12 bridge is overlay-only, keeping native hinted text without
+  mixing overlay UI into scene rendering.
 
 ## Temporary Acceptable Debt
 
 - Committed resources are used directly. Replace with D3D12MA or placed-resource
   suballocation before the renderer owns many textures/buffers.
-- Descriptor arenas are still simple bump allocators. Add free lists or
-  descriptor-table paging only when real resource churn demands it.
+- Descriptor arenas are simple bump allocators. Add free lists or descriptor
+  table paging only when real resource churn demands it.
 - Static shader and RTV descriptor arenas rebuild wholesale on resize. This is
-  deliberately simple and correct for swapchain-dependent resources; add finer
-  free lists only when non-resize churn proves it needs them.
+  deliberately simple and correct for swapchain-dependent resources.
 - Upload ring is per-frame and reset after fence wait. It is not yet a global
   transient allocator with suballocation statistics or overflow diagnostics.
-- The real present path now renders scene HDR, bloom, temporal resolve, and
-  debug views instead of the old smoke-copy scaffold. Keep the smoke shader only
-  for narrowly scoped diagnostics; do not let smoke-era policy steer production
-  pass ownership.
-- The stochastic-event lane currently has only the direct-traced Grid producer.
-  Future particles and billboards need a producer for candidate events, but the
-  removed transparent-surface binning code should stay gone unless a measured
-  multi-event problem asks for a new version.
-- Solid bins currently contain only Self/planet analytic sphere candidates.
-  Future work should replace the analytic evaluator with bounded SDF surface
-  solving inside the existing interval traversal, not a separate solid pass.
-- D3D11 and D3D12 field table builders are temporarily duplicated by design.
-  D3D11 is reference-only and will be removed after migration; do not pay DRY
-  tax merely to preserve it.
+- Some medium-era render-target/history scaffolding still needs a follow-up
+  sanitation pass now that runtime volumetrics are shelved.
 
 ## Required Before Larger Renderer Work
 
-- Add GPU timestamp queries when D3D12 frame cost starts mattering beyond CPU
-  timing diagnostics.
+- Add GPU timestamp queries when frame cost starts mattering beyond CPU timing
+  diagnostics.
 - Add descriptor-owner diagnostics beyond heap-level capacity summaries when
   descriptor churn becomes hard to reason about.
-- Keep D3D11 reference-only and delete it once visible D3D12 use survives the
-  ballast-cut pass.
+- Finish cutting removed-pass scaffolding before adding new renderer systems.
 
 ## Rule
 
-Do not port Aquarium's scene/froxel/history passes into ad hoc D3D12 resource
-creation. Build the resource machine first, then move pixels through it.
+Build the resource machine first, then move pixels through it. Dead experiments
+belong to Git, not to the live frame graph.

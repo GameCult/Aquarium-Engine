@@ -29,7 +29,7 @@ public sealed class AquariumCultStateStore : IDisposable
         }
         catch (Exception error) when (IsRecoverableBackingStoreFailure(error))
         {
-            QuarantineUnreadableCache(CachePath, error);
+            QuarantineUnusableCache(CachePath, error);
         }
 
         Hello = CreateHello(cache.Registry);
@@ -90,15 +90,6 @@ public sealed class AquariumCultStateStore : IDisposable
         state.SceneExposure = normalized.SceneExposure;
         state.BloomIntensity = normalized.BloomIntensity;
         state.BloomVeilIntensity = normalized.BloomVeilIntensity;
-        state.MediumCompositeIntensity = normalized.MediumCompositeIntensity;
-        state.MediumDebugStep = normalized.MediumDebugStep;
-        state.MediumFogDensity = normalized.MediumFogDensity;
-        state.MediumFogHeightFalloff = normalized.MediumFogHeightFalloff;
-        state.MediumNoiseScale = normalized.MediumNoiseScale;
-        state.MediumNoiseContrast = normalized.MediumNoiseContrast;
-        state.MediumGridFogDensity = normalized.MediumGridFogDensity;
-        state.MediumPrimitiveFogDensity = normalized.MediumPrimitiveFogDensity;
-        state.MediumNoiseSpeed = normalized.MediumNoiseSpeed;
         state.SaveGeneration++;
         cache.AddAsync(state, new CultRecordHandle<AquariumGraphicsSettingsState>(GraphicsSettingsKey)).GetAwaiter().GetResult();
         backingStore.PushAll();
@@ -139,10 +130,11 @@ public sealed class AquariumCultStateStore : IDisposable
     {
         return error is EndOfStreamException
             or InvalidDataException
+            or InvalidOperationException
             or MessagePackSerializationException;
     }
 
-    private static void QuarantineUnreadableCache(string cachePath, Exception error)
+    private static void QuarantineUnusableCache(string cachePath, Exception error)
     {
         if (!File.Exists(cachePath))
         {
@@ -158,14 +150,14 @@ public sealed class AquariumCultStateStore : IDisposable
         {
             File.Move(cachePath, quarantinePath);
             Console.Error.WriteLine(
-                $"CultCache snapshot was unreadable and has been quarantined: {quarantinePath}. {error.GetType().Name}: {error.Message}");
+                $"CultCache snapshot was unusable and has been quarantined: {quarantinePath}. {error.GetType().Name}: {error.Message}");
         }
         catch (Exception quarantineError)
         {
             var fallbackPath = Path.Combine(directory, $"{fileName}.corrupt-{stamp}-{Guid.NewGuid():N}");
             File.Move(cachePath, fallbackPath);
             Console.Error.WriteLine(
-                $"CultCache snapshot was unreadable and quarantine path was busy; moved it to {fallbackPath}. "
+                $"CultCache snapshot was unusable and quarantine path was busy; moved it to {fallbackPath}. "
                 + $"{error.GetType().Name}: {error.Message}; quarantine retry after {quarantineError.GetType().Name}: {quarantineError.Message}");
         }
     }
