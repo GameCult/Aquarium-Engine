@@ -43,13 +43,15 @@ struct AgentVisual
 
 StructuredBuffer<AgentVisual> agentVisuals : register(t24);
 
-static const int AGENT_VISUAL_COUNT = 5;
+static const int AGENT_VISUAL_COUNT = 7;
+static const int SELF_OBJECT_INDEX = AGENT_VISUAL_COUNT - 2;
+static const int CURSOR_OBJECT_INDEX = AGENT_VISUAL_COUNT - 1;
+static const int ROLE_AGENT_COUNT = AGENT_VISUAL_COUNT - 2;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_AGENT_BASE = 10.0;
-static const int CURSOR_PRIMITIVE_ID = AGENT_VISUAL_COUNT + 1;
 static const float CURSOR_RADIUS = 0.56;
 static const float CURSOR_BOUND_RADIUS = 0.72;
 static const float BODY_GRID_CLEARANCE_RADIUS_SCALE = 2.0;
@@ -71,6 +73,12 @@ struct VertexOut
     float2 uv : TEXCOORD0;
 };
 
+struct AgentProxyVertexOut
+{
+    float4 position : SV_Position;
+    nointerpolation float agentIndex : TEXCOORD0;
+};
+
 struct SceneOut
 {
     float4 colorTravel : SV_Target0;
@@ -78,6 +86,7 @@ struct SceneOut
     float4 control : SV_Target2;
     float4 eventColor : SV_Target3;
     float4 eventMetadata : SV_Target4;
+    float depth : SV_Depth;
 };
 
 struct SolidHit
@@ -111,12 +120,46 @@ struct RayMarchResult
     float3 eventColor;
 };
 
+void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up);
+
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
     VertexOut output;
     output.position = float4(uv * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
     output.uv = uv;
+    return output;
+}
+
+AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
+{
+    float2 corners[6] =
+    {
+        float2(-1.0, -1.0),
+        float2(1.0, -1.0),
+        float2(1.0, 1.0),
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0),
+        float2(-1.0, 1.0),
+    };
+
+    AgentVisual agent = agentVisuals[instanceId];
+    float3 forward;
+    float3 right;
+    float3 up;
+    cameraBasis(cameraPosition, gridCenter, forward, right, up);
+    float3 delta = agent.centerRadius.xyz - cameraPosition;
+    float z = max(dot(delta, forward), 0.0001);
+    float2 projected = float2(dot(delta, right), dot(delta, up)) / z * 1.6;
+    float clipAspect = resolution.x / max(resolution.y, 1.0);
+    float boundRadius = agent.centerRadius.w * 1.58;
+    float projectedRadius = boundRadius / z * 1.6 + 0.035;
+    float2 clipCenter = float2(projected.x / clipAspect, -projected.y);
+    float2 clipRadius = float2(projectedRadius / clipAspect, projectedRadius);
+
+    AgentProxyVertexOut output;
+    output.position = float4(clipCenter + corners[vertexId] * clipRadius, 0.0, 1.0);
+    output.agentIndex = (float)instanceId;
     return output;
 }
 
@@ -396,7 +439,20 @@ AgentSurface agentVisualSdf(float3 p, int agentIndex)
     float3 local = (p - agent.centerRadius.xyz) / radius;
     float roleId = agent.previousCenterRole.w;
     AgentSurface surface = agentFallbackSdf(local, agent);
-    if (abs(roleId - 2.0) < 0.25)
+    if (agentIndex == SELF_OBJECT_INDEX)
+    {
+        surface.distanceValue = sdSphere(local, 1.0);
+        surface.materialId = 0.0;
+        surface.costTier = 0.0;
+    }
+    else if (agentIndex == CURSOR_OBJECT_INDEX)
+    {
+        surface.distanceValue = cursorLocatorSdf(p);
+        surface.materialId = 5.0;
+        surface.costTier = 1.0;
+        return surface;
+    }
+    else if (abs(roleId - 2.0) < 0.25)
     {
         surface = agentImaginationSdf(local, agent);
     }
@@ -510,72 +566,78 @@ bool traceCursorLocator(float3 origin, float3 direction, float intervalStart, fl
 
 float3 primitiveCenterAt(int primitiveId, float sampleTime)
 {
-    if (primitiveId == 0)
-    {
-        return bodyCenterAtGridHeight(0.0, SUN_RADIUS);
-    }
-
-    if (primitiveId == CURSOR_PRIMITIVE_ID)
-    {
-        return bodyCenterAtGridHeight(cursorWorlds.xy, CURSOR_RADIUS);
-    }
-
-    int agentIndex = clamp(primitiveId - 1, 0, AGENT_VISUAL_COUNT - 1);
+    int agentIndex = clamp(primitiveId, 0, AGENT_VISUAL_COUNT - 1);
     return agentVisuals[agentIndex].centerRadius.xyz;
 }
 
 float primitiveRadius(int primitiveId)
 {
-    if (primitiveId == 0)
-    {
-        return SUN_RADIUS;
-    }
-
-    if (primitiveId == CURSOR_PRIMITIVE_ID)
-    {
-        return CURSOR_BOUND_RADIUS;
-    }
-
-    int agentIndex = clamp(primitiveId - 1, 0, AGENT_VISUAL_COUNT - 1);
+    int agentIndex = clamp(primitiveId, 0, AGENT_VISUAL_COUNT - 1);
     return agentVisuals[agentIndex].centerRadius.w;
 }
 
 float primitiveFieldId(int primitiveId)
 {
-    if (primitiveId == CURSOR_PRIMITIVE_ID)
+    if (primitiveId == SELF_OBJECT_INDEX)
+    {
+        return FIELD_ID_SELF;
+    }
+
+    if (primitiveId == CURSOR_OBJECT_INDEX)
     {
         return FIELD_ID_CURSOR;
     }
 
-    return primitiveId == 0 ? FIELD_ID_SELF : FIELD_ID_AGENT_BASE + (float)(primitiveId - 1);
+    return FIELD_ID_AGENT_BASE + (float)primitiveId;
 }
 
 void considerPrimitiveHit(float3 origin, float3 direction, int primitiveId, float intervalStart, float intervalEnd, inout SolidHit nearest)
 {
-    if (primitiveId < 0 || primitiveId == CURSOR_PRIMITIVE_ID)
+    if (primitiveId < 0 || primitiveId >= AGENT_VISUAL_COUNT)
     {
         return;
     }
 
-    if (primitiveId > 0 && primitiveId <= AGENT_VISUAL_COUNT)
+    if (primitiveId < SELF_OBJECT_INDEX)
     {
         float agentTravel;
         float3 agentNormal;
         float materialId;
         float stepCount;
         float costTier;
-        if (traceAgentVisual(origin, direction, primitiveId - 1, intervalStart, min(intervalEnd, nearest.travel), agentTravel, agentNormal, materialId, stepCount, costTier))
+        if (traceAgentVisual(origin, direction, primitiveId, intervalStart, min(intervalEnd, nearest.travel), agentTravel, agentNormal, materialId, stepCount, costTier))
         {
             nearest.hit = true;
             nearest.travel = agentTravel;
             nearest.normal = agentNormal;
             nearest.fieldId = primitiveFieldId(primitiveId);
             nearest.primitiveId = primitiveId;
-            nearest.roleId = agentVisuals[primitiveId - 1].previousCenterRole.w;
+            nearest.roleId = agentVisuals[primitiveId].previousCenterRole.w;
             nearest.materialId = materialId;
             nearest.stepCount = stepCount;
-            nearest.lodTier = agentVisuals[primitiveId - 1].lodIndexFlags.x;
+            nearest.lodTier = agentVisuals[primitiveId].lodIndexFlags.x;
             nearest.costTier = costTier;
+        }
+
+        return;
+    }
+
+    if (primitiveId == CURSOR_OBJECT_INDEX)
+    {
+        float hitTravel;
+        float3 hitNormal;
+        if (traceCursorLocator(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
+        {
+            nearest.hit = true;
+            nearest.travel = hitTravel;
+            nearest.normal = hitNormal;
+            nearest.fieldId = FIELD_ID_CURSOR;
+            nearest.primitiveId = primitiveId;
+            nearest.roleId = 0.0;
+            nearest.materialId = 5.0;
+            nearest.stepCount = 1.0;
+            nearest.lodTier = 0.0;
+            nearest.costTier = 1.0;
         }
 
         return;
@@ -602,28 +664,10 @@ void considerPrimitiveHit(float3 origin, float3 direction, int primitiveId, floa
 
 void considerAllPrimitiveHits(float3 origin, float3 direction, float intervalStart, float intervalEnd, inout SolidHit nearest)
 {
-    considerPrimitiveHit(origin, direction, 0, intervalStart, intervalEnd, nearest);
-
     [unroll]
     for (int i = 0; i < AGENT_VISUAL_COUNT; i++)
     {
-        considerPrimitiveHit(origin, direction, i + 1, intervalStart, intervalEnd, nearest);
-    }
-
-    float hitTravel;
-    float3 hitNormal;
-    if (traceCursorLocator(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
-    {
-        nearest.hit = true;
-        nearest.travel = hitTravel;
-        nearest.normal = hitNormal;
-        nearest.fieldId = FIELD_ID_CURSOR;
-        nearest.primitiveId = CURSOR_PRIMITIVE_ID;
-        nearest.roleId = 0.0;
-        nearest.materialId = 5.0;
-        nearest.stepCount = 1.0;
-        nearest.lodTier = 0.0;
-        nearest.costTier = 1.0;
+        considerPrimitiveHit(origin, direction, i, intervalStart, intervalEnd, nearest);
     }
 }
 
@@ -743,23 +787,9 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     result.eventCoverage = 0.0;
     result.eventColor = 0.0;
 
-    SolidHit nearestSolid;
-    nearestSolid.hit = false;
-    nearestSolid.travel = farDistance;
-    nearestSolid.normal = 0.0;
-    nearestSolid.fieldId = 0.0;
-    nearestSolid.primitiveId = -1;
-    nearestSolid.roleId = 0.0;
-    nearestSolid.materialId = 0.0;
-    nearestSolid.stepCount = 0.0;
-    nearestSolid.lodTier = 0.0;
-    nearestSolid.costTier = 0.0;
-    considerAllPrimitiveHits(origin, direction, 0.0, farDistance, nearestSolid);
-
-    float stopTravel = nearestSolid.hit ? nearestSolid.travel : farDistance;
     float3 gridPosition;
     float gridTravel;
-    bool gridHit = traceGridSurfaceDirect(origin, direction, 0.0, stopTravel, gridPosition, gridTravel);
+    bool gridHit = traceGridSurfaceDirect(origin, direction, 0.0, farDistance, gridPosition, gridTravel);
     if (gridHit)
     {
         float3 gridNormal;
@@ -774,22 +804,6 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
         result.lodTier = 0.0;
         result.costTier = 0.0;
         return result;
-    }
-
-    if (nearestSolid.hit)
-    {
-        float3 p = origin + direction * nearestSolid.travel;
-        float3 bodyColor = shadeBody(uv, nearestSolid.travel, p, nearestSolid.normal, nearestSolid.primitiveId);
-        result.color = bodyColor;
-        result.travel = nearestSolid.travel;
-        result.fieldId = nearestSolid.fieldId;
-        result.normal = nearestSolid.normal;
-        result.coverage = 1.0;
-        result.roleId = nearestSolid.roleId;
-        result.materialId = nearestSolid.materialId;
-        result.stepCount = nearestSolid.stepCount;
-        result.lodTier = nearestSolid.lodTier;
-        result.costTier = nearestSolid.costTier;
     }
 
     return result;
@@ -911,12 +925,12 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
 {
     float fieldId = primitiveFieldId(primitiveId);
     float3 emission = primitiveEmissionRadiance(fieldId);
-    if (primitiveId == 0)
+    if (primitiveId == SELF_OBJECT_INDEX)
     {
         return emission;
     }
 
-    if (primitiveId == CURSOR_PRIMITIVE_ID)
+    if (primitiveId == CURSOR_OBJECT_INDEX)
     {
         static const float CursorRoughness = 0.16;
         float3 cursorF0 = float3(0.95, 0.62, 0.26);
@@ -925,7 +939,7 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
             + studioPmremSpecularRadiance(p, normal, CursorRoughness, cursorF0);
     }
 
-    int agentIndex = clamp(primitiveId - 1, 0, AGENT_VISUAL_COUNT - 1);
+    int agentIndex = clamp(primitiveId, 0, ROLE_AGENT_COUNT - 1);
     float roleId = agentVisuals[agentIndex].previousCenterRole.w;
     float materialPulse = agentVisuals[agentIndex].state.y;
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hash21(float2(primitiveId, 6.3)));
@@ -963,5 +977,41 @@ SceneOut D3D12ScenePS(VertexOut input)
     output.control = float4(result.materialId, result.coverage, result.stepCount / 72.0, result.lodTier + result.costTier * 0.1);
     output.eventColor = float4(result.eventColor, result.eventCoverage);
     output.eventMetadata = float4(FIELD_ID_GRID, result.eventTravel, result.eventCoverage, 0.0);
+    output.depth = saturate(result.travel / max(farDistance, 0.001));
+    return output;
+}
+
+SceneOut D3D12AgentProxyPS(AgentProxyVertexOut input)
+{
+    float2 pixel = input.position.xy;
+    float2 uv = float2(pixel.x / max(resolution.x, 1.0), 1.0 - pixel.y / max(resolution.y, 1.0));
+    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+
+    SolidHit hit;
+    hit.hit = false;
+    hit.travel = farDistance;
+    hit.normal = 0.0;
+    hit.fieldId = 0.0;
+    hit.primitiveId = -1;
+    hit.roleId = 0.0;
+    hit.materialId = 0.0;
+    hit.stepCount = 0.0;
+    hit.lodTier = 0.0;
+    hit.costTier = 0.0;
+    int agentIndex = clamp((int)round(input.agentIndex), 0, AGENT_VISUAL_COUNT - 1);
+    considerPrimitiveHit(cameraPosition, rayDirection, agentIndex, 0.0, farDistance, hit);
+    if (!hit.hit)
+    {
+        discard;
+    }
+
+    float3 p = cameraPosition + rayDirection * hit.travel;
+    SceneOut output;
+    output.colorTravel = float4(shadeBody(uv, hit.travel, p, hit.normal, hit.primitiveId), min(hit.travel, farDistance + 1.0));
+    output.metadata = float4(hit.fieldId, hit.normal);
+    output.control = float4(hit.materialId, 1.0, hit.stepCount / 72.0, hit.lodTier + hit.costTier * 0.1);
+    output.eventColor = float4(0.0, 0.0, 0.0, 0.0);
+    output.eventMetadata = float4(FIELD_ID_GRID, farDistance + 1.0, 0.0, 0.0);
+    output.depth = saturate(hit.travel / max(farDistance, 0.001));
     return output;
 }

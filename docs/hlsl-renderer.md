@@ -6,8 +6,8 @@ explicit frame graph.
 ## Current Path
 
 1. `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
-2. `D3D12Scene.hlsl` traces the Self emitter, CPU-authored agent visuals,
-   cursor locator, and Grid event lane into scene-linear HDR targets.
+2. `D3D12Scene.hlsl` traces the background and Grid into scene-linear HDR
+   targets, then draws one bounded proxy quad per visible body.
 3. `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
    exposure and ACES, then presents.
 4. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
@@ -29,17 +29,21 @@ lines stay the same pixel width across zoom distances. Terrain isolines derive
 from the Grid height field, while field lines quantize terrain gradient angle
 and fade out on flat surfaces.
 
-The Grid is not an opaque surface. The scene shader traces it before the nearest
-solid and emits premultiplied event radiance plus event metadata. The opaque
-surface packet belongs to Self, agent visuals, cursor, or empty space.
+The fullscreen scene pass owns environment and Grid only. Bodies are not folded
+into that pass. After the Grid writes scene color and travel-derived depth,
+each body gets an instanced proxy quad whose vertex shader computes a
+conservative screen rectangle from the uploaded body center and bound radius.
+The proxy pixel shader raymarches only that object and writes travel-derived
+depth so the Grid and nearer bodies arbitrate visibility through the depth
+target.
 
 ## Solids
 
-Self remains an analytic sphere hit. Agent visuals are uploaded through
-`AgentVisualGpu`, including current center, previous center, role id, activity,
-heartbeat, pressure, expression, and LOD tier. The first visual slice keeps the
-fixed orbit fallback, renders Body and Imagination as LOD 1 role SDFs inside
-bounded per-agent intervals, and keeps the remaining roles as simple distinct
+Self, the cursor, and role bodies are uploaded through `AgentVisualGpu`,
+including current center, previous center, role id, activity, heartbeat,
+pressure, expression, object kind, and LOD tier. The first visual slice keeps
+the fixed orbit fallback, renders Body and Imagination as LOD 1 role SDFs inside
+bounded per-object proxy draws, and keeps the remaining roles as simple distinct
 fallback organs.
 
 The cursor is a revolved MathWorld teardrop SDF with SDF ripples and brass GGX

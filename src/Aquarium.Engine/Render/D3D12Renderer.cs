@@ -23,10 +23,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
 {
     private const int BackBufferCount = 2;
     private const int GridHeightTextureSize = 128;
-    private const int CursorPrimitiveId = AgentVisualCount + 1;
     private const Format GridHeightFormat = Format.R16_Float;
-    private const int AgentVisualCount = 5;
-    private const int GridHeightBrushCount = AgentVisualCount + 1;
+    private const Format SceneDepthFormat = Format.D32_Float;
+    private const int AgentVisualCount = 7;
+    private const int SelfObjectIndex = AgentVisualCount - 2;
+    private const int CursorObjectIndex = AgentVisualCount - 1;
+    private const int GridHeightBrushCount = AgentVisualCount - 1;
     private const int BodyLightCount = 8;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
@@ -69,6 +71,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly IDXGISwapChain3 swapChain;
     private readonly D3D12ResourceRegistry resourceRegistry = new();
     private D3D12DescriptorArena renderTargetViewArena;
+    private D3D12DescriptorArena depthStencilViewArena;
     private D3D12DescriptorArena staticShaderDescriptorArena;
     private readonly FrameResources[] frames = new FrameResources[BackBufferCount];
     private readonly ID3D12GraphicsCommandList commandList;
@@ -76,6 +79,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? gridHeightBasePipelineState;
     private ID3D12PipelineState? gridHeightBrushPipelineState;
     private ID3D12PipelineState? scenePipelineState;
+    private ID3D12PipelineState? agentProxyPipelineState;
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
     private ID3D12PipelineState? bloomBlurHorizontalPipelineState;
@@ -92,6 +96,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget sceneControlRenderTarget;
     private D3D12RenderTarget sceneEventColorRenderTarget;
     private D3D12RenderTarget sceneEventMetadataRenderTarget;
+    private D3D12TrackedResource sceneDepthTarget;
+    private D3D12DescriptorSlot sceneDepthStencilView;
     private readonly D3D12RenderTarget[] historyRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] historyMetadataRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] historyControlRenderTargets = new D3D12RenderTarget[2];
@@ -175,6 +181,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         frameIndex = (int)swapChain.CurrentBackBufferIndex;
 
         renderTargetViewArena = CreateRenderTargetViewArena();
+        depthStencilViewArena = CreateDepthStencilViewArena();
         staticShaderDescriptorArena = CreateStaticShaderDescriptorArena();
         for (var index = 0; index < frames.Length; index++)
         {
@@ -190,6 +197,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
         sceneEventColorRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-color-target", "Aquarium D3D12 Scene Event Color Target");
         sceneEventMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-metadata-target", "Aquarium D3D12 Scene Event Metadata Target");
+        sceneDepthStencilView = depthStencilViewArena.Allocate();
+        sceneDepthTarget = CreateSceneDepthTarget(sceneDepthStencilView);
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
         bodyLightBuffer = new D3D12StructuredBuffer(device, BodyLightCount, Marshal.SizeOf<BodyLightGpu>(), "Aquarium D3D12 Body Light Buffer");
@@ -461,12 +470,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneControlRenderTarget.Dispose();
         sceneEventColorRenderTarget.Dispose();
         sceneEventMetadataRenderTarget.Dispose();
+        sceneDepthTarget.Dispose();
         gridHeightRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
             frames[index].Dispose();
         }
         staticShaderDescriptorArena.Dispose();
+        depthStencilViewArena.Dispose();
         renderTargetViewArena.Dispose();
         swapChain.Dispose();
         commandQueue.Dispose();
@@ -588,6 +599,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrush.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
         var scene = CreateScenePipelineState(paths.Scene);
         scene.Name = "Aquarium D3D12 Scene Pipeline";
+        var agentProxy = CreateAgentProxyPipelineState(paths.Scene);
+        agentProxy.Name = "Aquarium D3D12 Agent Proxy Pipeline";
         var bloomPrefilter = CreateBloomPrefilterPipelineState(paths.Post);
         bloomPrefilter.Name = "Aquarium D3D12 Bloom Prefilter Pipeline";
         var bloomDownsample = CreateBloomDownsamplePipelineState(paths.Post);
@@ -603,6 +616,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gridHeightBase,
             gridHeightBrush,
             scene,
+            agentProxy,
             bloomPrefilter,
             bloomDownsample,
             bloomBlurHorizontal,
@@ -628,6 +642,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("scene-control-target");
         resourceRegistry.RemoveRenderTarget("scene-event-color-target");
         resourceRegistry.RemoveRenderTarget("scene-event-metadata-target");
+        resourceRegistry.RemoveResource("scene-depth-target");
         resourceRegistry.RemoveRenderTarget("grid-height-target");
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
@@ -636,6 +651,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneControlRenderTarget.Dispose();
         sceneEventColorRenderTarget.Dispose();
         sceneEventMetadataRenderTarget.Dispose();
+        sceneDepthTarget.Dispose();
         gridHeightRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
@@ -646,8 +662,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         width = newWidth;
         height = newHeight;
         renderTargetViewArena.Dispose();
+        depthStencilViewArena.Dispose();
         staticShaderDescriptorArena.Dispose();
         renderTargetViewArena = CreateRenderTargetViewArena();
+        depthStencilViewArena = CreateDepthStencilViewArena();
         staticShaderDescriptorArena = CreateStaticShaderDescriptorArena();
 
         swapChain.ResizeBuffers(BackBufferCount, (uint)width, (uint)height, Format.B8G8R8A8_UNorm, SwapChainFlags.None).CheckError();
@@ -660,6 +678,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
         sceneEventColorRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-color-target", "Aquarium D3D12 Scene Event Color Target");
         sceneEventMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-metadata-target", "Aquarium D3D12 Scene Event Metadata Target");
+        sceneDepthStencilView = depthStencilViewArena.Allocate();
+        sceneDepthTarget = CreateSceneDepthTarget(sceneDepthStencilView);
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
         viewport = new Viewport(0.0f, 0.0f, width, height);
@@ -698,6 +718,37 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new Color4(0.0f, 0.0f, 0.0f, 1.0f),
             resourceName);
         resourceRegistry.Add(registryName, target);
+        return target;
+    }
+
+    private D3D12TrackedResource CreateSceneDepthTarget(D3D12DescriptorSlot depthStencilView)
+    {
+        var clearValue = new ClearValue
+        {
+            Format = SceneDepthFormat,
+            DepthStencil = new DepthStencilValue(1.0f, 0),
+        };
+        var resource = device.CreateCommittedResource(
+            HeapType.Default,
+            ResourceDescription.Texture2D(
+                SceneDepthFormat,
+                (uint)width,
+                (uint)height,
+                1,
+                1,
+                1,
+                0,
+                Vortice.Direct3D12.ResourceFlags.AllowDepthStencil),
+            ResourceStates.DepthWrite,
+            clearValue);
+        device.CreateDepthStencilView(resource, new DepthStencilViewDescription
+        {
+            Format = SceneDepthFormat,
+            ViewDimension = DepthStencilViewDimension.Texture2D,
+            Texture2D = new Texture2DDepthStencilView(),
+        }, depthStencilView.Cpu);
+        var target = new D3D12TrackedResource(resource, ResourceStates.DepthWrite, "Aquarium D3D12 Scene Depth Target", true);
+        resourceRegistry.Add("scene-depth-target", target);
         return target;
     }
 
@@ -811,11 +862,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
             sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneEventColorRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneEventMetadataRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
+            sceneDepthTarget.Transition(context.CommandList, ResourceStates.DepthWrite);
             context.CommandList.ClearRenderTargetView(sceneRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneMetadataRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneControlRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneEventColorRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneEventMetadataRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
+            context.CommandList.ClearDepthStencilView(sceneDepthStencilView.Cpu, ClearFlags.Depth, 1.0f, 0);
             context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             context.CommandList.SetPipelineState(scenePipelineState!);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
@@ -835,9 +888,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 sceneEventColorRenderTarget.RenderTargetView.Cpu,
                 sceneEventMetadataRenderTarget.RenderTargetView.Cpu,
             ],
-            null);
+            sceneDepthStencilView.Cpu);
             context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.CommandList.DrawInstanced(3, 1, 0, 0);
+
+            context.CommandList.SetPipelineState(agentProxyPipelineState!);
+            context.CommandList.DrawInstanced(6, AgentVisualCount, 0, 0);
         }
         finally
         {
@@ -1038,7 +1094,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             0.82f,
             1.25f);
 
-        for (var index = 0; index < AgentVisualCount; index++)
+        for (var index = 0; index < SelfObjectIndex; index++)
         {
             var radius = AgentRadius(index);
             var center = AgentAnchor(index, frame.TimeSeconds);
@@ -1058,7 +1114,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private void BuildAgentVisualTable(AquariumFrame frame)
     {
         Array.Clear(agentVisuals);
-        for (var index = 0; index < AgentVisualCount; index++)
+        for (var index = 0; index < SelfObjectIndex; index++)
         {
             var radius = AgentRadius(index);
             var center = AgentCenterAtGridHeight(index, frame.TimeSeconds);
@@ -1076,6 +1132,24 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 new Vector4(activity, heartbeat, pressure, expression),
                 new Vector4(lod, index, 0.0f, 0.0f));
         }
+
+        var selfCenter = BodyCenterAtGridHeight(frame, Vector2.Zero, SunRadius);
+        agentVisuals[SelfObjectIndex] = new AgentVisualGpu(
+            new Vector4(selfCenter, SunRadius),
+            new Vector4(selfCenter, 0.0f),
+            new Vector4(1.0f, 1.0f, 0.0f, 0.0f),
+            new Vector4(0.0f, SelfObjectIndex, 1.0f, 0.0f));
+
+        var cursorCenter = BodyCenterAtGridHeight(frame, frame.CursorWorld, CursorBodyRadius);
+        var previousCursorCenter = BodyCenterAtGridHeight(
+            new AquariumFrame(frame.Grid, previousCameraPosition, previousTimeSeconds, previousCursorWorld),
+            previousCursorWorld,
+            CursorBodyRadius);
+        agentVisuals[CursorObjectIndex] = new AgentVisualGpu(
+            new Vector4(cursorCenter, CursorBodyBoundRadius),
+            new Vector4(previousCursorCenter, -1.0f),
+            new Vector4(1.0f, 0.5f, 0.0f, 0.0f),
+            new Vector4(0.0f, CursorObjectIndex, 2.0f, 0.0f));
     }
 
     private void SetGridHeightBrush(
@@ -1348,6 +1422,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 gridHeightBasePipelineState!,
                 gridHeightBrushPipelineState!,
                 scenePipelineState!,
+                agentProxyPipelineState!,
                 bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
                 bloomBlurHorizontalPipelineState!,
@@ -1361,6 +1436,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = pipelines.GridHeightBase;
         gridHeightBrushPipelineState = pipelines.GridHeightBrush;
         scenePipelineState = pipelines.Scene;
+        agentProxyPipelineState = pipelines.AgentProxy;
         bloomPrefilterPipelineState = pipelines.BloomPrefilter;
         bloomDownsamplePipelineState = pipelines.BloomDownsample;
         bloomBlurHorizontalPipelineState = pipelines.BloomBlurHorizontal;
@@ -1374,6 +1450,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = null;
         gridHeightBrushPipelineState = null;
         scenePipelineState = null;
+        agentProxyPipelineState = null;
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
         bloomBlurHorizontalPipelineState = null;
@@ -1412,6 +1489,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
             64,
             DescriptorHeapFlags.None,
             "Aquarium D3D12 RTV Arena");
+    }
+
+    private D3D12DescriptorArena CreateDepthStencilViewArena()
+    {
+        return new D3D12DescriptorArena(
+            device,
+            DescriptorHeapType.DepthStencilView,
+            8,
+            DescriptorHeapFlags.None,
+            "Aquarium D3D12 DSV Arena");
     }
 
     private D3D12DescriptorArena CreateStaticShaderDescriptorArena()
@@ -1546,7 +1633,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([historyEventMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([studioPmremRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([studioIrradianceRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([agentVisualRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([agentVisualRange]), ShaderVisibility.All),
         };
         var staticSamplers = new[]
         {
@@ -1589,7 +1676,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private ID3D12PipelineState CreateScenePipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12ScenePS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12ScenePS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
+    }
+
+    private ID3D12PipelineState CreateAgentProxyPipelineState(string path)
+    {
+        return CreateFullscreenPipelineState(path, "D3D12AgentProxyVS", "D3D12AgentProxyPS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -1641,14 +1733,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
         string vertexEntryPoint,
         string pixelEntryPoint,
         Format renderTargetFormat,
-        BlendDescription? blendDescription = null)
+        BlendDescription? blendDescription = null,
+        bool enableDepth = false)
     {
         return CreateFullscreenPipelineState(
             path,
             vertexEntryPoint,
             pixelEntryPoint,
             [renderTargetFormat],
-            blendDescription);
+            blendDescription,
+            enableDepth);
     }
 
     private ID3D12PipelineState CreateFullscreenPipelineState(
@@ -1656,7 +1750,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         string vertexEntryPoint,
         string pixelEntryPoint,
         IReadOnlyList<Format> renderTargetFormats,
-        BlendDescription? blendDescription = null)
+        BlendDescription? blendDescription = null,
+        bool enableDepth = false)
     {
         var vertexShader = CompileShader(path, vertexEntryPoint, "vs_5_0");
         var pixelShader = CompileShader(path, pixelEntryPoint, "ps_5_0");
@@ -1667,14 +1762,30 @@ public sealed class D3D12Renderer : IAquariumRenderer
             PixelShader = pixelShader,
             BlendState = blendDescription ?? BlendDescription.Opaque,
             RasterizerState = RasterizerDescription.CullNone,
-            DepthStencilState = DepthStencilDescription.None,
+            DepthStencilState = enableDepth
+                ? new DepthStencilDescription
+                {
+                    DepthEnable = true,
+                    DepthWriteMask = DepthWriteMask.All,
+                    DepthFunc = ComparisonFunction.LessEqual,
+                    StencilEnable = false,
+                }
+                : DepthStencilDescription.None,
             SampleMask = uint.MaxValue,
             PrimitiveTopologyType = PrimitiveTopologyType.Triangle,
             RenderTargetFormats = renderTargetFormats.ToArray(),
             SampleDescription = new SampleDescription(1, 0),
+            DepthStencilFormat = enableDepth ? SceneDepthFormat : Format.Unknown,
         };
 
-        return device.CreateGraphicsPipelineState(description);
+        try
+        {
+            return device.CreateGraphicsPipelineState(description);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to create D3D12 pipeline VS={vertexEntryPoint} PS={pixelEntryPoint} depth={enableDepth}.", ex);
+        }
     }
 
     private static ReadOnlyMemory<byte> CompileShader(string path, string entryPoint, string profile)
@@ -1721,7 +1832,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             * MathF.Sin((world.X * -0.04f + world.Y * 0.07f) - timeSeconds * 0.19f)
             * 0.035f;
         height += GridBrushHeight(world, Vector2.Zero, SelfGravityRadius, 2.85f, -1.34f, 0.18f, MathF.Tau, 0.82f, 1.25f, timeSeconds);
-        for (var index = 0; index < AgentVisualCount; index++)
+        for (var index = 0; index < SelfObjectIndex; index++)
         {
             var radius = AgentRadius(index);
             height += GridBrushHeight(world, AgentAnchor(index, timeSeconds), 3.8f + radius * 2.5f, 2.1f, -0.42f, 0.022f, 2.4f, 1.35f, 0.0f, timeSeconds);
@@ -1906,6 +2017,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState GridHeightBase,
         ID3D12PipelineState GridHeightBrush,
         ID3D12PipelineState Scene,
+        ID3D12PipelineState AgentProxy,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
         ID3D12PipelineState BloomBlurHorizontal,
@@ -1919,6 +2031,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
+            AgentProxy.Dispose();
             Scene.Dispose();
             GridHeightBrush.Dispose();
             GridHeightBase.Dispose();
