@@ -52,7 +52,7 @@ renderer_state:
   current:
     - D3D12 default renderer behind IAquariumRenderer with explicit device/queue/swapchain, command allocators, fences, descriptor arenas, upload ring constants, tracked render targets, command events, resize rebuild, HDR/bloom/present, temporal diagnostics, and DirectWrite overlay bridge.
     - Deferred scalar Grid height target rendered from additive brush passes.
-    - Direct-traced Grid linework as a non-terminating stochastic event lane before the nearest solid.
+    - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio3 PMREM mip 0.
     - SDF/analytic solids for Self, planets, and the cursor locator.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio3 PMREM DDS cubemap is loaded as a D3D12 TextureCube and sampled for roughness-mip PBR specular reflections.
@@ -70,5 +70,5 @@ next_actions:
   - Verify publish output after every packaging-affecting change.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
-  - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics or stochastic event handling.
+    - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.

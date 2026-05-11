@@ -43,16 +43,6 @@ static const float CURSOR_RADIUS = 0.56;
 static const float CURSOR_BOUND_RADIUS = 0.72;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
-static const float TERRAIN_ISOLINE_SPACING = 0.12;
-static const float GRID_LINE_WORLD_CELL = 2.0;
-static const float GRID_MAJOR_LINE_WORLD_CELL = GRID_LINE_WORLD_CELL * 5.0;
-static const float GRID_LINE_PIXEL_WIDTH = 0.46;
-static const float GRID_MAJOR_LINE_PIXEL_WIDTH = 0.82;
-static const float GRID_LINE_PIXEL_FADE = 0.95;
-static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
-static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
-static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
-static const float GRID_ALPHA_SCALE = 0.56;
 static const int BODY_LIGHT_COUNT = 8;
 static const float STUDIO_PMREM_MAX_LOD = 8.0;
 static const float STUDIO_PMREM_SPECULAR_INTENSITY = 0.34;
@@ -176,52 +166,6 @@ float3 terrainNormal(float3 p)
 {
     float2 gradient = terrainGradient(p.xy);
     return normalize(float3(-gradient.x, -gradient.y, 1.0));
-}
-
-float periodicLineMask(float coordinate, float pixelWidth, float pixelFade)
-{
-    float distanceToLine = min(frac(coordinate), 1.0 - frac(coordinate));
-    float coordinatePerPixel = max(fwidth(coordinate), 0.00001);
-    float distancePixels = distanceToLine / coordinatePerPixel;
-    return 1.0 - smoothstep(pixelWidth, pixelWidth + pixelFade, distancePixels);
-}
-
-float gridLine(float2 p)
-{
-    float2 minorDomain = p / GRID_LINE_WORLD_CELL;
-    float2 majorDomain = p / GRID_MAJOR_LINE_WORLD_CELL;
-
-    float minor = max(
-        periodicLineMask(minorDomain.x, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
-        periodicLineMask(minorDomain.y, GRID_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
-    float major = max(
-        periodicLineMask(majorDomain.x, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE),
-        periodicLineMask(majorDomain.y, GRID_MAJOR_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE));
-
-    return saturate(minor * 0.58 + major);
-}
-
-float isolineMask(float height)
-{
-    float contourDomain = height / TERRAIN_ISOLINE_SPACING;
-    float contour = periodicLineMask(contourDomain, TERRAIN_ISOLINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
-    float contourDerivative = max(fwidth(contourDomain), 0.00001);
-    float slopeFade = smoothstep(0.025, 0.25, contourDerivative);
-    return contour * slopeFade;
-}
-
-float fieldLineMask(float2 gradient)
-{
-    float slope = length(gradient);
-    if (slope < 0.0001)
-    {
-        return 0.0;
-    }
-
-    float angleDomain = (atan2(gradient.y, gradient.x) / PI + 1.0) * 6.0;
-    float angleLine = periodicLineMask(angleDomain, TERRAIN_FIELD_LINE_PIXEL_WIDTH, GRID_LINE_PIXEL_FADE);
-    float slopeStrength = smoothstep(0.015, 0.16, slope);
-    return angleLine * slopeStrength;
 }
 
 bool traceSphere(float3 origin, float3 direction, float3 center, float radius, out float travel)
@@ -473,19 +417,11 @@ bool traceGridSurfaceDirect(float3 origin, float3 direction, float intervalStart
     return false;
 }
 
-float3 gridEventColor(float3 p, out float alpha)
+float3 gridMirrorRadiance(float3 p, float3 direction, out float3 normal)
 {
-    float height = terrainHeight(p.xy);
-    float2 gradient = terrainGradient(p.xy);
-    float gridAmount = gridLine(p.xy);
-    float contour = isolineMask(height);
-    float fieldLine = fieldLineMask(gradient);
-    float support = saturate(gridAmount * 0.58 + contour * 0.22 + fieldLine * 0.16);
-    float3 color = GRID_COLOR * gridAmount * 1.05;
-    color += float3(0.98, 1.0, 0.78) * contour * 0.34;
-    color += float3(0.36, 0.92, 1.0) * fieldLine * 0.22;
-    alpha = saturate(support * GRID_ALPHA_SCALE);
-    return color;
+    normal = terrainNormal(p);
+    float3 reflectionDirection = reflect(direction, normal);
+    return studioPmremTexture.SampleLevel(gridSampler, reflectionDirection, 0.0).rgb;
 }
 
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
@@ -512,19 +448,15 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     float3 gridPosition;
     float gridTravel;
     bool gridHit = traceGridSurfaceDirect(origin, direction, 0.0, stopTravel, gridPosition, gridTravel);
-    float gridAlpha = 0.0;
-    float3 gridColor = 0.0;
     if (gridHit)
     {
-        gridColor = gridEventColor(gridPosition, gridAlpha);
-        gridHit = gridAlpha > 0.001;
-    }
-
-    if (gridHit)
-    {
-        result.eventTravel = gridTravel;
-        result.eventCoverage = gridAlpha;
-        result.eventColor = gridColor * gridAlpha;
+        float3 gridNormal;
+        result.color = gridMirrorRadiance(gridPosition, direction, gridNormal);
+        result.travel = gridTravel;
+        result.fieldId = FIELD_ID_GRID;
+        result.normal = gridNormal;
+        result.coverage = 1.0;
+        return result;
     }
 
     if (nearestSolid.hit)
