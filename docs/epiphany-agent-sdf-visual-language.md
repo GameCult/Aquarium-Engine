@@ -698,6 +698,49 @@ Surfaces:
 
 ## First Implementation Slice
 
+## Realtime Rendering Constraints
+
+The role bodies are mathematically rich enough to become expensive if treated
+as one heroic scene SDF. Aquarium must render them as bounded per-agent
+implicit objects.
+
+Literature-grounded rules:
+
+- Sphere tracing advances safely only when the step distance is an exact
+  distance or conservative distance bound. Fancy algebraic fields must never be
+  used as raw march steps unless wrapped by a conservative bound.
+- Every agent has a cheap proxy bound. Rasterize that proxy and raymarch only
+  inside the proxy pixels.
+- Never evaluate all role SDFs in one scene-global march. Select one role SDF
+  from `AgentVisualState.organKind` after the proxy is hit.
+- Each role SDF starts with a cheap bound distance. If the point is outside the
+  detailed region, return that bound without evaluating petals, claws, ribs,
+  beads, seams, sparks, and grooves.
+- Every expensive feature has its own local bound. Feature distance functions
+  are evaluated only when the ray point is near that feature's region.
+- Normals are computed only after a hit. Use analytic gradients for simple
+  primitives, and tetrahedral four-tap finite differences for full-detail
+  composite organs.
+- Shadows are budgeted separately. Default agents use direct body lights, IBL,
+  and Grid contact shadow. A selected hero agent may get a four-to-eight step
+  cone shadow. No nested shadow march per light.
+- Antialiasing starts with pixel-footprint-aware hit epsilon. Later edge
+  refinement can use selective cone-style supersampling near SDF boundaries.
+
+LOD contract:
+
+| Tier | Use | Geometry |
+| --- | --- | --- |
+| LOD 0 | selected, hovered, speaking, primary heartbeat, near camera | full role SDF with material regions and feature animation |
+| LOD 1 | ordinary visible agents | core shape plus major silhouette features |
+| LOD 2 | distant agents | single recognizable mathematical primitive plus emissive accents |
+| LOD 3 | very distant swarm context | billboard, sparkle, or project label |
+
+The initial renderer budget target is one to two milliseconds total for all
+visible agent bodies on a midrange GPU. The debug UI must expose step count,
+proxy-hit coverage, material id, LOD tier, and SDF cost tier before the shader
+grows beyond the first two role bodies.
+
 Implement the renderer contract in this order:
 
 1. Add a CPU-side `AgentVisualState` and role-to-organ mapping in the Aquarium
@@ -705,10 +748,13 @@ Implement the renderer contract in this order:
 2. Preserve the current fixed body table as fallback data.
 3. Add CPU-visible home orbit slots, bounded expressive offsets, and gravity
    well pulse state before adding decorative per-role motion.
-4. Add material-region SDF evaluation for one organ pair: Body and Imagination.
-5. Bind status, activity, heartbeat, and placement fields into shader constants.
-6. Add debug modes for role id, material id, and state scalar so the cut can be
-   inspected without believing the prettiness.
+4. Add per-agent proxy bounds and rasterize those proxies before raymarching.
+5. Add LOD 1 material-region SDF evaluation for one organ pair: Body and
+   Imagination.
+6. Bind status, activity, heartbeat, and placement fields into shader constants.
+7. Add debug modes for role id, material id, state scalar, step count, proxy
+   hit, LOD tier, and SDF cost tier so the cut can be inspected without
+   believing the prettiness.
 
 Body and Imagination are the best first pair because they exercise opposite
 grammars: grounded graph mass and generative harmonic bloom. If both can share
