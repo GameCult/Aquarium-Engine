@@ -23,15 +23,13 @@ cbuffer AquariumFrame : register(b0)
 Texture2D<float4> gridHeightTexture : register(t0);
 SamplerState gridSampler : register(s0);
 
-struct FieldInstance
+struct BodyLight
 {
     float4 centerRadius;
-    float4 radiusAngle;
-    float4 fieldFlags;
-    float4 colorIntensity;
+    float4 radianceFieldId;
 };
 
-StructuredBuffer<FieldInstance> fieldInstances : register(t12);
+StructuredBuffer<BodyLight> bodyLights : register(t12);
 
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
@@ -54,8 +52,7 @@ static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.56;
-static const int FIELD_INSTANCE_COUNT = 7;
-static const int FIELD_FLAG_EMITTER = 8;
+static const int BODY_LIGHT_COUNT = 8;
 
 struct VertexOut
 {
@@ -544,43 +541,49 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
 float3 primitiveEmissionRadiance(float fieldId)
 {
     [loop]
-    for (int i = 0; i < FIELD_INSTANCE_COUNT; i++)
+    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
     {
-        FieldInstance emitter = fieldInstances[i];
-        if (abs(emitter.fieldFlags.x - fieldId) < 0.25 &&
-            (((int)(emitter.fieldFlags.y + 0.5) & FIELD_FLAG_EMITTER) != 0))
+        BodyLight light = bodyLights[i];
+        if (abs(light.radianceFieldId.w - fieldId) < 0.25)
         {
-            return emitter.colorIntensity.rgb;
+            return light.radianceFieldId.rgb;
         }
     }
 
     return 0.0;
 }
 
-float3 selfRadiance()
+float3 bodyLightIrradianceAt(float3 p, float3 normal)
 {
-    return float3(10.0, 8.7, 4.2);
+    float3 irradiance = 0.0;
+    [loop]
+    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
+    {
+        BodyLight light = bodyLights[i];
+        float3 radiance = light.radianceFieldId.rgb;
+        if (dot(radiance, radiance) <= 0.000001)
+        {
+            continue;
+        }
+
+        float3 toLight = light.centerRadius.xyz - p;
+        float distanceSquared = max(dot(toLight, toLight), 0.01);
+        float3 lightDirection = toLight * rsqrt(distanceSquared);
+        float cosine = saturate(dot(normal, lightDirection));
+        float radius = max(light.centerRadius.w, 0.001);
+        float solidAngle = saturate((radius * radius) / distanceSquared);
+        irradiance += radiance * cosine * solidAngle * 6.0;
+    }
+
+    return irradiance;
 }
 
-float3 selfIrradianceAt(float3 p, float3 normal)
-{
-    float3 toSelf = float3(0.0, 0.0, 2.2) - p;
-    float distanceSquared = max(dot(toSelf, toSelf), 0.01);
-    float3 lightDirection = toSelf * rsqrt(distanceSquared);
-    float cosine = saturate(dot(normal, lightDirection));
-    float solidAngle = saturate((SUN_RADIUS * SUN_RADIUS) / distanceSquared);
-    return selfRadiance() * cosine * solidAngle * 6.0;
-}
-
-float3 cursorSpecularSelfRadiance(float3 p, float3 normal)
+float3 cursorSpecularBodyLightRadiance(float3 p, float3 normal)
 {
     static const float MinimumRoughness = 0.045;
     static const float CursorRoughness = 0.16;
 
     float3 viewDirection = normalize(cameraPosition - p);
-    float3 toSelf = float3(0.0, 0.0, 2.2) - p;
-    float distanceSquared = max(dot(toSelf, toSelf), 0.01);
-    float3 lightDirection = toSelf * rsqrt(distanceSquared);
     float ndv = saturate(dot(normal, viewDirection));
     float roughness = max(CursorRoughness, MinimumRoughness);
     float alpha = roughness * roughness;
@@ -589,18 +592,36 @@ float3 cursorSpecularSelfRadiance(float3 p, float3 normal)
     k = (k * k) * 0.125;
     float geometryV = ndv / max(ndv * (1.0 - k) + k, 0.00001);
     float3 f0 = float3(0.95, 0.62, 0.26);
-    float3 irradiance = selfRadiance() * saturate((SUN_RADIUS * SUN_RADIUS) / distanceSquared) * 7.0;
-    float3 halfVector = normalize(lightDirection + viewDirection);
-    float ndl = saturate(dot(normal, lightDirection));
-    float ndh = saturate(dot(normal, halfVector));
-    float vdh = saturate(dot(viewDirection, halfVector));
-    float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
-    float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
-    float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
-    float geometry = geometryL * geometryV;
-    float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
-    float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
-    return specular * irradiance * ndl;
+    float3 result = 0.0;
+    [loop]
+    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
+    {
+        BodyLight light = bodyLights[i];
+        float3 radiance = light.radianceFieldId.rgb;
+        if (dot(radiance, radiance) <= 0.000001)
+        {
+            continue;
+        }
+
+        float3 toLight = light.centerRadius.xyz - p;
+        float distanceSquared = max(dot(toLight, toLight), 0.01);
+        float3 lightDirection = toLight * rsqrt(distanceSquared);
+        float radius = max(light.centerRadius.w, 0.001);
+        float3 irradiance = radiance * saturate((radius * radius) / distanceSquared) * 7.0;
+        float3 halfVector = normalize(lightDirection + viewDirection);
+        float ndl = saturate(dot(normal, lightDirection));
+        float ndh = saturate(dot(normal, halfVector));
+        float vdh = saturate(dot(viewDirection, halfVector));
+        float denominator = ndh * ndh * (alpha2 - 1.0) + 1.0;
+        float distribution = alpha2 / max(PI * denominator * denominator, 0.00001);
+        float geometryL = ndl / max(ndl * (1.0 - k) + k, 0.00001);
+        float geometry = geometryL * geometryV;
+        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vdh, 5.0);
+        float3 specular = (distribution * geometry) * fresnel / max(4.0 * ndl * ndv, 0.00001);
+        result += specular * irradiance * ndl;
+    }
+
+    return result;
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId)
@@ -614,12 +635,12 @@ float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitive
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        return emission + cursorSpecularSelfRadiance(p, normal);
+        return emission + cursorSpecularBodyLightRadiance(p, normal);
     }
 
     float hue = hash21(float2(primitiveId, 6.3));
     float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hue);
-    return emission + albedo * selfIrradianceAt(p, normal) / PI;
+    return emission + albedo * bodyLightIrradianceAt(p, normal) / PI;
 }
 
 SceneOut D3D12ScenePS(VertexOut input)

@@ -27,7 +27,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
     private const int GridHeightBrushCount = PlanetCount + 1;
-    private const int FieldInstanceCount = PlanetCount + 2;
+    private const int BodyLightCount = 8;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -90,8 +90,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] historyEventMetadataRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] bloomRenderTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
-    private readonly D3D12StructuredBuffer fieldInstanceBuffer;
-    private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
+    private readonly D3D12StructuredBuffer bodyLightBuffer;
+    private readonly BodyLightGpu[] bodyLights = new BodyLightGpu[BodyLightCount];
     private readonly GridHeightBrushCpu[] gridHeightBrushes = new GridHeightBrushCpu[GridHeightBrushCount];
     private Viewport viewport;
     private RawRect scissorRect;
@@ -179,8 +179,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneEventMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-metadata-target", "Aquarium D3D12 Scene Event Metadata Target");
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
-        fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
-        resourceRegistry.Add("field-instance-buffer", fieldInstanceBuffer);
+        bodyLightBuffer = new D3D12StructuredBuffer(device, BodyLightCount, Marshal.SizeOf<BodyLightGpu>(), "Aquarium D3D12 Body Light Buffer");
+        resourceRegistry.Add("body-light-buffer", bodyLightBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
         commandList.Close();
@@ -275,7 +275,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         BuildGridHeightBrushes(frame);
-        BuildFieldInstanceTable(frame);
+        BuildBodyLightTable();
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -305,8 +305,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new ConstantBufferViewDescription(gridBrushConstants.GpuVirtualAddress, gridBrushConstants.SizeInBytes),
             frameResources.GridBrushConstantsDescriptor.Cpu);
 
-        frameResources.FieldInstanceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        fieldInstanceBuffer.CreateShaderResourceView(device, frameResources.FieldInstanceDescriptor);
+        frameResources.BodyLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        bodyLightBuffer.CreateShaderResourceView(device, frameResources.BodyLightDescriptor);
         frameResources.GridHeightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         gridHeightRenderTarget.CreateShaderResourceView(device, frameResources.GridHeightDescriptor);
         frameResources.SceneDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -351,7 +351,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         var recordCpuStart = Stopwatch.GetTimestamp();
         commandList.BeginEvent("Aquarium D3D12 Frame");
-        UploadFieldResources(commandList, frameResources);
+        UploadBodyLightResources(commandList, frameResources);
         RenderGridHeight(commandList, frameResources);
         RenderSceneAndPresent(new D3D12PassContext(commandList, frameResources.BackBuffer, frameResources.BackBufferRenderTargetView.Cpu), frameResources);
         commandList.EndEvent();
@@ -423,7 +423,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         overlayDevice.Dispose();
         DisposePipelineStates();
         fullscreenRootSignature.Dispose();
-        fieldInstanceBuffer.Dispose();
+        bodyLightBuffer.Dispose();
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
@@ -762,7 +762,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.GridHeightDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.FieldInstanceDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.BodyLightDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -919,12 +919,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
-    private void UploadFieldResources(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
+    private void UploadBodyLightResources(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
     {
-        activeCommandList.BeginEvent("Field Resource Upload");
+        activeCommandList.BeginEvent("Body Light Upload");
         try
         {
-            fieldInstanceBuffer.Upload(activeCommandList, frameResources.UploadRing, fieldInstances);
+            bodyLightBuffer.Upload(activeCommandList, frameResources.UploadRing, bodyLights);
         }
         finally
         {
@@ -1006,35 +1006,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrushes[index] = new GridHeightBrushCpu(center, radius, power, amplitude, waveAmplitude, waveFrequency, waveSpeed);
     }
 
-    private void BuildFieldInstanceTable(AquariumFrame frame)
+    private void BuildBodyLightTable()
     {
-        fieldInstances[0] = FieldInstanceGpu.Sphere(
-            fieldId: 2.0f,
-            flags: FieldFlags.Solid | FieldFlags.Emitter,
-            center: new Vector3(0.0f, 0.0f, 2.2f),
-            radius: SunRadius,
-            materialId: 1.0f,
-            color: new Vector3(10.0f, 8.7f, 4.2f));
-
-        for (var i = 0; i < PlanetCount; i++)
-        {
-            var radius = PlanetRadius(i);
-            fieldInstances[i + 1] = FieldInstanceGpu.Sphere(
-                fieldId: 10.0f + i,
-                flags: FieldFlags.Solid | FieldFlags.ShadowCaster | FieldFlags.Receiver,
-                center: PlanetCenter(i, frame.TimeSeconds, radius),
-                radius: radius,
-                materialId: 10.0f + i,
-                color: Vector3.One);
-        }
-
-        fieldInstances[6] = FieldInstanceGpu.Sphere(
-            fieldId: 5.0f,
-            flags: FieldFlags.Solid | FieldFlags.Emitter | FieldFlags.Receiver,
-            center: new Vector3(frame.CursorWorld.X, frame.CursorWorld.Y, CursorBodyRadius),
-            radius: CursorBodyBoundRadius,
-            materialId: 5.0f,
-            color: Vector3.Zero);
+        Array.Clear(bodyLights);
+        bodyLights[0] = new BodyLightGpu(
+            new Vector4(0.0f, 0.0f, 2.2f, SunRadius),
+            new Vector4(10.0f, 8.7f, 4.2f, 2.0f));
     }
 
     private float EvaluateGridHeight(AquariumFrame frame, Vector2 world)
@@ -1367,7 +1344,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             1,
             0,
             D3D12.DescriptorRangeOffsetAppend);
-        var fieldInstanceRange = new DescriptorRange(
+        var bodyLightRange = new DescriptorRange(
             DescriptorRangeType.ShaderResourceView,
             1,
             12,
@@ -1438,7 +1415,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([sourceTextureRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([gridBrushRange]), ShaderVisibility.All),
-            new RootParameter(new RootDescriptorTable([fieldInstanceRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([bodyLightRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([bloomRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneControlRange]), ShaderVisibility.Pixel),
@@ -1713,39 +1690,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float WaveFrequency,
         float WaveSpeed);
 
-    [Flags]
-    private enum FieldFlags
-    {
-        Solid = 1,
-        Emitter = 8,
-        ShadowCaster = 16,
-        Receiver = 32,
-    }
-
     [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct FieldInstanceGpu(
+    private readonly record struct BodyLightGpu(
         Vector4 CenterRadius,
-        Vector4 RadiusAngle,
-        Vector4 FieldFlags,
-        Vector4 Material,
-        Vector4 ColorIntensity)
-    {
-        public static FieldInstanceGpu Sphere(
-            float fieldId,
-            FieldFlags flags,
-            Vector3 center,
-            float radius,
-            float materialId,
-            Vector3 color)
-        {
-            return new FieldInstanceGpu(
-                new Vector4(center, radius),
-                new Vector4(radius, radius, radius, 0.0f),
-                new Vector4(fieldId, (float)flags, 1.0f, 0.0f),
-                new Vector4(materialId, 0.0f, 0.0f, 0.0f),
-                new Vector4(color, 1.0f));
-        }
-    }
+        Vector4 RadianceFieldId);
 
     private sealed record D3D12ShaderPaths(
         string Grid,
@@ -1801,7 +1749,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         public D3D12DescriptorSlot GridBrushConstantsDescriptor { get; set; }
 
-        public D3D12DescriptorSlot FieldInstanceDescriptor { get; set; }
+        public D3D12DescriptorSlot BodyLightDescriptor { get; set; }
 
         public D3D12DescriptorSlot GridHeightDescriptor { get; set; }
 
