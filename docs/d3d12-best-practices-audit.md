@@ -41,8 +41,8 @@ targets, async shader pipeline builds, and a narrow DirectWrite overlay bridge.
   deliberately simple and correct for swapchain-dependent resources.
 - Upload ring is per-frame and reset after fence wait. It is not yet a global
   transient allocator with suballocation statistics or overflow diagnostics.
-- Some medium-era render-target/history scaffolding still needs a follow-up
-  sanitation pass now that runtime volumetrics are shelved.
+- Removed-pass scaffolding should stay out of the live frame. Runtime
+  volumetrics, medium/froxel targets, and medium history lanes are shelved.
 
 ## Required Before Larger Renderer Work
 
@@ -50,7 +50,8 @@ targets, async shader pipeline builds, and a narrow DirectWrite overlay bridge.
   diagnostics.
 - Add descriptor-owner diagnostics beyond heap-level capacity summaries when
   descriptor churn becomes hard to reason about.
-- Finish cutting removed-pass scaffolding before adding new renderer systems.
+- Keep future renderer systems tied to explicit live pass contracts before
+  adding new render targets or history lanes.
 
 ## Rule
 

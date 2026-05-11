@@ -18,7 +18,7 @@
       "D3D12 descriptor ownership stays explicit: static descriptors for long-lived views, per-frame transient descriptors reset only after fence wait, and whole-arena rebuilds on resize until real descriptor churn demands free lists.",
       "D3D12 previous-frame camera/Grid/time/cursor state is renderer-level temporal state, not per-swapchain-frame-resource state.",
       "Grid height is brush-rendered into one scalar R16_Float target. Height is one value; do not spend extra channels without a concrete pass contract.",
-      "Runtime volumetrics, cloud/fog research, and the D3D11 renderer are shelved. Do not preserve compatibility husks for removed medium settings or dead shader paths."
+      "Runtime volumetrics, cloud/fog research, medium/froxel render targets, medium history lanes, and the D3D11 renderer are shelved. Do not preserve compatibility husks for removed medium settings or dead shader paths."
     ],
     "camera_and_grid": [
       "The camera target is the Grid center on XY. Camera distance is clamped to [5, 40]. Grid radius derives from twice that distance and clamps to [20, 80]. Pitch, yaw, FOV, and screen aspect do not resize the Grid.",

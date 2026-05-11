@@ -17,25 +17,10 @@ cbuffer AquariumFrame : register(b0)
     float exposure;
     float bloomIntensity;
     float bloomVeilIntensity;
-    float mediumCompositeIntensity;
-    float mediumDebugStep;
-    float mediumFogDensity;
-    float mediumFogHeightFalloff;
-    float mediumNoiseScale;
-    float mediumNoiseContrast;
-    float mediumGridFogDensity;
-    float mediumPrimitiveFogDensity;
-    float mediumNoiseSpeed;
-    float mediumReserved0;
     float4 cursorWorlds;
 };
 
 Texture2D<float4> gridHeightTexture : register(t0);
-StructuredBuffer<int4> froxelPrimitiveIds : register(t1);
-Texture2D<float4> mediumVolumeTexture : register(t13);
-Texture2D<float4> mediumTransportTexture : register(t14);
-Texture2D<float4> mediumLightTexture : register(t15);
-Texture2D<float4> mediumLightDirectionTexture : register(t25);
 SamplerState gridSampler : register(s0);
 
 struct FieldInstance
@@ -43,9 +28,7 @@ struct FieldInstance
     float4 centerRadius;
     float4 radiusAngle;
     float4 fieldFlags;
-    float4 materialMedium;
     float4 colorIntensity;
-    float4 mediumTerms;
 };
 
 StructuredBuffer<FieldInstance> fieldInstances : register(t12);
@@ -53,18 +36,12 @@ StructuredBuffer<FieldInstance> fieldInstances : register(t12);
 static const int PLANET_COUNT = 5;
 static const float SUN_RADIUS = 1.12;
 static const float FIELD_ID_SELF = 2.0;
-static const float FIELD_ID_MEDIUM = 3.0;
 static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int CURSOR_PRIMITIVE_ID = PLANET_COUNT + 1;
 static const float CURSOR_RADIUS = 0.56;
 static const float CURSOR_BOUND_RADIUS = 0.72;
-static const int MEDIUM_FROXEL_ATLAS_COLUMNS = 8;
-static const int MEDIUM_FROXEL_ATLAS_ROWS = 4;
-static const int MEDIUM_FROXEL_DOWNSCALE = 8;
-static const int MEDIUM_FROXEL_SLICE_COUNT = MEDIUM_FROXEL_ATLAS_COLUMNS * MEDIUM_FROXEL_ATLAS_ROWS;
-static const int VIEW_FROXEL_PRIMITIVE_SLOT_COUNT = 2;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const float TERRAIN_ISOLINE_SPACING = 0.12;
@@ -77,10 +54,8 @@ static const float TERRAIN_ISOLINE_PIXEL_WIDTH = 0.54;
 static const float TERRAIN_FIELD_LINE_PIXEL_WIDTH = 0.38;
 static const float3 GRID_COLOR = float3(0.30, 0.90, 0.82);
 static const float GRID_ALPHA_SCALE = 0.56;
-static const int FIELD_INSTANCE_COUNT = 11;
+static const int FIELD_INSTANCE_COUNT = 7;
 static const int FIELD_FLAG_EMITTER = 8;
-static const float INV_FOUR_PI = 0.07957747155;
-static const float MEDIUM_PHASE_G = 0.34;
 
 struct VertexOut
 {
@@ -93,10 +68,8 @@ struct SceneOut
     float4 colorTravel : SV_Target0;
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
-    float4 mediumPacket : SV_Target3;
-    float4 mediumColor : SV_Target4;
-    float4 eventColor : SV_Target5;
-    float4 eventMetadata : SV_Target6;
+    float4 eventColor : SV_Target3;
+    float4 eventMetadata : SV_Target4;
 };
 
 struct SolidHit
@@ -115,10 +88,6 @@ struct RayMarchResult
     float fieldId;
     float3 normal;
     float coverage;
-    float mediumOpacity;
-    float densityMean;
-    float mediumTravel;
-    float3 mediumColor;
     float eventTravel;
     float eventCoverage;
     float3 eventColor;
@@ -156,62 +125,6 @@ float hash21(float2 p)
     p = frac(p * float2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return frac(p.x * p.y);
-}
-
-float tri(float x)
-{
-    return abs(frac(x) - 0.5);
-}
-
-float3 tri3(float3 p)
-{
-    return float3(
-        tri(p.z + tri(p.y)),
-        tri(p.z + tri(p.x)),
-        tri(p.y + tri(p.x)));
-}
-
-float triNoise3d(float3 p)
-{
-    float z = 1.4;
-    float value = 0.001;
-    float3 basePoint = p;
-
-    [unroll]
-    for (int i = 0; i < 2; i++)
-    {
-        float3 dg = tri3(basePoint * 2.0);
-        p += dg + timeSeconds * mediumNoiseSpeed * 0.055;
-        basePoint *= 1.8;
-        z *= 1.5;
-        p *= 1.2;
-        value += tri(p.z + tri(p.x + tri(p.y))) / z;
-        basePoint += 0.14;
-    }
-
-    return value;
-}
-
-float mediumRayDetail(float3 p)
-{
-    float noiseScale = max(mediumNoiseScale, 0.001);
-    float3 domain = float3(p.xy - gridCenter, p.z * 1.55) * (0.145 * noiseScale);
-    float3 flow = float3(0.10, -0.075, 0.045) * timeSeconds;
-    float3 warp = float3(
-        triNoise3d(domain + flow + 4.1),
-        triNoise3d(domain.yzx - flow * 0.85 + 17.7),
-        triNoise3d(domain.zxy + flow.zxy * 1.25 + 31.3)) * 2.0 - 1.0;
-
-    float3 warped = domain + warp * 1.35;
-    float low = triNoise3d(warped * 1.25 + flow);
-    float mid = triNoise3d(warped * 3.1 - flow.yzx * 0.8 + 9.4);
-    float high = triNoise3d(warped * 8.4 + flow.zxy * 1.5 + 22.2);
-    float strand = 1.0 - abs(mid * 2.0 - 1.0);
-    float filament = strand * strand * lerp(0.35, 1.0, high);
-    float textureWeight = saturate(0.30 + low * 0.88 + filament * 0.72 - high * 0.18);
-    float veil = lerp(0.60, 1.85, textureWeight);
-    float strata = lerp(0.82, 1.24, triNoise3d(float3(domain.xy * 0.42, p.z * 0.18) - flow.zxy * 0.45));
-    return lerp(1.0, veil * strata, mediumNoiseContrast);
 }
 
 float planetRadius(int index)
@@ -488,39 +401,25 @@ void considerPrimitiveHit(float3 origin, float3 direction, int primitiveId, floa
     }
 }
 
-void considerFroxelPrimitiveHits(float3 origin, float3 direction, int froxelIndex, float intervalStart, float intervalEnd, inout SolidHit nearest)
+void considerAllPrimitiveHits(float3 origin, float3 direction, float intervalStart, float intervalEnd, inout SolidHit nearest)
 {
-    if (froxelIndex < 0)
-    {
-        return;
-    }
+    considerPrimitiveHit(origin, direction, 0, intervalStart, intervalEnd, nearest);
 
     [unroll]
-    for (int slot = 0; slot < VIEW_FROXEL_PRIMITIVE_SLOT_COUNT; slot++)
+    for (int i = 0; i < PLANET_COUNT; i++)
     {
-        int4 ids = froxelPrimitiveIds[froxelIndex * VIEW_FROXEL_PRIMITIVE_SLOT_COUNT + slot];
-        bool hasCursor =
-            ids.x == CURSOR_PRIMITIVE_ID ||
-            ids.y == CURSOR_PRIMITIVE_ID ||
-            ids.z == CURSOR_PRIMITIVE_ID ||
-            ids.w == CURSOR_PRIMITIVE_ID;
-        considerPrimitiveHit(origin, direction, ids.x, intervalStart, intervalEnd, nearest);
-        considerPrimitiveHit(origin, direction, ids.y, intervalStart, intervalEnd, nearest);
-        considerPrimitiveHit(origin, direction, ids.z, intervalStart, intervalEnd, nearest);
-        considerPrimitiveHit(origin, direction, ids.w, intervalStart, intervalEnd, nearest);
-        if (hasCursor)
-        {
-            float hitTravel;
-            float3 hitNormal;
-            if (traceCursorLocator(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
-            {
-                nearest.hit = true;
-                nearest.travel = hitTravel;
-                nearest.normal = hitNormal;
-                nearest.fieldId = FIELD_ID_CURSOR;
-                nearest.primitiveId = CURSOR_PRIMITIVE_ID;
-            }
-        }
+        considerPrimitiveHit(origin, direction, i + 1, intervalStart, intervalEnd, nearest);
+    }
+
+    float hitTravel;
+    float3 hitNormal;
+    if (traceCursorLocator(origin, direction, intervalStart, min(intervalEnd, nearest.travel), hitTravel, hitNormal))
+    {
+        nearest.hit = true;
+        nearest.travel = hitTravel;
+        nearest.normal = hitNormal;
+        nearest.fieldId = FIELD_ID_CURSOR;
+        nearest.primitiveId = CURSOR_PRIMITIVE_ID;
     }
 }
 
@@ -589,187 +488,6 @@ float3 gridEventColor(float3 p, out float alpha)
     return color;
 }
 
-float2 mediumAtlasUv(float2 uv, int sliceIndex)
-{
-    int tileX = sliceIndex % MEDIUM_FROXEL_ATLAS_COLUMNS;
-    int tileY = sliceIndex / MEDIUM_FROXEL_ATLAS_COLUMNS;
-    return (float2(tileX, tileY) + uv) / float2(MEDIUM_FROXEL_ATLAS_COLUMNS, MEDIUM_FROXEL_ATLAS_ROWS);
-}
-
-float sliceCenterCoordinate(float travel)
-{
-    return saturate(travel / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT - 0.5;
-}
-
-float3 froxelIrradianceAt(float2 uv, float travel)
-{
-    float slice = sliceCenterCoordinate(travel);
-    int sliceA = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    int sliceB = clamp(sliceA + 1, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    float sliceBlend = saturate(slice - (float)sliceA);
-    float3 lightA = mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceA), 0.0).rgb;
-    float3 lightB = mediumLightTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceB), 0.0).rgb;
-    return lerp(lightA, lightB, sliceBlend);
-}
-
-float froxelDominantLightAt(float2 uv, float travel, out float3 lightDirection)
-{
-    float slice = sliceCenterCoordinate(travel);
-    int sliceA = clamp((int)floor(slice), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    int sliceB = clamp(sliceA + 1, 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    float sliceBlend = saturate(slice - (float)sliceA);
-    float4 momentA = mediumLightDirectionTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceA), 0.0);
-    float4 momentB = mediumLightDirectionTexture.SampleLevel(gridSampler, mediumAtlasUv(uv, sliceB), 0.0);
-    float4 moment = lerp(momentA, momentB, sliceBlend);
-    float momentLength = length(moment.rgb);
-    lightDirection = momentLength > 0.00001 ? moment.rgb / momentLength : normalize(float3(0.18, -0.25, 0.95));
-    return saturate(momentLength / max(moment.a, 0.0001));
-}
-
-float henyeyGreensteinPhase(float cosTheta, float g)
-{
-    float gg = g * g;
-    float denominator = max(1.0 + gg - 2.0 * g * cosTheta, 0.0001);
-    return (1.0 - gg) / (4.0 * PI * denominator * sqrt(denominator));
-}
-
-float mediumSliceTravel(int sliceIndex)
-{
-    float t = ((float)sliceIndex + 0.5) / (float)MEDIUM_FROXEL_SLICE_COUNT;
-    return t * farDistance;
-}
-
-float mediumSliceStartTravel(int sliceIndex)
-{
-    return ((float)sliceIndex / (float)MEDIUM_FROXEL_SLICE_COUNT) * farDistance;
-}
-
-float mediumSliceEndTravel(int sliceIndex)
-{
-    return (((float)sliceIndex + 1.0) / (float)MEDIUM_FROXEL_SLICE_COUNT) * farDistance;
-}
-
-int viewFroxelIndexForUvSlice(float2 uv, int sliceIndex)
-{
-    int width = max((int)(resolution.x / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
-    int height = max((int)(resolution.y / (float)MEDIUM_FROXEL_DOWNSCALE), 1);
-    int2 cell = clamp((int2)floor(uv * float2(width, height)), int2(0, 0), int2(width - 1, height - 1));
-    return cell.x + cell.y * width + sliceIndex * width * height;
-}
-
-SolidHit nearestViewFroxelSolidHit(float2 uv, float3 origin, float3 direction, int sliceIndex)
-{
-    float intervalStart = mediumSliceStartTravel(sliceIndex);
-    float intervalEnd = min(mediumSliceEndTravel(sliceIndex), farDistance);
-    SolidHit nearest;
-    nearest.hit = false;
-    nearest.travel = intervalEnd;
-    nearest.normal = 0.0;
-    nearest.fieldId = 0.0;
-    nearest.primitiveId = -1;
-    considerFroxelPrimitiveHits(origin, direction, viewFroxelIndexForUvSlice(uv, sliceIndex), intervalStart, intervalEnd, nearest);
-    return nearest;
-}
-
-void integrateMediumSlice(
-    float2 uv,
-    float3 origin,
-    float3 rayDirection,
-    int sliceIndex,
-    float intervalStart,
-    float intervalEnd,
-    inout float transmittance,
-    inout float3 inScattering,
-    inout float densityMean,
-    inout float densityTravelSum,
-    inout float densitySum)
-{
-    float2 atlasUv = mediumAtlasUv(uv, sliceIndex);
-    float4 diagnostic = mediumVolumeTexture.SampleLevel(gridSampler, atlasUv, 0.0);
-    float4 transport = mediumTransportTexture.SampleLevel(gridSampler, atlasUv, 0.0);
-    float3 propagatedLight = mediumLightTexture.SampleLevel(gridSampler, atlasUv, 0.0).rgb;
-    float4 directionMoment = mediumLightDirectionTexture.SampleLevel(gridSampler, atlasUv, 0.0);
-    float sliceTravel = mediumSliceTravel(sliceIndex);
-    float sliceStart = mediumSliceStartTravel(sliceIndex);
-    float sliceEnd = mediumSliceEndTravel(sliceIndex);
-    float fraction = saturate((intervalEnd - intervalStart) / max(sliceEnd - sliceStart, 0.0001));
-    float3 samplePosition = origin + rayDirection * ((intervalStart + intervalEnd) * 0.5);
-    float detail = mediumRayDetail(samplePosition);
-    float density = saturate(diagnostic.x);
-    float sigmaT = max(diagnostic.y, 0.0);
-    float sigmaS = min(max(diagnostic.z, 0.0), sigmaT);
-    density = saturate(density * detail);
-    sigmaT *= detail;
-    sigmaS = min(sigmaS * detail, sigmaT);
-    float fullSliceTransmittance = saturate(transport.a);
-    float sliceExtinction = max(-log(max(fullSliceTransmittance, 0.0001)) * detail, sigmaT * (sliceEnd - sliceStart));
-    float partialTransmittance = exp(-sliceExtinction * fraction);
-    float scatterIntegral = sigmaT > 0.0001 ? sigmaS * (1.0 - partialTransmittance) / sigmaT : 0.0;
-    float densityContribution = density * fraction;
-    float directionLength = length(directionMoment.rgb);
-    float3 lightDirection = directionLength > 0.00001 ? directionMoment.rgb / directionLength : -rayDirection;
-    float directionConfidence = saturate(directionLength / max(directionMoment.a, 0.0001));
-    float phase = lerp(INV_FOUR_PI, henyeyGreensteinPhase(dot(-rayDirection, lightDirection), MEDIUM_PHASE_G), directionConfidence);
-    float3 sliceInScattering = propagatedLight * (phase * scatterIntegral);
-
-    densityMean += densityContribution;
-    densityTravelSum += densityContribution * sliceTravel;
-    densitySum += densityContribution;
-    inScattering += transmittance * sliceInScattering;
-    transmittance *= saturate(partialTransmittance);
-}
-
-void integrateMediumRange(
-    float2 uv,
-    float3 origin,
-    float3 rayDirection,
-    float rangeStart,
-    float rangeEnd,
-    inout float transmittance,
-    inout float3 inScattering,
-    inout float densityMean,
-    inout float densityTravelSum,
-    inout float densitySum)
-{
-    if (rangeEnd <= rangeStart)
-    {
-        return;
-    }
-
-    int firstSlice = clamp((int)floor(saturate(rangeStart / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    int lastSlice = clamp((int)floor(saturate(rangeEnd / max(farDistance, 0.0001)) * (float)MEDIUM_FROXEL_SLICE_COUNT), 0, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    if (rangeEnd < farDistance)
-    {
-        lastSlice = min(lastSlice, MEDIUM_FROXEL_SLICE_COUNT - 1);
-    }
-
-    [loop]
-    for (int sliceIndex = firstSlice; sliceIndex <= lastSlice; sliceIndex++)
-    {
-        float sliceStart = mediumSliceStartTravel(sliceIndex);
-        float sliceEnd = mediumSliceEndTravel(sliceIndex);
-        float overlapStart = max(rangeStart, sliceStart);
-        float overlapEnd = min(rangeEnd, sliceEnd);
-        if (overlapEnd <= overlapStart)
-        {
-            continue;
-        }
-
-        integrateMediumSlice(
-            uv,
-            origin,
-            rayDirection,
-            sliceIndex,
-            overlapStart,
-            overlapEnd,
-            transmittance,
-            inScattering,
-            densityMean,
-            densityTravelSum,
-            densitySum);
-    }
-}
-
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
 {
     RayMarchResult result;
@@ -778,10 +496,6 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     result.fieldId = 0.0;
     result.normal = 0.0;
     result.coverage = 0.0;
-    result.mediumOpacity = 0.0;
-    result.densityMean = 0.0;
-    result.mediumTravel = farDistance + 1.0;
-    result.mediumColor = 0.0;
     result.eventTravel = farDistance + 1.0;
     result.eventCoverage = 0.0;
     result.eventColor = 0.0;
@@ -792,20 +506,7 @@ RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 dir
     nearestSolid.normal = 0.0;
     nearestSolid.fieldId = 0.0;
     nearestSolid.primitiveId = -1;
-    [loop]
-    for (int sliceIndex = 0; sliceIndex < MEDIUM_FROXEL_SLICE_COUNT; sliceIndex++)
-    {
-        if (nearestSolid.hit && mediumSliceStartTravel(sliceIndex) > nearestSolid.travel)
-        {
-            break;
-        }
-
-        SolidHit cellSolid = nearestViewFroxelSolidHit(uv, origin, direction, sliceIndex);
-        if (cellSolid.hit && cellSolid.travel < nearestSolid.travel)
-        {
-            nearestSolid = cellSolid;
-        }
-    }
+    considerAllPrimitiveHits(origin, direction, 0.0, farDistance, nearestSolid);
 
     float stopTravel = nearestSolid.hit ? nearestSolid.travel : farDistance;
     float3 gridPosition;
@@ -933,8 +634,6 @@ SceneOut D3D12ScenePS(VertexOut input)
     output.colorTravel = float4(result.color, min(result.travel, farDistance + 1.0));
     output.metadata = float4(result.fieldId, result.normal);
     output.control = float4(0.0, result.coverage, 0.0, 0.0);
-    output.mediumPacket = 0.0;
-    output.mediumColor = 0.0;
     output.eventColor = float4(result.eventColor, result.eventCoverage);
     output.eventMetadata = float4(FIELD_ID_GRID, result.eventTravel, result.eventCoverage, 0.0);
     return output;

@@ -8,7 +8,7 @@ for a living Epiphany client.
 ## Intent
 
 - C# host with renderer architecture kept legible in Rider.
-- Vortice/D3D11 first, with the native boundary kept explicit.
+- Vortice/D3D12 renderer spine with the native boundary kept explicit.
 - DirectWrite/Direct2D overlay text after the scene pass for crisp debug and UI
   typography.
 - Grid-centered camera and world-space interaction invariants as first-class
@@ -20,7 +20,7 @@ for a living Epiphany client.
 
 ## Current Shape
 
-The engine opens a Win32 window, owns a D3D11 swapchain, raymarches the visible
+The engine opens a Win32 window, owns a D3D12 swapchain, renders the visible
 Aquarium world in HLSL, and draws crisp overlay text through DirectWrite. The
 camera target is the Grid center. Grid radius follows zoom distance. Body anchors
 remain world-space.
@@ -86,10 +86,11 @@ run the watcher with:
 ```
 
 Shader edits do not restart the process. The dev reload runner passes the
-source `Aquarium.hlsl` path into the live app, and the renderer polls that file,
-compiles changed shaders in the running process, then swaps the D3D shader
-objects only after compilation succeeds. A bad shader edit leaves the previous
-working shaders bound and writes the compiler failure to stderr.
+shader source directory into the live app, and the renderer polls
+`D3D12Grid.hlsl`, `D3D12Scene.hlsl`, and `D3D12Post.hlsl`, compiles changed
+shaders in the running process, then swaps the D3D shader objects only after
+compilation succeeds. A bad shader edit leaves the previous working shaders
+bound and writes the compiler failure to stderr.
 
 Live gameplay/runtime code is split into `Aquarium.Engine.Live` behind
 `Aquarium.Engine.Contracts`. The host loads that live DLL through a collectible

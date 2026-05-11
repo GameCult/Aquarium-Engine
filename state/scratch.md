@@ -17,10 +17,10 @@ Live renderer shape:
 - GraphicsSettings persists only render debug, exposure, bloom intensity, and
   bloom veil.
 
-Immediate cleanup debt: the live volumetric behavior and user controls are cut,
-but some medium-era render-target/history scaffolding still needs a second
-sanitation pass through D3D12Renderer, D3D12Scene, and D3D12Post. Do that as a
-lean refactor, not by preserving compatibility with removed data.
+The medium/froxel render-target and history lanes have been cut from
+D3D12Renderer, D3D12Scene, and D3D12Post. Current cleanup debt is now ordinary:
+keep future renderer work tied to explicit live passes instead of rebuilding the
+removed medium stack under a better haircut.
 
 ## Verification
 

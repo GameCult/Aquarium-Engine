@@ -23,18 +23,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
 {
     private const int BackBufferCount = 2;
     private const int GridHeightTextureSize = 128;
-    private const int MediumFroxelDownscale = 8;
-    private const int MediumFroxelAtlasColumns = 8;
-    private const int MediumFroxelAtlasRows = 4;
-    private const int MediumFroxelSliceCount = MediumFroxelAtlasColumns * MediumFroxelAtlasRows;
-    private const int MediumLightPropagationIterationCount = 4;
-    private const int ViewFroxelPrimitiveSlotCount = 2;
     private const int CursorPrimitiveId = PlanetCount + 1;
-    private const Format MediumVolumeFormat = Format.R16G16B16A16_Float;
     private const Format GridHeightFormat = Format.R16_Float;
     private const int PlanetCount = 5;
     private const int GridHeightBrushCount = PlanetCount + 1;
-    private const int FieldInstanceCount = PlanetCount + 6;
+    private const int FieldInstanceCount = PlanetCount + 2;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -45,8 +38,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
-    private const string DitherTextureRelativePath = "Assets/Textures/Aetheria-LDR_LLL1_0.r8";
-    private const int DitherTextureSize = 512;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -87,51 +78,25 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D11Resource[] overlayWrappedBackBuffers = [];
     private DirectWriteOverlay[] overlays = [];
     private D3D12RenderTarget gridHeightRenderTarget;
-    private D3D12RenderTarget mediumVolumeRenderTarget;
-    private D3D12RenderTarget mediumTransportRenderTarget;
-    private D3D12RenderTarget mediumLightInjectionRenderTarget;
-    private D3D12RenderTarget mediumLightDirectionInjectionRenderTarget;
-    private D3D12RenderTarget mediumLightScratchRenderTarget;
-    private D3D12RenderTarget mediumLightDirectionScratchRenderTarget;
-    private D3D12RenderTarget mediumLightRenderTarget;
-    private D3D12RenderTarget mediumLightDirectionRenderTarget;
     private D3D12RenderTarget sceneRenderTarget;
     private D3D12RenderTarget sceneMetadataRenderTarget;
     private D3D12RenderTarget sceneControlRenderTarget;
-    private D3D12RenderTarget sceneMediumPacketRenderTarget;
-    private D3D12RenderTarget sceneMediumColorRenderTarget;
     private D3D12RenderTarget sceneEventColorRenderTarget;
     private D3D12RenderTarget sceneEventMetadataRenderTarget;
     private readonly D3D12RenderTarget[] historyRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] historyMetadataRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] historyControlRenderTargets = new D3D12RenderTarget[2];
-    private readonly D3D12RenderTarget[] historyMediumPacketRenderTargets = new D3D12RenderTarget[2];
-    private readonly D3D12RenderTarget[] historyMediumColorRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] historyEventColorRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] historyEventMetadataRenderTargets = new D3D12RenderTarget[2];
     private readonly D3D12RenderTarget[] bloomRenderTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
-    private static readonly Vector3[] CloudCenters =
-    [
-        new(-3.8f, 1.8f, 1.15f),
-        new(4.1f, -1.4f, -0.45f),
-        new(0.8f, 3.7f, 2.7f),
-        new(-0.4f, -3.9f, -1.35f),
-    ];
-    private D3D12StructuredBuffer froxelPrimitiveBuffer;
-    private readonly D3D12StructuredBuffer ditherBuffer;
     private readonly D3D12StructuredBuffer fieldInstanceBuffer;
-    private Int4[] froxelPrimitiveIds = [];
     private readonly FieldInstanceGpu[] fieldInstances = new FieldInstanceGpu[FieldInstanceCount];
     private readonly GridHeightBrushCpu[] gridHeightBrushes = new GridHeightBrushCpu[GridHeightBrushCount];
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
     private int height;
-    private int mediumFroxelWidth;
-    private int mediumFroxelHeight;
-    private int mediumVolumeWidth;
-    private int mediumVolumeHeight;
     private ulong fenceValue;
     private int temporalFrameIndex;
     private int frameIndex;
@@ -170,7 +135,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.width = width;
         this.height = height;
-        UpdateMediumDimensions();
         shaderSourceRoot = ResolveShaderSourceRoot(shaderPath);
         shaderPaths = D3D12ShaderPaths.FromRoot(shaderSourceRoot);
         ReportStartupProgress(startupProgress, "Creating D3D12 device and swapchain");
@@ -208,32 +172,17 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateBackBufferOverlays();
         debugUi = CreateDebugUi();
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
-        mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
-        mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
-        mediumLightInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-injection-target", "Aquarium D3D12 Medium Light Injection Target");
-        mediumLightDirectionInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-injection-target", "Aquarium D3D12 Medium Light Direction Injection Target");
-        mediumLightScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-scratch-target", "Aquarium D3D12 Medium Light Scratch Target");
-        mediumLightDirectionScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-scratch-target", "Aquarium D3D12 Medium Light Direction Scratch Target");
-        mediumLightRenderTarget = CreateMediumVolumeRenderTarget("medium-light-target", "Aquarium D3D12 Propagated Medium Light Target");
-        mediumLightDirectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-target", "Aquarium D3D12 Propagated Medium Light Direction Target");
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
-        sceneMediumPacketRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-medium-packet-target", "Aquarium D3D12 Scene Medium Packet Target");
-        sceneMediumColorRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-medium-color-target", "Aquarium D3D12 Scene Medium Color Target");
         sceneEventColorRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-color-target", "Aquarium D3D12 Scene Event Color Target");
         sceneEventMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-metadata-target", "Aquarium D3D12 Scene Event Metadata Target");
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
-        froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
-        ditherBuffer = CreateDitherBuffer(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath));
         fieldInstanceBuffer = new D3D12StructuredBuffer(device, FieldInstanceCount, Marshal.SizeOf<FieldInstanceGpu>(), "Aquarium D3D12 Field Instance Buffer");
-        resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
-        resourceRegistry.Add("dither-buffer", ditherBuffer);
         resourceRegistry.Add("field-instance-buffer", fieldInstanceBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
-        ditherBuffer.Upload(commandList, frames[frameIndex].UploadRing, LoadDitherPixels(Path.Combine(AppContext.BaseDirectory, DitherTextureRelativePath)));
         commandList.Close();
         fence = device.CreateFence(0);
         fence.Name = "Aquarium D3D12 Frame Fence";
@@ -326,7 +275,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         BuildGridHeightBrushes(frame);
-        BuildFroxelPrimitiveTable(frame);
         BuildFieldInstanceTable(frame);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
@@ -346,16 +294,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             settings.SceneExposure,
             settings.BloomIntensity,
             settings.BloomVeilIntensity,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
             new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
@@ -367,48 +305,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new ConstantBufferViewDescription(gridBrushConstants.GpuVirtualAddress, gridBrushConstants.SizeInBytes),
             frameResources.GridBrushConstantsDescriptor.Cpu);
 
-        frameResources.FroxelPrimitiveDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        froxelPrimitiveBuffer.CreateShaderResourceView(device, frameResources.FroxelPrimitiveDescriptor);
-        frameResources.DitherDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        ditherBuffer.CreateShaderResourceView(device, frameResources.DitherDescriptor);
         frameResources.FieldInstanceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         fieldInstanceBuffer.CreateShaderResourceView(device, frameResources.FieldInstanceDescriptor);
         frameResources.GridHeightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         gridHeightRenderTarget.CreateShaderResourceView(device, frameResources.GridHeightDescriptor);
-        frameResources.MediumInjectionTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionTargetsDescriptor);
-        frameResources.MediumInjectionTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionTransportDescriptor);
-        frameResources.MediumInjectionLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumLightInjectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionLightDescriptor);
-        frameResources.MediumInjectionLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumLightDirectionInjectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumInjectionLightDirectionDescriptor);
-        frameResources.MediumScratchTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchTargetsDescriptor);
-        frameResources.MediumScratchTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchTransportDescriptor);
-        frameResources.MediumScratchLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumLightScratchRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchLightDescriptor);
-        frameResources.MediumScratchLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumLightDirectionScratchRenderTarget.CreateShaderResourceView(device, frameResources.MediumScratchLightDirectionDescriptor);
-        frameResources.MediumTargetsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumVolumeRenderTarget.CreateShaderResourceView(device, frameResources.MediumTargetsDescriptor);
-        frameResources.MediumTransportDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumTransportRenderTarget.CreateShaderResourceView(device, frameResources.MediumTransportDescriptor);
-        frameResources.MediumLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumLightRenderTarget.CreateShaderResourceView(device, frameResources.MediumLightDescriptor);
-        frameResources.MediumLightDirectionDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        mediumLightDirectionRenderTarget.CreateShaderResourceView(device, frameResources.MediumLightDirectionDescriptor);
         frameResources.SceneDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneRenderTarget.CreateShaderResourceView(device, frameResources.SceneDescriptor);
         frameResources.SceneMetadataDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneMetadataRenderTarget.CreateShaderResourceView(device, frameResources.SceneMetadataDescriptor);
         frameResources.SceneControlDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneControlRenderTarget.CreateShaderResourceView(device, frameResources.SceneControlDescriptor);
-        frameResources.SceneMediumPacketDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        sceneMediumPacketRenderTarget.CreateShaderResourceView(device, frameResources.SceneMediumPacketDescriptor);
-        frameResources.SceneMediumColorDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        sceneMediumColorRenderTarget.CreateShaderResourceView(device, frameResources.SceneMediumColorDescriptor);
         frameResources.SceneEventColorDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sceneEventColorRenderTarget.CreateShaderResourceView(device, frameResources.SceneEventColorDescriptor);
         frameResources.SceneEventMetadataDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -420,10 +326,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         historyMetadataRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryMetadataDescriptor);
         frameResources.HistoryControlDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         historyControlRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryControlDescriptor);
-        frameResources.HistoryMediumPacketDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        historyMediumPacketRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryMediumPacketDescriptor);
-        frameResources.HistoryMediumColorDescriptor = frameResources.TransientShaderDescriptors.Allocate();
-        historyMediumColorRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryMediumColorDescriptor);
         frameResources.HistoryEventColorDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         historyEventColorRenderTargets[historyReadIndex].CreateShaderResourceView(device, frameResources.HistoryEventColorDescriptor);
         frameResources.HistoryEventMetadataDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -522,25 +424,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         DisposePipelineStates();
         fullscreenRootSignature.Dispose();
         fieldInstanceBuffer.Dispose();
-        ditherBuffer.Dispose();
-        froxelPrimitiveBuffer.Dispose();
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
-        sceneMediumPacketRenderTarget.Dispose();
-        sceneMediumColorRenderTarget.Dispose();
         sceneEventColorRenderTarget.Dispose();
         sceneEventMetadataRenderTarget.Dispose();
-        mediumLightDirectionRenderTarget.Dispose();
-        mediumLightRenderTarget.Dispose();
-        mediumLightDirectionScratchRenderTarget.Dispose();
-        mediumLightScratchRenderTarget.Dispose();
-        mediumLightDirectionInjectionRenderTarget.Dispose();
-        mediumLightInjectionRenderTarget.Dispose();
-        mediumTransportRenderTarget.Dispose();
-        mediumVolumeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
@@ -631,52 +521,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         overlayWrappedBackBuffers = [];
     }
 
-    private void UpdateMediumDimensions()
-    {
-        mediumFroxelWidth = Math.Max(1, width / MediumFroxelDownscale);
-        mediumFroxelHeight = Math.Max(1, height / MediumFroxelDownscale);
-        mediumVolumeWidth = mediumFroxelWidth * MediumFroxelAtlasColumns;
-        mediumVolumeHeight = mediumFroxelHeight * MediumFroxelAtlasRows;
-    }
-
-    private int ViewFroxelCount => mediumFroxelWidth * mediumFroxelHeight * MediumFroxelSliceCount;
-
-    private D3D12StructuredBuffer CreateViewFroxelPrimitiveBuffer()
-    {
-        froxelPrimitiveIds = new Int4[ViewFroxelCount * ViewFroxelPrimitiveSlotCount];
-        return new D3D12StructuredBuffer(
-            device,
-            froxelPrimitiveIds.Length,
-            Marshal.SizeOf<Int4>(),
-            "Aquarium D3D12 View-Froxel Primitive Buffer");
-    }
-
-    private D3D12StructuredBuffer CreateDitherBuffer(string path)
-    {
-        return new D3D12StructuredBuffer(
-            device,
-            DitherTextureSize * DitherTextureSize,
-            sizeof(uint),
-            "Aquarium D3D12 Aetheria Blue Noise Buffer");
-    }
-
-    private static uint[] LoadDitherPixels(string path)
-    {
-        var pixels = File.ReadAllBytes(path);
-        if (pixels.Length != DitherTextureSize * DitherTextureSize)
-        {
-            throw new InvalidOperationException($"Dither texture {path} must be {DitherTextureSize}x{DitherTextureSize} R8 data.");
-        }
-
-        var values = new uint[pixels.Length];
-        for (var index = 0; index < pixels.Length; index++)
-        {
-            values[index] = pixels[index];
-        }
-
-        return values;
-    }
-
     private D3D12PipelineSet CreatePipelineSet(D3D12ShaderPaths paths)
     {
         var gridHeightBase = CreateGridHeightBasePipelineState(paths.Grid);
@@ -723,39 +567,17 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("scene-hdr-target");
         resourceRegistry.RemoveRenderTarget("scene-metadata-target");
         resourceRegistry.RemoveRenderTarget("scene-control-target");
-        resourceRegistry.RemoveRenderTarget("scene-medium-packet-target");
-        resourceRegistry.RemoveRenderTarget("scene-medium-color-target");
         resourceRegistry.RemoveRenderTarget("scene-event-color-target");
         resourceRegistry.RemoveRenderTarget("scene-event-metadata-target");
-        resourceRegistry.RemoveRenderTarget("medium-transport-target");
-        resourceRegistry.RemoveRenderTarget("medium-light-injection-target");
-        resourceRegistry.RemoveRenderTarget("medium-light-direction-injection-target");
-        resourceRegistry.RemoveRenderTarget("medium-light-scratch-target");
-        resourceRegistry.RemoveRenderTarget("medium-light-direction-scratch-target");
-        resourceRegistry.RemoveRenderTarget("medium-light-target");
-        resourceRegistry.RemoveRenderTarget("medium-light-direction-target");
-        resourceRegistry.RemoveRenderTarget("medium-volume-target");
         resourceRegistry.RemoveRenderTarget("grid-height-target");
-        resourceRegistry.RemoveStructuredBuffer("froxel-primitive-buffer");
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
         sceneRenderTarget.Dispose();
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
-        sceneMediumPacketRenderTarget.Dispose();
-        sceneMediumColorRenderTarget.Dispose();
         sceneEventColorRenderTarget.Dispose();
         sceneEventMetadataRenderTarget.Dispose();
-        mediumLightDirectionRenderTarget.Dispose();
-        mediumLightRenderTarget.Dispose();
-        mediumLightDirectionScratchRenderTarget.Dispose();
-        mediumLightScratchRenderTarget.Dispose();
-        mediumLightDirectionInjectionRenderTarget.Dispose();
-        mediumLightInjectionRenderTarget.Dispose();
-        mediumTransportRenderTarget.Dispose();
-        mediumVolumeRenderTarget.Dispose();
         gridHeightRenderTarget.Dispose();
-        froxelPrimitiveBuffer.Dispose();
         for (var index = 0; index < frames.Length; index++)
         {
             resourceRegistry.RemoveResource($"backbuffer-{index}");
@@ -764,7 +586,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         width = newWidth;
         height = newHeight;
-        UpdateMediumDimensions();
         renderTargetViewArena.Dispose();
         staticShaderDescriptorArena.Dispose();
         renderTargetViewArena = CreateRenderTargetViewArena();
@@ -775,21 +596,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateRenderTargetViews();
         CreateBackBufferOverlays();
         gridHeightRenderTarget = CreateGridHeightRenderTarget();
-        mediumVolumeRenderTarget = CreateMediumVolumeRenderTarget("medium-volume-target", "Aquarium D3D12 Medium Volume Target");
-        mediumTransportRenderTarget = CreateMediumVolumeRenderTarget("medium-transport-target", "Aquarium D3D12 Medium Transport Target");
-        mediumLightInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-injection-target", "Aquarium D3D12 Medium Light Injection Target");
-        mediumLightDirectionInjectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-injection-target", "Aquarium D3D12 Medium Light Direction Injection Target");
-        mediumLightScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-scratch-target", "Aquarium D3D12 Medium Light Scratch Target");
-        mediumLightDirectionScratchRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-scratch-target", "Aquarium D3D12 Medium Light Direction Scratch Target");
-        mediumLightRenderTarget = CreateMediumVolumeRenderTarget("medium-light-target", "Aquarium D3D12 Propagated Medium Light Target");
-        mediumLightDirectionRenderTarget = CreateMediumVolumeRenderTarget("medium-light-direction-target", "Aquarium D3D12 Propagated Medium Light Direction Target");
-        froxelPrimitiveBuffer = CreateViewFroxelPrimitiveBuffer();
-        resourceRegistry.Add("froxel-primitive-buffer", froxelPrimitiveBuffer);
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
         sceneControlRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-control-target", "Aquarium D3D12 Scene Control Target");
-        sceneMediumPacketRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-medium-packet-target", "Aquarium D3D12 Scene Medium Packet Target");
-        sceneMediumColorRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-medium-color-target", "Aquarium D3D12 Scene Medium Color Target");
         sceneEventColorRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-color-target", "Aquarium D3D12 Scene Event Color Target");
         sceneEventMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-event-metadata-target", "Aquarium D3D12 Scene Event Metadata Target");
         CreateHistoryRenderTargets();
@@ -849,8 +658,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             historyRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-{index}", $"Aquarium D3D12 History {index}");
             historyMetadataRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-metadata-{index}", $"Aquarium D3D12 History Metadata {index}");
             historyControlRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-control-{index}", $"Aquarium D3D12 History Control {index}");
-            historyMediumPacketRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-medium-packet-{index}", $"Aquarium D3D12 History Medium Packet {index}");
-            historyMediumColorRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-medium-color-{index}", $"Aquarium D3D12 History Medium Color {index}");
             historyEventColorRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-event-color-{index}", $"Aquarium D3D12 History Event Color {index}");
             historyEventMetadataRenderTargets[index] = CreateSceneAuxiliaryRenderTarget($"history-event-metadata-{index}", $"Aquarium D3D12 History Event Metadata {index}");
         }
@@ -863,8 +670,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             resourceRegistry.RemoveRenderTarget($"history-{index}");
             resourceRegistry.RemoveRenderTarget($"history-metadata-{index}");
             resourceRegistry.RemoveRenderTarget($"history-control-{index}");
-            resourceRegistry.RemoveRenderTarget($"history-medium-packet-{index}");
-            resourceRegistry.RemoveRenderTarget($"history-medium-color-{index}");
             resourceRegistry.RemoveRenderTarget($"history-event-color-{index}");
             resourceRegistry.RemoveRenderTarget($"history-event-metadata-{index}");
         }
@@ -877,8 +682,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             historyRenderTargets[index]?.Dispose();
             historyMetadataRenderTargets[index]?.Dispose();
             historyControlRenderTargets[index]?.Dispose();
-            historyMediumPacketRenderTargets[index]?.Dispose();
-            historyMediumColorRenderTargets[index]?.Dispose();
             historyEventColorRenderTargets[index]?.Dispose();
             historyEventMetadataRenderTargets[index]?.Dispose();
         }
@@ -938,45 +741,20 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return target;
     }
 
-    private D3D12RenderTarget CreateMediumVolumeRenderTarget(string registryName, string resourceName)
-    {
-        var target = new D3D12RenderTarget(
-            device,
-            mediumVolumeWidth,
-            mediumVolumeHeight,
-            MediumVolumeFormat,
-            renderTargetViewArena.Allocate(),
-            staticShaderDescriptorArena.Allocate(),
-            null,
-            false,
-            new Color4(0.0f, 0.0f, 0.0f, 1.0f),
-            resourceName);
-        resourceRegistry.Add(registryName, target);
-        return target;
-    }
-
     private void RenderSceneAndPresent(D3D12PassContext context, FrameResources frameResources)
     {
-        context.CommandList.BeginEvent("Scene Pass");
+            context.CommandList.BeginEvent("Scene Pass");
         try
         {
             gridHeightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            mediumVolumeRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            mediumTransportRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            mediumLightRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            mediumLightDirectionRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
-            sceneMediumPacketRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
-            sceneMediumColorRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneEventColorRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             sceneEventMetadataRenderTarget.Transition(context.CommandList, ResourceStates.RenderTarget);
             context.CommandList.ClearRenderTargetView(sceneRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneMetadataRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneControlRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            context.CommandList.ClearRenderTargetView(sceneMediumPacketRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            context.CommandList.ClearRenderTargetView(sceneMediumColorRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneEventColorRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(sceneEventMetadataRenderTarget.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
@@ -984,10 +762,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.GridHeightDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.FroxelPrimitiveDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(5, frameResources.MediumTargetsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(21, frameResources.MediumLightDirectionDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.FieldInstanceDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -995,8 +770,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 sceneRenderTarget.RenderTargetView.Cpu,
                 sceneMetadataRenderTarget.RenderTargetView.Cpu,
                 sceneControlRenderTarget.RenderTargetView.Cpu,
-                sceneMediumPacketRenderTarget.RenderTargetView.Cpu,
-                sceneMediumColorRenderTarget.RenderTargetView.Cpu,
                 sceneEventColorRenderTarget.RenderTargetView.Cpu,
                 sceneEventMetadataRenderTarget.RenderTargetView.Cpu,
             ],
@@ -1090,29 +863,21 @@ public sealed class D3D12Renderer : IAquariumRenderer
             sceneRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneMetadataRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneControlRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            sceneMediumPacketRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            sceneMediumColorRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneEventColorRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             sceneEventMetadataRenderTarget.Transition(context.CommandList, ResourceStates.PixelShaderResource);
             historyRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
             historyMetadataRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
             historyControlRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            historyMediumPacketRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
-            historyMediumColorRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
             historyEventColorRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
             historyEventMetadataRenderTargets[historyReadIndex].Transition(context.CommandList, ResourceStates.PixelShaderResource);
             historyRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
             historyMetadataRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
             historyControlRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
-            historyMediumPacketRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
-            historyMediumColorRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
             historyEventColorRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
             historyEventMetadataRenderTargets[historyWriteIndex].Transition(context.CommandList, ResourceStates.RenderTarget);
             context.CommandList.ClearRenderTargetView(historyRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(historyMetadataRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(historyControlRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            context.CommandList.ClearRenderTargetView(historyMediumPacketRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
-            context.CommandList.ClearRenderTargetView(historyMediumColorRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(historyEventColorRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
             context.CommandList.ClearRenderTargetView(historyEventMetadataRenderTargets[historyWriteIndex].RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
 
@@ -1122,22 +887,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.SceneDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.FieldInstanceDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(6, frameResources.BloomPresentationDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.SceneMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.SceneControlDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.HistoryDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(10, frameResources.HistoryMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(11, frameResources.HistoryControlDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(12, frameResources.SceneMediumPacketDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(13, frameResources.HistoryMediumPacketDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(14, frameResources.SceneEventColorDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(15, frameResources.SceneEventMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(16, frameResources.HistoryEventColorDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(17, frameResources.HistoryEventMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(18, frameResources.GridHeightDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(19, frameResources.SceneMediumColorDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(20, frameResources.HistoryMediumColorDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.BloomPresentationDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(5, frameResources.SceneMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(6, frameResources.SceneControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.HistoryDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.HistoryMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.HistoryControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(10, frameResources.SceneEventColorDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(11, frameResources.SceneEventMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(12, frameResources.HistoryEventColorDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(13, frameResources.HistoryEventMetadataDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
@@ -1147,8 +906,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 historyRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
                 historyMetadataRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
                 historyControlRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
-                historyMediumPacketRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
-                historyMediumColorRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
                 historyEventColorRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
                 historyEventMetadataRenderTargets[historyWriteIndex].RenderTargetView.Cpu,
             ],
@@ -1167,7 +924,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         activeCommandList.BeginEvent("Field Resource Upload");
         try
         {
-            froxelPrimitiveBuffer.Upload(activeCommandList, frameResources.UploadRing, froxelPrimitiveIds);
             fieldInstanceBuffer.Upload(activeCommandList, frameResources.UploadRing, fieldInstances);
         }
         finally
@@ -1250,49 +1006,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrushes[index] = new GridHeightBrushCpu(center, radius, power, amplitude, waveAmplitude, waveFrequency, waveSpeed);
     }
 
-    private void BuildFroxelPrimitiveTable(AquariumFrame frame)
-    {
-        for (var i = 0; i < froxelPrimitiveIds.Length; i++)
-        {
-            froxelPrimitiveIds[i] = new Int4(-1, -1, -1, -1);
-        }
-
-        AddPrimitiveToFroxels(frame, 0, new Vector3(0.0f, 0.0f, 2.2f), SunRadius * 1.22f);
-
-        for (var i = 0; i < PlanetCount; i++)
-        {
-            var radius = PlanetRadius(i);
-            AddPrimitiveToFroxels(frame, i + 1, PlanetCenter(i, frame.TimeSeconds, radius), radius * 1.16f);
-        }
-
-        AddPrimitiveToFroxels(frame, CursorPrimitiveId, CursorCenter(frame), CursorBodyBoundRadius);
-    }
-
-    private void AddPrimitiveToFroxels(AquariumFrame frame, int primitiveId, Vector3 center, float boundRadius)
-    {
-        var farDistance = FrameFarDistance(frame);
-        if (!TryProjectSphereToViewFroxelBounds(frame, center, boundRadius, farDistance, out var bounds))
-        {
-            return;
-        }
-
-        for (var slice = bounds.MinSlice; slice <= bounds.MaxSlice; slice++)
-        {
-            for (var y = bounds.MinY; y <= bounds.MaxY; y++)
-            {
-                for (var x = bounds.MinX; x <= bounds.MaxX; x++)
-                {
-                    AddPrimitiveToViewFroxel(ViewFroxelIndex(x, y, slice), primitiveId);
-                }
-            }
-        }
-    }
-
-    private void AddPrimitiveToViewFroxel(int viewFroxelIndex, int primitiveId)
-    {
-        AddIdToInt4Slots(froxelPrimitiveIds, viewFroxelIndex * ViewFroxelPrimitiveSlotCount, ViewFroxelPrimitiveSlotCount, primitiveId);
-    }
-
     private void BuildFieldInstanceTable(AquariumFrame frame)
     {
         fieldInstances[0] = FieldInstanceGpu.Sphere(
@@ -1301,9 +1014,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             center: new Vector3(0.0f, 0.0f, 2.2f),
             radius: SunRadius,
             materialId: 1.0f,
-            mediumId: 0.0f,
-            color: new Vector3(10.0f, 8.7f, 4.2f),
-            medium: Vector4.Zero);
+            color: new Vector3(10.0f, 8.7f, 4.2f));
 
         for (var i = 0; i < PlanetCount; i++)
         {
@@ -1314,152 +1025,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 center: PlanetCenter(i, frame.TimeSeconds, radius),
                 radius: radius,
                 materialId: 10.0f + i,
-                mediumId: 0.0f,
-                color: Vector3.One,
-                medium: Vector4.Zero);
+                color: Vector3.One);
         }
 
-        fieldInstances[6] = FieldInstanceGpu.Ellipsoid(
-            fieldId: 32.0f,
-            flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: CloudCenters[0],
-            radius: new Vector3(3.4f, 1.25f, 0.92f),
-            angle: frame.TimeSeconds * 0.055f,
-            mediumId: 1.0f,
-            color: new Vector3(0.50f, 0.72f, 0.86f),
-            medium: new Vector4(0.220f, 0.88f, 0.0f, 1.25f));
-        fieldInstances[7] = FieldInstanceGpu.Ellipsoid(
-            fieldId: 33.0f,
-            flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: CloudCenters[1],
-            radius: new Vector3(4.5f, 1.55f, 0.78f),
-            angle: -0.62f + frame.TimeSeconds * 0.033f,
-            mediumId: 1.0f,
-            color: new Vector3(0.34f, 0.58f, 0.72f),
-            medium: new Vector4(0.200f, 0.86f, 0.0f, 1.20f));
-        fieldInstances[8] = FieldInstanceGpu.Ellipsoid(
-            fieldId: 34.0f,
-            flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: CloudCenters[2],
-            radius: new Vector3(2.2f, 1.1f, 0.62f),
-            angle: 1.15f,
-            mediumId: 1.0f,
-            color: new Vector3(0.75f, 0.70f, 0.52f),
-            medium: new Vector4(0.180f, 0.90f, 0.0f, 1.15f));
-        fieldInstances[9] = FieldInstanceGpu.Ellipsoid(
-            fieldId: 35.0f,
-            flags: FieldFlags.Cloud | FieldFlags.Receiver,
-            center: CloudCenters[3],
-            radius: new Vector3(5.2f, 1.8f, 0.88f),
-            angle: 0.46f,
-            mediumId: 1.0f,
-            color: new Vector3(0.30f, 0.50f, 0.68f),
-            medium: new Vector4(0.190f, 0.84f, 0.0f, 1.20f));
-        fieldInstances[10] = FieldInstanceGpu.Sphere(
+        fieldInstances[6] = FieldInstanceGpu.Sphere(
             fieldId: 5.0f,
             flags: FieldFlags.Solid | FieldFlags.Emitter | FieldFlags.Receiver,
             center: new Vector3(frame.CursorWorld.X, frame.CursorWorld.Y, CursorBodyRadius),
             radius: CursorBodyBoundRadius,
             materialId: 5.0f,
-            mediumId: 0.0f,
-            color: Vector3.Zero,
-            medium: Vector4.Zero);
-    }
-
-    private bool TryProjectSphereToViewFroxelBounds(
-        AquariumFrame frame,
-        Vector3 center,
-        float radius,
-        float farDistance,
-        out ViewFroxelBounds bounds)
-    {
-        bounds = default;
-        var target = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
-        var forward = Vector3.Normalize(target - frame.CameraPosition);
-        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
-        var up = Vector3.Cross(right, forward);
-        var delta = center - frame.CameraPosition;
-        var forwardDistance = Vector3.Dot(delta, forward);
-        if (forwardDistance <= -radius)
-        {
-            return false;
-        }
-
-        var safeForward = MathF.Max(forwardDistance, 0.001f);
-        var projected = new Vector2(Vector3.Dot(delta, right), Vector3.Dot(delta, up)) / safeForward * 1.6f;
-        var pixel = (projected * height + new Vector2(width, height)) * 0.5f;
-        var projectedRadius = (radius / safeForward) * 1.6f * height * 0.5f;
-        projectedRadius += MediumFroxelDownscale * 2.0f;
-
-        var minPixelX = pixel.X - projectedRadius;
-        var maxPixelX = pixel.X + projectedRadius;
-        var minPixelY = height - (pixel.Y + projectedRadius);
-        var maxPixelY = height - (pixel.Y - projectedRadius);
-        var minX = (int)MathF.Floor(minPixelX / MediumFroxelDownscale) - 1;
-        var maxX = (int)MathF.Floor(maxPixelX / MediumFroxelDownscale) + 1;
-        var minY = (int)MathF.Floor(minPixelY / MediumFroxelDownscale) - 1;
-        var maxY = (int)MathF.Floor(maxPixelY / MediumFroxelDownscale) + 1;
-        minX = Math.Clamp(minX, 0, mediumFroxelWidth - 1);
-        maxX = Math.Clamp(maxX, 0, mediumFroxelWidth - 1);
-        minY = Math.Clamp(minY, 0, mediumFroxelHeight - 1);
-        maxY = Math.Clamp(maxY, 0, mediumFroxelHeight - 1);
-        if (minX > maxX || minY > maxY)
-        {
-            return false;
-        }
-
-        var centerTravel = Vector3.Distance(frame.CameraPosition, center);
-        var minSlice = (int)MathF.Floor(Math.Clamp((centerTravel - radius) / farDistance, 0.0f, 0.99999f) * MediumFroxelSliceCount) - 1;
-        var maxSlice = (int)MathF.Floor(Math.Clamp((centerTravel + radius) / farDistance, 0.0f, 0.99999f) * MediumFroxelSliceCount) + 1;
-        bounds = new ViewFroxelBounds(
-            minX,
-            maxX,
-            minY,
-            maxY,
-            Math.Clamp(minSlice, 0, MediumFroxelSliceCount - 1),
-            Math.Clamp(maxSlice, 0, MediumFroxelSliceCount - 1));
-        return true;
-    }
-
-    private void FillViewFroxelCorners(AquariumFrame frame, int x, int y, int slice, float farDistance, Span<Vector3> corners)
-    {
-        var nearTravel = (slice / (float)MediumFroxelSliceCount) * farDistance;
-        var farTravel = ((slice + 1.0f) / MediumFroxelSliceCount) * farDistance;
-        var px0 = (float)(x * MediumFroxelDownscale);
-        var px1 = (float)Math.Min((x + 1) * MediumFroxelDownscale, width - 1);
-        var py0 = (float)(height - Math.Min((y + 1) * MediumFroxelDownscale, height - 1));
-        var py1 = (float)(height - (y * MediumFroxelDownscale));
-        py0 = Math.Clamp(py0, 0.0f, MathF.Max(height - 1.0f, 0.0f));
-        py1 = Math.Clamp(py1, 0.0f, MathF.Max(height - 1.0f, 0.0f));
-
-        var d00 = RayDirectionForPixel(new Vector2(px0, py0), frame.CameraPosition, frame.Grid.Center);
-        var d10 = RayDirectionForPixel(new Vector2(px1, py0), frame.CameraPosition, frame.Grid.Center);
-        var d01 = RayDirectionForPixel(new Vector2(px0, py1), frame.CameraPosition, frame.Grid.Center);
-        var d11 = RayDirectionForPixel(new Vector2(px1, py1), frame.CameraPosition, frame.Grid.Center);
-        corners[0] = frame.CameraPosition + d00 * nearTravel;
-        corners[1] = frame.CameraPosition + d10 * nearTravel;
-        corners[2] = frame.CameraPosition + d01 * nearTravel;
-        corners[3] = frame.CameraPosition + d11 * nearTravel;
-        corners[4] = frame.CameraPosition + d00 * farTravel;
-        corners[5] = frame.CameraPosition + d10 * farTravel;
-        corners[6] = frame.CameraPosition + d01 * farTravel;
-        corners[7] = frame.CameraPosition + d11 * farTravel;
-    }
-
-    private Vector3 RayDirectionForPixel(Vector2 pixel, Vector3 cameraPosition, Vector2 gridCenter)
-    {
-        var ndc = ((pixel * 2.0f) - new Vector2(width, height)) / MathF.Max(height, 1.0f);
-        var target = new Vector3(gridCenter.X, gridCenter.Y, 0.0f);
-        var forward = Vector3.Normalize(target - cameraPosition);
-        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
-        var up = Vector3.Cross(right, forward);
-        return Vector3.Normalize(forward * 1.6f + right * ndc.X + up * ndc.Y);
-    }
-
-    private static float FrameFarDistance(AquariumFrame frame)
-    {
-        var gridOrigin = new Vector3(frame.Grid.Center.X, frame.Grid.Center.Y, 0.0f);
-        return Vector3.Distance(frame.CameraPosition, gridOrigin) + MathF.Max(frame.Grid.Radius, 0.001f);
+            color: Vector3.Zero);
     }
 
     private float EvaluateGridHeight(AquariumFrame frame, Vector2 world)
@@ -1490,48 +1065,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var normalized = Math.Clamp(distanceValue / MathF.Max(radius, 0.001f), 0.0f, 1.0f);
         var shaped = MathF.Pow(1.0f - normalized, power);
         return shaped * shaped * (3.0f - 2.0f * shaped);
-    }
-
-    private int ViewFroxelIndex(int x, int y, int slice)
-    {
-        return x + y * mediumFroxelWidth + slice * mediumFroxelWidth * mediumFroxelHeight;
-    }
-
-    private static void AddIdToInt4Slots(Int4[] ids, int baseElement, int slotCount, int id)
-    {
-        for (var slot = 0; slot < slotCount; slot++)
-        {
-            var elementIndex = baseElement + slot;
-            var element = ids[elementIndex];
-            if (element.X == id || element.Y == id || element.Z == id || element.W == id)
-            {
-                return;
-            }
-
-            if (element.X == -1)
-            {
-                ids[elementIndex] = element with { X = id };
-                return;
-            }
-
-            if (element.Y == -1)
-            {
-                ids[elementIndex] = element with { Y = id };
-                return;
-            }
-
-            if (element.Z == -1)
-            {
-                ids[elementIndex] = element with { Z = id };
-                return;
-            }
-
-            if (element.W == -1)
-            {
-                ids[elementIndex] = element with { W = id };
-                return;
-            }
-        }
     }
 
     private void SignalFrame(FrameResources frameResources)
@@ -1834,22 +1367,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
             1,
             0,
             D3D12.DescriptorRangeOffsetAppend);
-        var froxelPrimitiveRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            1,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
         var fieldInstanceRange = new DescriptorRange(
             DescriptorRangeType.ShaderResourceView,
             1,
             12,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
-        var mediumTargetRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            3,
-            13,
             0,
             D3D12.DescriptorRangeOffsetAppend);
         var bloomRange = new DescriptorRange(
@@ -1888,18 +1409,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             8,
             0,
             D3D12.DescriptorRangeOffsetAppend);
-        var currentMediumPacketRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            16,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
-        var historyMediumPacketRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            17,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
         var currentEventColorRange = new DescriptorRange(
             DescriptorRangeType.ShaderResourceView,
             1,
@@ -1924,61 +1433,22 @@ public sealed class D3D12Renderer : IAquariumRenderer
             21,
             0,
             D3D12.DescriptorRangeOffsetAppend);
-        var gridHeightMediumRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            22,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
-        var currentMediumColorRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            23,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
-        var historyMediumColorRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            24,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
-        var mediumLightDirectionRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            25,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
-        var ditherRange = new DescriptorRange(
-            DescriptorRangeType.ShaderResourceView,
-            1,
-            26,
-            0,
-            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([sourceTextureRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([gridBrushRange]), ShaderVisibility.All),
-            new RootParameter(new RootDescriptorTable([froxelPrimitiveRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([fieldInstanceRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([mediumTargetRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([bloomRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentSceneControlRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyControlRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([currentMediumPacketRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([historyMediumPacketRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentEventColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([currentEventMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyEventColorRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([historyEventMetadataRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([gridHeightMediumRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([currentMediumColorRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([historyMediumColorRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([mediumLightDirectionRange]), ShaderVisibility.Pixel),
-            new RootParameter(new RootDescriptorTable([ditherRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -2008,7 +1478,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private ID3D12PipelineState CreateScenePipelineState(string path)
     {
-        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12ScenePS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
+        return CreateFullscreenPipelineState(path, "FullscreenTriangleVS", "D3D12ScenePS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -2037,7 +1507,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             path,
             "FullscreenTriangleVS",
             "D3D12ResolvePS",
-            [Format.B8G8R8A8_UNorm, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
+            [Format.B8G8R8A8_UNorm, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat, SceneHdrFormat]);
     }
 
     private ID3D12PipelineState CreateGridHeightBasePipelineState(string path)
@@ -2171,16 +1641,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float Exposure,
         float BloomIntensity,
         float BloomVeilIntensity,
-        float MediumCompositeIntensity,
-        float MediumDebugStep,
-        float MediumFogDensity,
-        float MediumFogHeightFalloff,
-        float MediumNoiseScale,
-        float MediumNoiseContrast,
-        float MediumGridFogDensity,
-        float MediumPrimitiveFogDensity,
-        float MediumNoiseSpeed,
-        float MediumReserved0,
         Vector4 CursorWorlds);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -2253,23 +1713,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float WaveFrequency,
         float WaveSpeed);
 
-    private readonly record struct ViewFroxelBounds(
-        int MinX,
-        int MaxX,
-        int MinY,
-        int MaxY,
-        int MinSlice,
-        int MaxSlice);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct Int4(int X, int Y, int Z, int W);
-
     [Flags]
     private enum FieldFlags
     {
         Solid = 1,
-        Cloud = 2,
-        Hybrid = 4,
         Emitter = 8,
         ShadowCaster = 16,
         Receiver = 32,
@@ -2280,9 +1727,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Vector4 CenterRadius,
         Vector4 RadiusAngle,
         Vector4 FieldFlags,
-        Vector4 MaterialMedium,
-        Vector4 ColorIntensity,
-        Vector4 MediumTerms)
+        Vector4 Material,
+        Vector4 ColorIntensity)
     {
         public static FieldInstanceGpu Sphere(
             float fieldId,
@@ -2290,36 +1736,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
             Vector3 center,
             float radius,
             float materialId,
-            float mediumId,
-            Vector3 color,
-            Vector4 medium)
+            Vector3 color)
         {
             return new FieldInstanceGpu(
                 new Vector4(center, radius),
                 new Vector4(radius, radius, radius, 0.0f),
                 new Vector4(fieldId, (float)flags, 1.0f, 0.0f),
-                new Vector4(materialId, mediumId, 0.0f, 0.0f),
-                new Vector4(color, 1.0f),
-                medium);
-        }
-
-        public static FieldInstanceGpu Ellipsoid(
-            float fieldId,
-            FieldFlags flags,
-            Vector3 center,
-            Vector3 radius,
-            float angle,
-            float mediumId,
-            Vector3 color,
-            Vector4 medium)
-        {
-            return new FieldInstanceGpu(
-                new Vector4(center, MathF.Max(MathF.Max(radius.X, radius.Y), radius.Z)),
-                new Vector4(radius, angle),
-                new Vector4(fieldId, (float)flags, 2.0f, 0.0f),
-                new Vector4(0.0f, mediumId, 0.0f, 0.0f),
-                new Vector4(color, 1.0f),
-                medium);
+                new Vector4(materialId, 0.0f, 0.0f, 0.0f),
+                new Vector4(color, 1.0f));
         }
     }
 
@@ -2377,47 +1801,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         public D3D12DescriptorSlot GridBrushConstantsDescriptor { get; set; }
 
-        public D3D12DescriptorSlot FroxelPrimitiveDescriptor { get; set; }
-
-        public D3D12DescriptorSlot DitherDescriptor { get; set; }
-
         public D3D12DescriptorSlot FieldInstanceDescriptor { get; set; }
 
         public D3D12DescriptorSlot GridHeightDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumInjectionTargetsDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumInjectionTransportDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumInjectionLightDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumInjectionLightDirectionDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumScratchTargetsDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumScratchTransportDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumScratchLightDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumScratchLightDirectionDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumTargetsDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumTransportDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumLightDescriptor { get; set; }
-
-        public D3D12DescriptorSlot MediumLightDirectionDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneMetadataDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneControlDescriptor { get; set; }
-
-        public D3D12DescriptorSlot SceneMediumPacketDescriptor { get; set; }
-
-        public D3D12DescriptorSlot SceneMediumColorDescriptor { get; set; }
 
         public D3D12DescriptorSlot SceneEventColorDescriptor { get; set; }
 
@@ -2428,10 +1820,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot HistoryMetadataDescriptor { get; set; }
 
         public D3D12DescriptorSlot HistoryControlDescriptor { get; set; }
-
-        public D3D12DescriptorSlot HistoryMediumPacketDescriptor { get; set; }
-
-        public D3D12DescriptorSlot HistoryMediumColorDescriptor { get; set; }
 
         public D3D12DescriptorSlot HistoryEventColorDescriptor { get; set; }
 

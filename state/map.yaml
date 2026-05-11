@@ -56,9 +56,8 @@ renderer_state:
     - SDF/analytic solids for Self, planets, and the cursor locator.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
-    - D3D11 scene renderer, runtime volumetrics, cloud/fog research, and the SDF-field renderer plan are shelved and removed from live repo state.
+    - D3D11 scene renderer, runtime volumetrics, cloud/fog research, medium/froxel render targets, and the SDF-field renderer plan are shelved and removed from live repo state.
   next:
-    - Finish pruning leftover medium-era render-target/history scaffolding from D3D12Scene/Post/Renderer without regressing Grid, solids, HDR, TAA diagnostics, or overlay UI.
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Promote field/body instances from fixed renderer tables to a CPU-owned registry with typed controls.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.
