@@ -38,6 +38,7 @@
       "Role SDF animation should avoid raw atan2 polar fields for lobe deformation unless the branch cut is explicitly handled. Use continuous harmonic polynomials over normalized XY directions for rotational lobes so sphere tracing does not open visible seams.",
       "If a role SDF still shows cut-through gaps after removing angular branch cuts, stop using radial pseudo-distance deformation for that organ. Prefer smooth unions of analytic primitives with conservative bounds so the marcher sees connected surfaces instead of decorative distance fiction.",
       "Chained smooth-union role organs need conservative tracing even when each primitive has a decent distance estimate. Keep petal overlaps substantial, union radii generous, hit epsilon tight, and step scale small enough that narrow joins are sampled instead of skipped.",
+      "Imagination should read as distinct petals first, not as a fully merged blob. Keep the central seed small, make petal lobes narrow and visibly separated, and accept intentional negative space when it makes the role shape legible.",
       "Heavy/specialized SDF evaluators should not live inside generic packed-id helpers when those helpers are called repeatedly; avoid shader compiler path cloning.",
       "Lighting is diegetic. Self is the initial emitter; later other Selves should emit through an explicit body light lane, not generic field instances or ambient convenience fill.",
       "Keep bundled blue-noise texture assets available for future dithering/noise work even when no current pass samples them.",

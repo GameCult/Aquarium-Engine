@@ -326,10 +326,10 @@ float imaginationPetalSdf(float3 local, float angle, float activity, float heart
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
     float phase = timeSeconds * 1.15 + angle * 1.7 + heartbeat * 6.28318;
-    float3 petalCenter = float3(radial * (0.15 + activity * 0.04), 0.024 * sin(phase));
+    float3 petalCenter = float3(radial * (0.34 + activity * 0.05), 0.028 * sin(phase));
     float3 p = local - petalCenter;
     float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
-    float3 petalRadius = float3(0.50 + activity * 0.06, 0.25, 0.60 + 0.045 * sin(phase));
+    float3 petalRadius = float3(0.50 + activity * 0.05, 0.13, 0.64 + 0.045 * sin(phase));
     return sdEllipsoid(q, petalRadius);
 }
 
@@ -354,18 +354,15 @@ AgentSurface agentImaginationSdf(float3 local, AgentVisual agent)
 {
     float activity = agent.state.x;
     float heartbeat = agent.state.y;
-    float core = sdSuperellipsoid(local, float3(0.54 + activity * 0.08, 0.54 + activity * 0.08, 0.56), 1.18);
+    float core = sdSuperellipsoid(local, float3(0.30 + activity * 0.04, 0.30 + activity * 0.04, 0.42), 1.18);
     float phase = timeSeconds * 0.42;
     float petal0 = imaginationPetalSdf(local, phase, activity, heartbeat);
     float petal1 = imaginationPetalSdf(local, phase + 1.2566371, activity, heartbeat);
     float petal2 = imaginationPetalSdf(local, phase + 2.5132741, activity, heartbeat);
     float petal3 = imaginationPetalSdf(local, phase + 3.7699112, activity, heartbeat);
     float petal4 = imaginationPetalSdf(local, phase + 5.0265482, activity, heartbeat);
-    float bloom = smoothUnion(core, petal0, 0.26);
-    bloom = smoothUnion(bloom, petal1, 0.26);
-    bloom = smoothUnion(bloom, petal2, 0.26);
-    bloom = smoothUnion(bloom, petal3, 0.26);
-    bloom = smoothUnion(bloom, petal4, 0.26);
+    float petals = min(petal0, min(petal1, min(petal2, min(petal3, petal4))));
+    float bloom = smoothUnion(core, petals, 0.055);
     float ring = sdTorus(local, float2(0.72 + activity * 0.08, 0.032));
     float halo = sdTorus(local.zxy, float2(0.50, 0.024));
     float detail = min(ring, halo);
