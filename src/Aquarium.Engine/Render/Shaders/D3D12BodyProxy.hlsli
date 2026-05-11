@@ -54,7 +54,7 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
 
 SceneOut D3D12BodyProxyPS(AgentProxyVertexOut input)
 {
-    float2 pixel = input.position.xy;
+    float2 pixel = float2(input.position.x, resolution.y - input.position.y);
     float2 uv = float2(pixel.x / max(resolution.x, 1.0), 1.0 - pixel.y / max(resolution.y, 1.0));
     float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
     int agentIndex = clamp((int)round(input.agentIndex), 0, AGENT_VISUAL_COUNT - 1);

@@ -255,7 +255,7 @@ AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instance
     float clipAspect = resolution.x / max(resolution.y, 1.0);
     float boundRadius = agent.centerRadius.w * 1.58;
     float projectedRadius = boundRadius / z * 1.6 + 0.035;
-    float2 clipCenter = float2(projected.x / clipAspect, -projected.y);
+    float2 clipCenter = float2(projected.x / clipAspect, projected.y);
     float2 clipRadius = float2(projectedRadius / clipAspect, projectedRadius);
 
     AgentProxyVertexOut output;
