@@ -52,10 +52,10 @@ renderer_state:
   current:
     - D3D12 default renderer behind IAquariumRenderer with explicit device/queue/swapchain, command allocators, fences, descriptor arenas, upload ring constants, tracked render targets, command events, resize rebuild, HDR/bloom/present, temporal diagnostics, and DirectWrite overlay bridge.
     - Deferred scalar Grid height target rendered from additive brush passes.
-    - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio3 PMREM mip 0.
+    - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
     - SDF/analytic solids for Self, planets, and the cursor locator.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
-    - Studio3 PMREM DDS cubemap is loaded as a D3D12 TextureCube and sampled for roughness-mip PBR specular reflections.
+    - Studio2 PMREM DDS cubemap is loaded as a D3D12 TextureCube and sampled for roughness-mip PBR specular reflections.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.

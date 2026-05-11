@@ -38,7 +38,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
-    private const string StudioPmremRelativePath = "Assets/Textures/studio3_pmrem.dds";
+    private const string StudioPmremRelativePath = "Assets/Textures/studio2_pmrem.dds";
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
