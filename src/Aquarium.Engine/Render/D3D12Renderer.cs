@@ -41,6 +41,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
     private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
     private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
+    private const string BodiesShaderRelativePath = "Render/Shaders/D3D12Bodies.hlsl";
+    private const string SdfMathShaderRelativePath = "Render/Shaders/D3D12SdfMath.hlsli";
+    private const string AgentCharactersShaderRelativePath = "Render/Shaders/D3D12AgentCharacters.hlsli";
     private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
     private const string StudioPmremRelativePath = "Assets/Textures/studio2_pmrem.dds";
     private const string StudioIrradianceRelativePath = "Assets/Textures/studio2_irradiance.dds";
@@ -599,7 +602,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrush.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
         var scene = CreateScenePipelineState(paths.Scene);
         scene.Name = "Aquarium D3D12 Scene Pipeline";
-        var agentProxy = CreateAgentProxyPipelineState(paths.Scene);
+        var agentProxy = CreateAgentProxyPipelineState(paths.Bodies);
         agentProxy.Name = "Aquarium D3D12 Agent Proxy Pipeline";
         var bloomPrefilter = CreateBloomPrefilterPipelineState(paths.Post);
         bloomPrefilter.Name = "Aquarium D3D12 Bloom Prefilter Pipeline";
@@ -1140,11 +1143,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new Vector4(1.0f, 1.0f, 0.0f, 0.0f),
             new Vector4(0.0f, SelfObjectIndex, 1.0f, 0.0f));
 
-        var cursorCenter = BodyCenterAtGridHeight(frame, frame.CursorWorld, CursorBodyRadius);
-        var previousCursorCenter = BodyCenterAtGridHeight(
-            new AquariumFrame(frame.Grid, previousCameraPosition, previousTimeSeconds, previousCursorWorld),
-            previousCursorWorld,
-            CursorBodyRadius);
+        var cursorCenter = new Vector3(frame.CursorWorld, CursorBodyRadius);
+        var previousCursorCenter = new Vector3(previousCursorWorld, CursorBodyRadius);
         agentVisuals[CursorObjectIndex] = new AgentVisualGpu(
             new Vector4(cursorCenter, CursorBodyBoundRadius),
             new Vector4(previousCursorCenter, -1.0f),
@@ -1795,7 +1795,45 @@ public sealed class D3D12Renderer : IAquariumRenderer
         shaderFlags |= ShaderFlags.Debug | ShaderFlags.SkipOptimization;
 #endif
 
-        return Compiler.CompileFromFile(path, entryPoint, profile, shaderFlags, EffectFlags.None);
+        var source = ExpandShaderIncludes(path, []);
+        return Compiler.Compile(source, entryPoint, path, profile, shaderFlags, EffectFlags.None);
+    }
+
+    private static string ExpandShaderIncludes(string path, HashSet<string> stack)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!stack.Add(fullPath))
+        {
+            throw new InvalidOperationException($"Circular shader include detected at {fullPath}");
+        }
+
+        var lines = File.ReadAllLines(fullPath);
+        var expanded = new List<string>(lines.Length);
+        var directory = Path.GetDirectoryName(fullPath) ?? AppContext.BaseDirectory;
+        for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+        {
+            var line = lines[lineIndex];
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith("#include \"", StringComparison.Ordinal))
+            {
+                var firstQuote = trimmed.IndexOf('"');
+                var secondQuote = trimmed.IndexOf('"', firstQuote + 1);
+                if (firstQuote >= 0 && secondQuote > firstQuote)
+                {
+                    var includeName = trimmed.Substring(firstQuote + 1, secondQuote - firstQuote - 1);
+                    var includePath = Path.GetFullPath(Path.Combine(directory, includeName));
+                    expanded.Add($"#line 1 \"{includePath.Replace("\\", "\\\\")}\"");
+                    expanded.Add(ExpandShaderIncludes(includePath, stack));
+                    expanded.Add($"#line {lineIndex + 2} \"{fullPath.Replace("\\", "\\\\")}\"");
+                    continue;
+                }
+            }
+
+            expanded.Add(line);
+        }
+
+        stack.Remove(fullPath);
+        return string.Join(Environment.NewLine, expanded);
     }
 
     private static float AgentRadius(int index)
@@ -2000,15 +2038,21 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private sealed record D3D12ShaderPaths(
         string Grid,
         string Scene,
+        string Bodies,
+        string SdfMath,
+        string AgentCharacters,
         string Post)
     {
-        public IReadOnlyList<string> All { get; } = [Grid, Scene, Post];
+        public IReadOnlyList<string> All { get; } = [Grid, Scene, Bodies, SdfMath, AgentCharacters, Post];
 
         public static D3D12ShaderPaths FromRoot(string root)
         {
             return new D3D12ShaderPaths(
                 Path.Combine(root, Path.GetFileName(GridShaderRelativePath)),
                 Path.Combine(root, Path.GetFileName(SceneShaderRelativePath)),
+                Path.Combine(root, Path.GetFileName(BodiesShaderRelativePath)),
+                Path.Combine(root, Path.GetFileName(SdfMathShaderRelativePath)),
+                Path.Combine(root, Path.GetFileName(AgentCharactersShaderRelativePath)),
                 Path.Combine(root, Path.GetFileName(PostShaderRelativePath)));
         }
     }

@@ -7,10 +7,14 @@ explicit frame graph.
 
 1. `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
 2. `D3D12Scene.hlsl` traces the background and Grid into scene-linear HDR
-   targets, then draws one bounded proxy quad per visible body.
-3. `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
+   targets.
+3. `D3D12Bodies.hlsl` draws one bounded proxy quad per visible body and
+   raymarches only that object. Reusable SDF functions live in
+   `D3D12SdfMath.hlsli`; current role character SDFs live in
+   `D3D12AgentCharacters.hlsli`.
+4. `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
    exposure and ACES, then presents.
-4. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
+5. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
 
 C# feeds explicit frame constants: resolution, time, Grid radius, camera
 position, presentation controls, previous frame state, cursor anchors, and debug
@@ -46,10 +50,11 @@ the fixed orbit fallback, renders Body and Imagination as LOD 1 role SDFs inside
 bounded per-object proxy draws, and keeps the remaining roles as simple distinct
 fallback organs.
 
-The cursor is a revolved MathWorld teardrop SDF with SDF ripples and brass GGX
-material. It carries current and previous cursor world anchors so temporal
-reprojection can account for object motion. Agent visuals carry their previous
-centers in the structured buffer for the same reason.
+The cursor is a luminous three-lobed hibiscus SDF that lives on the XY plane:
+its center is one cursor radius above XY, so its lower contact tip lands at
+Grid z=0 instead of sampling the Grid height field. The previous MathWorld
+teardrop formula remains in `D3D12SdfMath.hlsli` for later reuse. Agent visuals
+carry their previous centers in the structured buffer for temporal reprojection.
 
 Lighting is currently direct and diegetic: Self is the emitter. No ambient fill
 is allowed to quietly solve a bad light story.
