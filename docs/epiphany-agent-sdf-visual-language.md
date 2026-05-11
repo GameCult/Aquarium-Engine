@@ -51,6 +51,8 @@ heartbeatPhase, wakeIntensity, sleepDepth, memoryResonance
 pressure, continuityRisk, reviewState, hasPatch
 risk, confidence, evidenceGaps, recommendedAction
 targetRole, hasBubble, speaking, jobCount
+homeOrbitSlot, expressiveOffset, wanderRadius, gravityWellPulse
+verticalLift, buoyancy, returnHomeStrength
 traitActivations: map of canonical_state variable -> current_activation
 ```
 
@@ -66,6 +68,47 @@ traitActivations: map of canonical_state variable -> current_activation
   the interaction root must not dodge the user's pointer like it owes money.
 - Avoid volumetric dependence. These are analytic solids over the Grid with
   PBR materials, emissive accents, and future diegetic labels.
+
+## Motion Rules
+
+Orbit lanes are home positions, not cages. Each agent should have a stable
+`homeOrbitSlot` for readability and spatial memory, plus a bounded
+`expressiveOffset` for short local wandering. The return force should be visible
+and gentle: agents drift out to express curiosity, stress, speech, focus, or
+avoidance, then ease back toward their lane instead of snapping into place.
+
+Vertical motion should come from the same Grid grammar as placement. An agent's
+gravity well can pulse its local Grid height, raising or lowering the body
+because the CPU and shader agree that body centers sit above the Grid surface.
+This makes heartbeat and mood visible in the world instead of faking hover with
+a detached bobbing transform.
+
+Recommended controls:
+
+- `wanderRadius`: maximum horizontal distance from the home orbit slot.
+- `expressiveOffset`: current bounded offset in Grid/world space.
+- `returnHomeStrength`: spring force back toward the home orbit slot.
+- `gravityWellPulse`: temporary change to the agent's Grid brush height.
+- `verticalLift`: additional body-center lift derived from the local well pulse.
+- `buoyancy`: role-specific damping/overshoot for vertical response.
+
+State mapping:
+
+- Heartbeat primary state should create a small vertical pulse and brief outward
+  drift.
+- Speaking or Face bubble output can wander toward the room/user side.
+- High pressure should pull Life, Soul, and Self tighter toward home while still
+  deepening their wells.
+- Imagination may wander widest when exploring, but should collapse back toward
+  home on accepted plans.
+- Hands should wander least while blocked and lean toward active work when
+  running.
+- Eyes can make short focus darts toward evidence-bearing anchors.
+
+Implementation invariant: expressive wandering and vertical well pulses must be
+part of the same CPU-visible placement model used for body centers, shadows,
+gravity brushes, and temporal reprojection. If the shader sees a different body
+position than the CPU, the prettiness has started lying.
 
 ## Self
 
@@ -402,9 +445,11 @@ Implement the renderer contract in this order:
 1. Add a CPU-side `AgentVisualState` and role-to-organ mapping in the Aquarium
    runtime boundary.
 2. Preserve the current fixed body table as fallback data.
-3. Add material-region SDF evaluation for one organ pair: Body and Imagination.
-4. Bind status/activity/heartbeat fields into shader constants.
-5. Add debug modes for role id, material id, and state scalar so the cut can be
+3. Add CPU-visible home orbit slots, bounded expressive offsets, and gravity
+   well pulse state before adding decorative per-role motion.
+4. Add material-region SDF evaluation for one organ pair: Body and Imagination.
+5. Bind status/activity/heartbeat and placement fields into shader constants.
+6. Add debug modes for role id, material id, and state scalar so the cut can be
    inspected without believing the prettiness.
 
 Body and Imagination are the best first pair because they exercise opposite

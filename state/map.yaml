@@ -58,7 +58,7 @@ renderer_state:
     - Self Grid brush uses a widened 17-world-unit gravity bowl plus an Aetheria-style radial cosine wave; CPU, Grid shader, scene placement, and temporal reprojection share the same brush equation.
     - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
     - SDF/analytic solids for Self, planets, and the cursor locator.
-    - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, and pressure from reorient/pressure surfaces.
+    - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
