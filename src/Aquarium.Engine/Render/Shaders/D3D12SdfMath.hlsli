@@ -110,61 +110,64 @@ float sdTeardropRevolution(float3 local, float contactZ, float tipZ, float radiu
     return max(radialDistance, max(topDistance, bottomDistance));
 }
 
+float2 hibiscusPetalCenter(float u)
+{
+    float radial = 0.92 * u * u * (1.0 - 0.10 * u);
+    float height = -0.10 + 0.82 * u;
+    return float2(radial, height);
+}
+
+float sdHibiscusPetalRibbon(float3 q, float phase)
+{
+    float u = saturate((q.z + 0.10) / 0.82);
+    float2 center = hibiscusPetalCenter(u);
+    float widthGrowth = smoothstep(0.08, 1.0, u);
+    float width = lerp(0.030, 0.42, widthGrowth);
+    float thickness = lerp(0.010, 0.046, widthGrowth);
+    float fold = 0.055 * q.y * q.y / max(width * width, 0.001);
+    float radialDistance = abs(q.x - center.x - fold) - thickness;
+    float verticalDistance = max(-0.10 - q.z, q.z - 0.72);
+    float sideDistance = abs(q.y) - width;
+    return max(max(radialDistance, verticalDistance), sideDistance);
+}
+
 float sdHibiscusCursorPetal(float3 local, float angle, float timeSeconds)
 {
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
     float phase = timeSeconds * 0.95 + angle * 1.7;
-    float3 center = float3(radial * 0.36, 0.09 + 0.030 * sin(phase));
+    float3 center = float3(radial * 0.20, 0.07 + 0.030 * sin(phase));
     float3 p = local - center;
     float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
-    float lengthT = saturate((q.x + 0.34) / 1.38);
-    float edgeT = saturate(abs(q.y) / max(lerp(0.22, 0.08, lengthT), 0.001));
-    float lift = 0.31 * lengthT * lengthT + 0.060 * edgeT * edgeT;
-    float curl = 0.075 * sin(q.x * 2.4 + phase) * smoothstep(0.08, 0.95, lengthT);
-    float rib = 0.014 * sin(q.y * 36.0 + q.x * 8.0 + phase) * smoothstep(0.05, 0.90, lengthT);
-    float surfaceZ = -0.075 + lift + curl;
-    float thickness = lerp(0.040, 0.009, lengthT) * lerp(1.0, 0.42, edgeT);
-    float sheet = abs(q.z - surfaceZ - rib) - thickness;
-    float footprint = sdTaperedCapsule2(float2(q.x, q.y), float2(-0.34, 0.0), float2(1.04, 0.0), 0.23, 0.07);
-    float notch = sdSphere(float3(q.x + 0.40, q.y, q.z), 0.11);
-    return max(max(sheet, footprint), -notch);
+    return sdHibiscusPetalRibbon(q, phase);
 }
 
 float sdHibiscusSepal(float3 local, float angle)
 {
     float2 radial = float2(cos(angle), sin(angle));
-    float3 a = float3(0.0, 0.0, -0.56);
-    float3 b = float3(radial * 0.22, -0.39);
-    return sdTaperedCapsuleSegment(local, a, b, 0.046, 0.020);
+    float3 a = float3(0.0, 0.0, -0.46);
+    float3 b = float3(radial * 0.26, -0.22);
+    return sdTaperedCapsuleSegment(local, a, b, 0.058, 0.022);
 }
 
 float sdHibiscusStamen(float3 local)
 {
     float column = sdQuadraticTube(local, float3(0.0, 0.0, 0.02), float3(-0.12, 0.08, 0.43), float3(0.13, 0.04, 0.86), 0.048, 0.032);
-    float filament0 = sdQuadraticTube(local, float3(-0.02, 0.03, 0.36), float3(-0.12, 0.09, 0.46), float3(-0.18, 0.07, 0.56), 0.014, 0.008);
-    float filament1 = sdQuadraticTube(local, float3(0.02, 0.04, 0.48), float3(0.15, 0.13, 0.58), float3(0.24, 0.12, 0.70), 0.014, 0.008);
-    float filament2 = sdQuadraticTube(local, float3(0.04, 0.02, 0.61), float3(0.15, -0.09, 0.70), float3(0.09, -0.19, 0.80), 0.012, 0.007);
-    float filament3 = sdQuadraticTube(local, float3(0.08, 0.04, 0.72), float3(0.20, 0.03, 0.84), float3(0.28, 0.00, 0.93), 0.011, 0.007);
-
     float bead0 = sdSphere(local - float3(0.14, 0.04, 0.92), 0.064);
-    float bead1 = sdSphere(local - float3(0.24, 0.12, 0.70), 0.044);
-    float bead2 = sdSphere(local - float3(-0.19, 0.07, 0.56), 0.042);
-    float bead3 = sdSphere(local - float3(0.09, -0.19, 0.80), 0.039);
-    float bead4 = sdSphere(local - float3(0.28, 0.00, 0.93), 0.036);
-    float sideFilaments = min(min(filament0, filament1), min(filament2, filament3));
-    float beads = min(min(bead0, bead1), min(min(bead2, bead3), bead4));
-    return min(column, min(sideFilaments, beads));
+    float bead1 = sdSphere(local - float3(0.18, 0.12, 0.72), 0.046);
+    float bead2 = sdSphere(local - float3(-0.12, 0.04, 0.62), 0.044);
+    float beads = min(bead0, min(bead1, bead2));
+    return min(column, beads);
 }
 
 float sdHibiscusCursor(float3 local, float timeSeconds)
 {
     float sway = 0.10 * sin(timeSeconds * 0.85);
-    float petal0 = sdHibiscusCursorPetal(local, 1.54 + sway, timeSeconds);
-    float petal1 = sdHibiscusCursorPetal(local, 2.78 + sway * 0.7, timeSeconds);
-    float petal2 = sdHibiscusCursorPetal(local, 4.02 + sway * 0.5, timeSeconds);
-    float petal3 = sdHibiscusCursorPetal(local, 5.26 + sway * 0.4, timeSeconds);
-    float petal4 = sdHibiscusCursorPetal(local, 0.34 + sway * 0.6, timeSeconds);
+    float petal0 = sdHibiscusCursorPetal(local, 1.45 + sway, timeSeconds);
+    float petal1 = sdHibiscusCursorPetal(local, 2.62 + sway * 0.7, timeSeconds);
+    float petal2 = sdHibiscusCursorPetal(local, 3.88 + sway * 0.5, timeSeconds);
+    float petal3 = sdHibiscusCursorPetal(local, 5.12 + sway * 0.4, timeSeconds);
+    float petal4 = sdHibiscusCursorPetal(local, 0.22 + sway * 0.6, timeSeconds);
     float petals = min(min(petal0, petal1), min(min(petal2, petal3), petal4));
 
     float throatSphere = sdSphere(local - float3(0.0, 0.0, -0.05), 0.24);
@@ -172,13 +175,13 @@ float sdHibiscusCursor(float3 local, float timeSeconds)
     float throat = max(throatSphere, throatTop);
     float stamen = sdHibiscusStamen(local);
 
-    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.72), float3(0.0, 0.0, -0.49), 0.014, 0.105);
+    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.62), float3(0.0, 0.0, -0.18), 0.014, 0.120);
     float sepals = min(sdHibiscusSepal(local, 1.57), min(sdHibiscusSepal(local, 3.66), sdHibiscusSepal(local, 5.75)));
     float calyx = smoothUnion(calyxCore, sepals, 0.035);
 
     float blossom = smoothUnion(petals, throat, 0.10);
     blossom = smoothUnion(blossom, stamen, 0.065);
-    return smoothUnion(blossom, calyx, 0.070);
+    return smoothUnion(blossom, calyx, 0.120);
 }
 
 #endif

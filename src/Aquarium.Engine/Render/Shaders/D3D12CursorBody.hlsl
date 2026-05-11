@@ -77,7 +77,7 @@ float3 cursorEmissionRadiance(float3 p, float3 normal)
     float petal = 0.55 + 0.45 * cos(atan2(local.y, local.x) * 3.0 - timeSeconds * 1.8);
     float throat = exp(-dot(local.xy, local.xy) * 7.0) * smoothstep(0.30, -0.18, local.z);
     float stamen = smoothstep(0.018, -0.035, sdHibiscusStamen(local));
-    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.72), float3(0.0, 0.0, -0.49), 0.018, 0.115);
+    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.62), float3(0.0, 0.0, -0.18), 0.018, 0.130);
     float calyxSepals = min(sdHibiscusSepal(local, 1.57), min(sdHibiscusSepal(local, 3.66), sdHibiscusSepal(local, 5.75)));
     float calyx = smoothstep(0.08, -0.02, min(calyxCore, calyxSepals));
     float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.0);
