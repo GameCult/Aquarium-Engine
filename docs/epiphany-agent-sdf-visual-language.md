@@ -18,7 +18,7 @@ Stable identity and temperament:
 
 - `epiphany.agent_memory`: `roleId`, `agent.agent_id`,
   `agent.identity.name`, `agent.identity.roles`, `agent.canonical_state`,
-  goals, memories, and optional overlays.
+  goals, memories, and perceived overlays.
 
 Physiology and animation clock:
 
@@ -40,7 +40,7 @@ Visible operational posture:
   and active work.
 - `epiphany.surface.pressure`: context pressure and compaction readiness.
 - `epiphany.surface.reorient` and `epiphany.surface.reorient_result`:
-  continuity verdicts, resume/regather posture, and reorientation result.
+  continuity verdicts, resume posture, regather posture, and reorientation result.
 
 Useful normalized visual fields:
 
@@ -76,10 +76,10 @@ activity =
   saturate(statusWeight(status) + min(jobCount, 3) * 0.08)
 
 blocked =
-  status in {"blocked", "unavailable"} or blockingReason exists
+  status in {"blocked", "unavailable"} || blockingReason exists
 
 completed =
-  status == "completed" or roleResult.status == "completed"
+  status == "completed" || roleResult.status == "completed"
 
 hasPatch =
   roleResult.finding.statePatch exists
@@ -109,7 +109,7 @@ All role placement and role-local SDF orientation uses Aquarium world space:
 - `gridCenter`: camera target on the XY plane.
 - `selfAnchor`: `gridCenter`.
 - `cameraFacingDir`: normalized horizontal vector from `gridCenter` toward the
-  camera. This is the "room/user side" direction.
+  camera. This is the room-facing direction.
 - `cameraRightDir`: normalized horizontal camera right vector.
 
 Each role has a stable home orbit slot around `selfAnchor`. These slots are
@@ -137,7 +137,7 @@ not rotate every time the camera does.
 ## Derived Spatial Anchors
 
 The renderer must derive named anchors before evaluating per-role motion.
-Epiphany does not publish world-space graph, job, artifact, or role anchors.
+Epiphany does not publish world-space graph, job, artifact, nor role anchors.
 It publishes semantic state. Aquarium owns the visible frame and projects that
 semantic state into deterministic local anchors around role bodies.
 
@@ -154,12 +154,12 @@ artifactAnchor(roleId) =
 
 evidenceAnchor =
   artifactAnchor("research"), when Eyes has evidence ids, artifacts, graph
-  query results, or retrieved context
+  query results, plus retrieved context
   else roleAnchor("research") + roleForward("research") * 3.0
 
 implementationArtifactAnchor =
   artifactAnchor("implementation"), when Hands has changed files,
-  implementation artifacts, or active implementation jobs
+  implementation artifacts, plus active implementation jobs
   else roleAnchor("implementation") + roleForward("implementation") * 3.0
 
 reviewAnchor =
@@ -177,9 +177,9 @@ targetAnchor =
 
 workAnchor =
   implementationArtifactAnchor, if changed files, implementation artifacts,
-  or active implementation jobs exist
+  plus active implementation jobs exist
   else coordinator target role anchor, if targetRole is present
-  else reviewAnchor, if implementation is waiting on verification/review
+  else reviewAnchor, if implementation is waiting on verification review
   else roleAnchor("implementation") + tangentClockwise("implementation") * 4.0
 ```
 
@@ -192,8 +192,8 @@ orbiting role. For Self, it is `cameraFacingDir`. If a role is exactly at
 `selfAnchor`, use `cameraFacingDir`.
 
 These anchors are not data contracts with Epiphany. They are Aquarium's
-diegetic layout rules for semantic surfaces. If a future Aquarium feature
-creates local graph-node or artifact objects, those objects may become anchors
+diegetic layout rules for semantic surfaces. If a later Aquarium feature
+creates local graph-node and artifact objects, those objects may become anchors
 inside Aquarium, but Epiphany still does not own their spatial arrangement.
 
 State-derived vectors:
@@ -228,18 +228,18 @@ into flickering NaNs with a nice color palette.
 - Keep DOM hit targets stable. The visual body can breathe, fold, and shimmer;
   the interaction root must not dodge the user's pointer like it owes money.
 - Avoid volumetric dependence. These are analytic solids over the Grid with
-  PBR materials, emissive accents, and future diegetic labels.
+  PBR materials, emissive accents, and planned diegetic labels.
 
 ## Motion Rules
 
 Orbit lanes are home positions, not cages. Each agent should have a stable
 `homeOrbitSlot` for readability and spatial memory, plus a bounded
 `expressiveOffset` for short local wandering. The return force should be visible
-and gentle: agents drift out to express curiosity, stress, speech, focus, or
+and gentle: agents drift out to express curiosity, stress, speech, focus, and
 avoidance, then ease back toward their lane instead of snapping into place.
 
 Vertical motion should come from the same Grid grammar as placement. An agent's
-gravity well can pulse its local Grid height, raising or lowering the body
+gravity well can pulse its local Grid height, raising and lowering the body
 because the CPU and shader agree that body centers sit above the Grid surface.
 This makes heartbeat and mood visible in the world instead of faking hover with
 a detached bobbing transform.
@@ -247,11 +247,11 @@ a detached bobbing transform.
 Recommended controls:
 
 - `wanderRadius`: maximum horizontal distance from the home orbit slot.
-- `expressiveOffset`: current bounded offset in Grid/world space.
+- `expressiveOffset`: current bounded offset in Grid space.
 - `returnHomeStrength`: spring force back toward the home orbit slot.
 - `gravityWellPulse`: temporary change to the agent's Grid brush height.
 - `verticalLift`: additional body-center lift derived from the local well pulse.
-- `buoyancy`: role-specific damping/overshoot for vertical response.
+- `buoyancy`: role-specific damping and overshoot for vertical response.
 
 Baseline placement integration:
 
@@ -299,14 +299,14 @@ verticalLift =
 ```
 
 The exact brush equation can change with the Grid implementation, but CPU
-placement and shader placement must call the same equation or the agent will
+placement and shader placement must call the same equation; otherwise the agent will
 visibly detach from its own well.
 
 State mapping:
 
 - Heartbeat primary state should create a small vertical pulse and brief outward
   drift.
-- Speaking or Face bubble output can wander toward the room/user side.
+- Speaking and Face bubble output can wander toward the room-facing side.
 - High pressure should pull Life, Soul, and Self tighter toward home while still
   deepening their wells.
 - Imagination may wander widest when exploring, but should collapse back toward
@@ -338,11 +338,12 @@ paths, one current routing decision.
 
 Math:
 
-- Base ellipsoid/sphere for the core.
-- Three or four torus arcs in tilted planes, clipped by angular masks.
+- Exact sphere core with radius `1.0`.
+- Four torus arcs in tilted planes, clipped by angular masks.
 - Smooth union between the core and small gate-node spheres.
-- Thin emissive routing filaments as capsule or torus-segment SDFs.
-- Material ids: warm ceramic core, gold/orange routing rails, bright current
+- Thin emissive routing filaments as torus-segment SDFs with sinusoidal radius
+  modulation along the arc.
+- Material ids: warm ceramic core, gold-orange routing rails, bright current
   target gate, dark review seam.
 
 Movement:
@@ -376,15 +377,17 @@ and soft bubble beads orbiting near the lip. It should look like a speaking
 surface, not a generic chat icon.
 
 Reasoning: Face translates hidden organ weather into public, bounded speech. A
-lantern form makes speech feel emitted and warm, while the mouth/bubbles make
+lantern form makes speech feel emitted and warm, while the mouth beads make
 output count and posting state visible without dumping private machinery.
 
 Math:
 
-- Bell body from a vertically squashed ellipsoid with lower lip subtraction.
-- Mouth as a rounded capsule/torus cut in the front of the bell.
+- Bell body from a superquadric dome with exponent `0.42`, clipped by a smooth
+  sinusoidal lower lip.
+- Mouth as a crescent cut formed by subtracting two offset torus segments.
 - Bubble beads as small spheres on phase-offset orbits.
-- Optional speech ribbon as a swept capsule curve around the mouth.
+- Speech ribbon as a swept lemniscate tube around the mouth, with tube radius
+  modulated by heartbeat phase.
 - Material ids: translucent enamel bell, emissive inner mouth, glossy bubble
   beads, muted draft beads.
 
@@ -409,20 +412,20 @@ Surfaces:
 
 Role ids: `imagination`, `epiphany.imagination`
 
-Purpose: planning, drafts, backlog, objective shaping, and future options.
+Purpose: planning, drafts, backlog, objective shaping, and candidate options.
 
 Appearance: an impossible flower made from prismatic ribbon petals around a
 small idea seed. The silhouette should keep almost becoming another silhouette.
 
 Reasoning: Imagination is generative, but not decorative chaos. It produces
-bounded future shapes: captures become drafts, drafts become objectives. Petals
+bounded candidate shapes: captures become drafts, drafts become objectives. Petals
 and ribbons communicate branching possibility while still returning to a center.
 
 Math:
 
 - Polar lobe field around a seed sphere:
   `r = base + amplitude * sin(k * theta + phase)`.
-- Ribbon petals as torus-knot or swept-capsule loops around the seed.
+- Ribbon petals as trefoil-knot tubes around the seed.
 - Smooth min unions for petal roots; sharp-ish material boundary near petal
   tips.
 - Harmonic count `k = 4 + floor(activity * 3) + min(backlogCount, 3)`.
@@ -433,10 +436,10 @@ Math:
 Movement:
 
 - Planning readiness increases petal openness.
-- Backlog/capture count increases secondary harmonic detail.
+- Backlog and capture count increases secondary harmonic detail.
 - A completed planning result collapses the flower into a cleaner symmetric
   bloom.
-- Uncertainty/evidence gaps add small branching petallets that fade rather than
+- Uncertainty and evidence gaps add small branching petallets that fade rather than
   becoming permanent complexity.
 - Exploratory wander direction is the weighted sum of `outwardVector` and
   `tangentClockwise("imagination")`; accepted plans set `expressionAmount`
@@ -470,29 +473,29 @@ Math:
 
 - Lens from intersection of two spheres with high
   specular material.
-- Aperture blades as repeated wedge/capsule SDFs around the front normal.
-- Evidence sparks as small orbiting spheres or star-like octahedra gated by
-  artifact/evidence count.
+- Aperture blades as repeated logarithmic-spiral wedges around the front normal.
+- Evidence sparks as small orbiting Kepler rosettes gated by artifact and
+  evidence count.
 - Scanning ring as a thin torus with animated angular mask.
 - Material ids: black glass lens, blue metal aperture, cyan evidence sparks,
   pale scan ring.
 
 Movement:
 
-- Graph query or artifact presence rotates aperture and adds controlled sparkle.
+- Graph query and artifact presence rotates aperture and adds controlled sparkle.
 - Unknowns widen the aperture and slow the scan.
 - High confidence narrows aperture and steadies the lens.
 - No evidence means no sparkle. The lens still watches, but it does not fake a
   finding.
 - Focus dart direction is `evidenceDirection`. `evidenceAnchor` is Aquarium's
   local projection for evidence-bearing surfaces; Epiphany only supplies the
-  semantic evidence/artifact/context state.
+  semantic evidence, artifact, and context state.
 
 Surfaces:
 
 - `epiphany.surface.graph_query`: graph query state and results.
 - `epiphany.surface.context`: retrieved context and source windows.
-- `epiphany.surface.role_result`: research/eyes result when present.
+- `epiphany.surface.role_result`: research result and Eyes result when present.
 - `epiphany.surface.roles`: research lane status where published.
 - `epiphany.agent_memory`: evidence and prior-art traits.
 
@@ -514,12 +517,12 @@ diagram shrine.
 
 Math:
 
-- Squashed ellipsoid core with smooth-union support lobes.
-- Graph ribs as capsule networks over the surface. First implementation uses
+- Superellipsoid geode core with exponent `0.72` and smooth-union support lobes.
+- Graph ribs as geodesic tube networks over the surface. First implementation uses
   five deterministic Aquarium-owned ribs between fixed normalized surface points:
   north-south, east-west, northwest-center-southeast,
   northeast-center-southwest, and one equatorial ring segment. Semantic graph
-  size or frontier count may brighten/fill these ribs, but Epiphany graph nodes
+  size and frontier count may brighten and fill these ribs, but Epiphany graph nodes
   do not define their world positions.
 - Node beads at rib intersections.
 - Subtle displacement from low-frequency sine waves for breathing mass.
@@ -529,13 +532,13 @@ Math:
 Movement:
 
 - Modeling `needed` state lowers the body and brightens empty rib slots.
-- Completed checkpoint/result fills nodes in sequence.
+- Completed checkpoint and result fills nodes in sequence.
 - Evidence gaps open small dark fissures between ribs.
 - High load makes the mass sag; high confidence makes ribs align and glow
   steadily.
 - Connective wake direction points from Body toward Self when modeling is
-  regathering/checkpointing, and toward `artifactAnchor("modeling")` when a
-  modeling result or state patch exists. `frontierNodeIds` affect rib count or
+  regathering and checkpointing, and toward `artifactAnchor("modeling")` when a
+  modeling result plus state patch exists. `frontierNodeIds` affect rib count and
   brightness, not world direction.
 
 Surfaces:
@@ -543,7 +546,7 @@ Surfaces:
 - `epiphany.surface.roles`: `modeling` lane status, note, recommended action.
 - `epiphany.surface.role_result`: modeling finding, checkpoint summary,
   frontier nodes, state patch, evidence gaps.
-- `epiphany.surface.graph_query`: architecture/dataflow graph context.
+- `epiphany.surface.graph_query`: architecture and dataflow graph context.
 - `epiphany.agent_memory`: Body graph and checkpoint traits.
 
 ## Hands
@@ -563,19 +566,21 @@ then settles. No grand aura. Hands earns drama by producing diff.
 
 Math:
 
-- Capsule/ellipsoid core elongated along `workDirection`.
-- Two or three gripper lobes as smooth-union capsules around the core.
-- Tool edge as a thin prism/capsule ridge with high-metalness material.
+- Superquadric tool core elongated along `workDirection`, exponent `0.58`,
+  with a small helical groove cut along its long axis.
+- Three gripper lobes as logarithmic-spiral tube claws around the core.
+- Tool edge as a thin triangular-prism ridge with high-metalness material and a
+  sine-notched cutting line.
 - Small impact sparks as short-lived bead SDFs near the leading edge.
 - Material ids: warm enamel grip, dark metal edge, hot action stripe,
   dull blocked cap.
 
 Movement:
 
-- Running/continuing work leans the core toward `workAnchor`.
-- Changed files or artifacts trigger quick acknowledgement pops.
+- Running and continuing work leans the core toward `workAnchor`.
+- Changed files and artifacts trigger quick acknowledgement pops.
 - Blocked state retracts grippers and dims the tool edge.
-- Verification pass or accepted result relaxes the shape back into idle.
+- Verification pass and accepted result relaxes the shape back into idle.
 
 Hands spatial rule:
 
@@ -591,7 +596,7 @@ gripPosB     = handsCenter.xy - handsForward * 0.18 - handsRight * 0.34
 
 `workDirection` is not semantic mood. It is derived from `workAnchor` in the
 coordinate contract above. `workAnchor` is Aquarium's local projection of
-implementation artifacts/jobs, coordinator target, or review dependency. If
+implementation artifacts and jobs, coordinator target, and review dependency. If
 none of those semantic states exist, it falls back to the clockwise orbit
 tangent, so the shape remains deterministic and debuggable.
 
@@ -619,13 +624,12 @@ shows tension between confidence and unresolved danger.
 
 Math:
 
-- Rounded octahedron or faceted sphere SDF using max-of-planes blended with a
-  small radius.
+- Rounded octahedron SDF using max-of-planes blended with radius `0.08`.
 - Inner core sphere visible through material contrast, not real transparency
   dependency.
-- Risk seam as a thin torus/capsule ring around the crystal. Ring thickness is
+- Risk seam as a thin torus ring around the crystal. Ring thickness is
   `lerp(0.015, 0.09, risk)`.
-- Finding marks as tiny engraved line SDFs or bright dots on facets.
+- Finding marks as tiny engraved line SDFs on facets.
 - Material ids: cool crystal facets, white inner core, red risk seam, blue
   confidence edge, dark rejected mark.
 
@@ -634,10 +638,10 @@ Movement:
 - Verification running rotates slowly with steady, low expressiveness.
 - Risk increases red seam thickness and facet sharpness.
 - Confidence brightens blue edges and steadies rotation.
-- Failed or blocked findings produce short angular fractures; accepted findings
+- Failed and blocked findings produce short angular fractures; accepted findings
   heal them into clean facet lines.
 - Review-facing posture points the risk seam normal toward
-  `roleAnchor(coordinator)` when `requiresReview` is true, otherwise toward
+  `roleAnchor(coordinator)` when `requiresReview` is true, else toward
   `outwardVector`.
 
 Surfaces:
@@ -653,22 +657,22 @@ Surfaces:
 
 Role ids: `reorientation`, `epiphany.life`
 
-Purpose: continuity, pressure, sleep, reorientation, resume/regather, and
+Purpose: continuity, pressure, sleep, reorientation, resume posture, regather posture, and
 memory survival.
 
 Appearance: a teal seed-shell with a small ember inside and a trailing spiral
 of memory beads. It should feel like continuity surviving weather.
 
 Reasoning: Life carries the thread through compaction, sleep, and rupture. A
-seed-shell is the right metaphor because it protects a future, while the ember
+seed-shell is the right metaphor because it protects a candidate continuation, while the ember
 and bead trail show what context remains warm enough to carry forward.
 
 Math:
 
-- Seed body from an asymmetric ellipsoid or teardrop SDF.
-- Shell seam as a curved capsule groove along the seed.
+- Seed body from a revolved cardioid SDF with a flattened base.
+- Shell seam as a logarithmic-spiral groove carved along the seed.
 - Ember as small emissive inner sphere.
-- Memory beads along a logarithmic spiral or damped helix around/behind the
+- Memory beads along a logarithmic spiral behind the
   seed.
 - Breathing field as radial sine displacement with low amplitude.
 - Material ids: teal shell, warm ember, pale memory beads, dark rupture scar.
@@ -678,7 +682,7 @@ Movement:
 - Pressure increases breathing depth and tightens the shell.
 - Regather opens a dark seam and pulls beads inward.
 - Resume steadies the ember and releases beads along the old path.
-- Sleep/incubation slows orbit and dims the shell while preserving the ember.
+- Sleep and incubation slows orbit and dims the shell while preserving the ember.
 - Memory bead trail follows a logarithmic spiral centered on Life's
   `bodyCenter.xy`. Regather reverses bead phase toward the seed; resume advances
   phase outward along `continuityAnchor -> lifePosition` tangent.
@@ -686,7 +690,7 @@ Movement:
 Surfaces:
 
 - `epiphany.surface.reorient`: decision action, checkpoint status, pressure
-  level, reasons, retrieval/watcher status.
+  level, reasons, retrieval status, watcher status.
 - `epiphany.surface.reorient_result`: reorientation worker result.
 - `epiphany.surface.pressure`: pressure level and compaction readiness.
 - `epiphany.agent_heartbeat`: sleep cycle, memory resonance, incubation.
@@ -702,7 +706,7 @@ Implement the renderer contract in this order:
 3. Add CPU-visible home orbit slots, bounded expressive offsets, and gravity
    well pulse state before adding decorative per-role motion.
 4. Add material-region SDF evaluation for one organ pair: Body and Imagination.
-5. Bind status/activity/heartbeat and placement fields into shader constants.
+5. Bind status, activity, heartbeat, and placement fields into shader constants.
 6. Add debug modes for role id, material id, and state scalar so the cut can be
    inspected without believing the prettiness.
 
