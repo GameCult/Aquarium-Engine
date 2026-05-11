@@ -76,13 +76,15 @@ float3 cursorEmissionRadiance(float3 p, float3 normal)
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     float petal = 0.55 + 0.45 * cos(atan2(local.y, local.x) * 3.0 - timeSeconds * 1.8);
     float throat = exp(-dot(local.xy, local.xy) * 7.0) * smoothstep(0.30, -0.18, local.z);
-    float stamen = smoothstep(0.018, -0.035, sdCapsuleSegment(local, float3(0.0, 0.0, 0.02), float3(0.0, 0.0, 0.82), 0.075));
-    float calyx = smoothstep(0.08, -0.02, sdEllipsoid(local - float3(0.0, 0.0, -0.70), float3(0.28, 0.26, 0.20)));
+    float stamen = smoothstep(0.018, -0.035, sdHibiscusStamen(local));
+    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.72), float3(0.0, 0.0, -0.49), 0.018, 0.115);
+    float calyxSepals = min(sdHibiscusSepal(local, 1.57), min(sdHibiscusSepal(local, 3.66), sdHibiscusSepal(local, 5.75)));
+    float calyx = smoothstep(0.08, -0.02, min(calyxCore, calyxSepals));
     float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.0);
-    float3 petalColor = lerp(float3(1.25, 0.12, 0.56), float3(1.0, 0.42, 0.88), petal);
-    float3 throatColor = float3(1.0, 0.76, 0.22);
-    float3 stamenColor = float3(1.0, 0.58, 0.22);
-    float3 calyxColor = float3(0.20, 0.72, 0.16);
+    float3 petalColor = lerp(float3(1.12, 0.28, 0.58), float3(1.0, 0.78, 0.90), petal);
+    float3 throatColor = float3(1.0, 0.18, 0.45);
+    float3 stamenColor = float3(1.0, 0.70, 0.10);
+    float3 calyxColor = float3(0.36, 0.68, 0.10);
     float3 blossom = petalColor * (0.82 + rim * 0.75) + throatColor * throat * 1.7 + stamenColor * stamen * 1.35;
     return lerp(blossom, calyxColor * (0.55 + rim * 0.25), calyx);
 }
