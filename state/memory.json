@@ -27,7 +27,7 @@
       "Cursor and camera interactions should project onto the same XY surface used by the Grid contract."
     ],
     "rendering": [
-      "D3D12 Grid line width normalization uses periodic domains with `fwidth()` and pixel-width constants, not world-space footprint guesses.",
+      "Grid height is defined by the shared brush equation in CPU placement, D3D12Grid, D3D12Scene, and temporal reprojection. Self uses a 17-world-unit gravity bowl plus an Aetheria-style radial cosine wave; body centers sit at Grid height plus 2x body radius.",
       "The Grid is direct-traced as a terminating mirror surface over the scalar height field. It writes the primary surface packet with FIELD_ID_GRID, terrain normal, full coverage, and Studio2 PMREM mip 0 reflection.",
       "Mouse/cursor-owned SDF bodies need object-motion reprojection. Carry current and previous cursor world anchors through frame constants and reproject cursor hits from current center to previous center.",
       "The cursor locator uses the MathWorld teardrop curve profile with m=6, revolved around vertical: x=cos(t), y=sin(t)*sin^m(t/2), radius `sqrt(1 - x^2) * ((1 - x) / 2)^3`. Ripples belong in the SDF radius function. Material is brass GGX metal with brass-tinted F0, no diffuse metal term, non-emissive, and no ambient floor.",

@@ -41,6 +41,7 @@ static const float FIELD_ID_PLANET_BASE = 10.0;
 static const int CURSOR_PRIMITIVE_ID = PLANET_COUNT + 1;
 static const float CURSOR_RADIUS = 0.56;
 static const float CURSOR_BOUND_RADIUS = 0.72;
+static const float BODY_GRID_CLEARANCE_RADIUS_SCALE = 2.0;
 static const float PI = 3.14159265359;
 static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int BODY_LIGHT_COUNT = 8;
@@ -122,13 +123,24 @@ float planetRadius(int index)
     return lerp(0.34, 0.62, hash21(float2(index, 19.7)));
 }
 
-float3 planetCenterAt(int index, float sampleTime)
+float terrainHeight(float2 p);
+
+float2 planetAnchorAt(int index, float sampleTime)
 {
     float f = (float)index;
     float angle = f * 0.8975979 + sampleTime * (0.08 + 0.011 * f);
     float radius = 4.1 + f * 0.77;
-    float2 xy = float2(cos(angle), sin(angle)) * radius;
-    return float3(xy, 1.15 + planetRadius(index) * 0.72);
+    return float2(cos(angle), sin(angle)) * radius;
+}
+
+float3 bodyCenterAtGridHeight(float2 xy, float radius)
+{
+    return float3(xy, terrainHeight(xy) + radius * BODY_GRID_CLEARANCE_RADIUS_SCALE);
+}
+
+float3 planetCenterAt(int index, float sampleTime)
+{
+    return bodyCenterAtGridHeight(planetAnchorAt(index, sampleTime), planetRadius(index));
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int primitiveId);
@@ -223,7 +235,7 @@ float cursorLocatorSdf(float3 p)
     static const float ContactZ = -1.0;
     static const float TipZ = 1.15;
 
-    float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
+    float3 center = bodyCenterAtGridHeight(cursorWorlds.xy, CURSOR_RADIUS);
     float3 local = (p - center) / CURSOR_RADIUS;
     float2 samplePoint = float2(length(local.xy), local.z);
     float profileRadius = cursorLocatorProfileRadius(samplePoint.y);
@@ -246,7 +258,7 @@ float3 cursorLocatorNormal(float3 p)
 bool traceCursorLocator(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float travel, out float3 normal)
 {
     float sphereTravel;
-    float3 center = float3(cursorWorlds.xy, CURSOR_RADIUS);
+    float3 center = bodyCenterAtGridHeight(cursorWorlds.xy, CURSOR_RADIUS);
     if (!traceSphere(origin, direction, center, CURSOR_BOUND_RADIUS, sphereTravel))
     {
         travel = farDistance + 1.0;
@@ -288,12 +300,12 @@ float3 primitiveCenterAt(int primitiveId, float sampleTime)
 {
     if (primitiveId == 0)
     {
-        return float3(0.0, 0.0, 2.2);
+        return bodyCenterAtGridHeight(0.0, SUN_RADIUS);
     }
 
     if (primitiveId == CURSOR_PRIMITIVE_ID)
     {
-        return float3(cursorWorlds.xy, CURSOR_RADIUS);
+        return bodyCenterAtGridHeight(cursorWorlds.xy, CURSOR_RADIUS);
     }
 
     return planetCenterAt(primitiveId - 1, sampleTime);

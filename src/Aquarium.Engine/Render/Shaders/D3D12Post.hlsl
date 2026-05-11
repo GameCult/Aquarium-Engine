@@ -57,6 +57,8 @@ static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_PLANET_BASE = 10.0;
+static const float BODY_GRID_CLEARANCE_RADIUS_SCALE = 2.0;
+static const float SELF_GRAVITY_RADIUS = 17.0;
 static const float MAX_HISTORY_AGE = 32.0;
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
@@ -128,13 +130,61 @@ float planetRadius(int index)
     return lerp(0.34, 0.62, hash21(float2(index, 19.7)));
 }
 
-float3 planetCenterAt(int index, float sampleTime)
+float2 planetAnchorAt(int index, float sampleTime)
 {
     float f = (float)index;
     float angle = f * 0.8975979 + sampleTime * (0.08 + 0.011 * f);
     float radius = 4.1 + f * 0.77;
-    float2 xy = float2(cos(angle), sin(angle)) * radius;
-    return float3(xy, 1.15 + planetRadius(index) * 0.72);
+    return float2(cos(angle), sin(angle)) * radius;
+}
+
+float powerPulse(float distanceValue, float radius, float power)
+{
+    float normalized = saturate(distanceValue / max(radius, 0.001));
+    float shaped = pow(1.0 - normalized, power);
+    return shaped * shaped * (3.0 - 2.0 * shaped);
+}
+
+float gridBrushHeight(float2 world, float2 center, float radius, float power, float amplitude, float waveAmplitude, float waveFrequency, float waveSpeed, float waveSinePower, float sampleTime)
+{
+    float distanceValue = length(world - center);
+    if (distanceValue > radius)
+    {
+        return 0.0;
+    }
+
+    float well = powerPulse(distanceValue, radius, power);
+    float normalizedDistance = saturate(distanceValue / max(radius, 0.001));
+    float legacyPhase = distanceValue * waveFrequency - sampleTime * waveSpeed;
+    float radialPhase = pow(normalizedDistance, waveSinePower) * waveFrequency - sampleTime * waveSpeed;
+    float ripple = waveSinePower > 0.0 ? cos(radialPhase) : sin(legacyPhase);
+    return amplitude * well + ripple * well * waveAmplitude;
+}
+
+float gridHeightAt(float2 world, float sampleTime)
+{
+    float height = sin((world.x * 0.08 + world.y * 0.06) + sampleTime * 0.27)
+        * sin((world.x * -0.04 + world.y * 0.07) - sampleTime * 0.19) * 0.035;
+    height += gridBrushHeight(world, 0.0, SELF_GRAVITY_RADIUS, 2.85, -1.34, 0.18, 6.28318530718, 0.82, 1.25, sampleTime);
+
+    [unroll]
+    for (int index = 0; index < PLANET_COUNT; index++)
+    {
+        float radius = planetRadius(index);
+        height += gridBrushHeight(world, planetAnchorAt(index, sampleTime), 3.8 + radius * 2.5, 2.1, -0.42, 0.022, 2.4, 1.35, 0.0, sampleTime);
+    }
+
+    return height;
+}
+
+float3 bodyCenterAtGridHeight(float2 xy, float radius, float sampleTime)
+{
+    return float3(xy, gridHeightAt(xy, sampleTime) + radius * BODY_GRID_CLEARANCE_RADIUS_SCALE);
+}
+
+float3 planetCenterAt(int index, float sampleTime)
+{
+    return bodyCenterAtGridHeight(planetAnchorAt(index, sampleTime), planetRadius(index), sampleTime);
 }
 
 void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
@@ -167,8 +217,8 @@ float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
 
     if (abs(fieldId - FIELD_ID_CURSOR) < 0.25)
     {
-        float3 currentCenter = float3(cursorWorlds.xy, 0.56);
-        float3 previousCenter = float3(cursorWorlds.zw, 0.56);
+        float3 currentCenter = bodyCenterAtGridHeight(cursorWorlds.xy, 0.56, timeSeconds);
+        float3 previousCenter = bodyCenterAtGridHeight(cursorWorlds.zw, 0.56, previousTimeSeconds);
         return previousCenter + (worldPosition - currentCenter);
     }
 

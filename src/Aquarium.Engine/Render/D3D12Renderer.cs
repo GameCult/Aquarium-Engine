@@ -32,6 +32,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
     private const float SunRadius = 1.12f;
+    private const float BodyGridClearanceRadiusScale = 2.0f;
+    private const float SelfGravityRadius = 17.0f;
     private const float CursorBodyRadius = 0.56f;
     private const float CursorBodyBoundRadius = 0.72f;
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
@@ -280,7 +282,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         BuildGridHeightBrushes(frame);
-        BuildBodyLightTable();
+        BuildBodyLightTable(frame);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -994,26 +996,28 @@ public sealed class D3D12Renderer : IAquariumRenderer
         SetGridHeightBrush(
             0,
             new Vector2(0.0f, 0.0f),
-            8.5f,
+            SelfGravityRadius,
             2.85f,
             -1.34f,
-            0.055f,
-            1.2f,
-            0.74f);
+            0.18f,
+            MathF.Tau,
+            0.82f,
+            1.25f);
 
         for (var index = 0; index < PlanetCount; index++)
         {
             var radius = PlanetRadius(index);
-            var center = PlanetCenter(index, frame.TimeSeconds, radius);
+            var center = PlanetAnchor(index, frame.TimeSeconds);
             SetGridHeightBrush(
                 index + 1,
-                new Vector2(center.X, center.Y),
+                center,
                 3.8f + radius * 2.5f,
                 2.1f,
                 -0.42f,
                 0.022f,
                 2.4f,
-                1.35f);
+                1.35f,
+                0.0f);
         }
     }
 
@@ -1025,20 +1029,22 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float amplitude,
         float waveAmplitude,
         float waveFrequency,
-        float waveSpeed)
+        float waveSpeed,
+        float waveSinePower)
     {
         var centerRadius = new Vector4(center, radius, 0.0f);
         var shape = new Vector4(power, amplitude, 0.0f, 0.0f);
-        var wave = new Vector4(waveAmplitude, waveFrequency, waveSpeed, 0.0f);
+        var wave = new Vector4(waveAmplitude, waveFrequency, waveSpeed, waveSinePower);
         gridHeightBrushConstants.Set(index, centerRadius, shape, wave);
-        gridHeightBrushes[index] = new GridHeightBrushCpu(center, radius, power, amplitude, waveAmplitude, waveFrequency, waveSpeed);
+        gridHeightBrushes[index] = new GridHeightBrushCpu(center, radius, power, amplitude, waveAmplitude, waveFrequency, waveSpeed, waveSinePower);
     }
 
-    private void BuildBodyLightTable()
+    private void BuildBodyLightTable(AquariumFrame frame)
     {
         Array.Clear(bodyLights);
+        var selfCenter = BodyCenterAtGridHeight(frame, Vector2.Zero, SunRadius);
         bodyLights[0] = new BodyLightGpu(
-            new Vector4(0.0f, 0.0f, 2.2f, SunRadius),
+            new Vector4(selfCenter, SunRadius),
             new Vector4(10.0f, 8.7f, 4.2f, 2.0f));
     }
 
@@ -1058,7 +1064,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
             }
 
             var well = PowerPulse(distanceValue, brush.Radius, brush.Power);
-            var ripple = MathF.Sin(distanceValue * brush.WaveFrequency - frame.TimeSeconds * brush.WaveSpeed);
+            var normalized = Math.Clamp(distanceValue / MathF.Max(brush.Radius, 0.001f), 0.0f, 1.0f);
+            var wavePhase = brush.WaveSinePower > 0.0f
+                ? MathF.Pow(normalized, brush.WaveSinePower) * brush.WaveFrequency - frame.TimeSeconds * brush.WaveSpeed
+                : distanceValue * brush.WaveFrequency - frame.TimeSeconds * brush.WaveSpeed;
+            var ripple = brush.WaveSinePower > 0.0f ? MathF.Cos(wavePhase) : MathF.Sin(wavePhase);
             height += brush.Amplitude * well + ripple * well * brush.WaveAmplitude;
         }
 
@@ -1070,6 +1080,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var normalized = Math.Clamp(distanceValue / MathF.Max(radius, 0.001f), 0.0f, 1.0f);
         var shaped = MathF.Pow(1.0f - normalized, power);
         return shaped * shaped * (3.0f - 2.0f * shaped);
+    }
+
+    private Vector3 BodyCenterAtGridHeight(AquariumFrame frame, Vector2 world, float radius)
+    {
+        return new Vector3(world.X, world.Y, EvaluateGridHeight(frame, world) + radius * BodyGridClearanceRadiusScale);
     }
 
     private void SignalFrame(FrameResources frameResources)
@@ -1606,20 +1621,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return Lerp(0.34f, 0.62f, Hash21(index, 19.7f));
     }
 
-    private static Vector3 CursorCenter(AquariumFrame frame)
-    {
-        return new Vector3(frame.CursorWorld.X, frame.CursorWorld.Y, CursorBodyRadius);
-    }
-
-    private static Vector3 PlanetCenter(int index, float timeSeconds, float radius)
+    private static Vector2 PlanetAnchor(int index, float timeSeconds)
     {
         var f = (float)index;
         var angle = f * 0.8975979f + timeSeconds * (0.08f + 0.011f * f);
         var orbitRadius = 4.1f + f * 0.77f;
-        return new Vector3(
+        return new Vector2(
             MathF.Cos(angle) * orbitRadius,
-            MathF.Sin(angle) * orbitRadius,
-            1.15f + radius * 0.72f);
+            MathF.Sin(angle) * orbitRadius);
     }
 
     private static float Hash21(float x, float y)
@@ -1736,7 +1745,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float Amplitude,
         float WaveAmplitude,
         float WaveFrequency,
-        float WaveSpeed);
+        float WaveSpeed,
+        float WaveSinePower);
 
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct BodyLightGpu(

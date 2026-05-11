@@ -113,7 +113,10 @@ float D3D12GridHeightBrushPS(BrushVertexOut input) : SV_Target
     float2 world = gridWorld(saturate(input.uv));
     float distanceValue = length(world - input.centerRadius.xy);
     float well = powerPulse(distanceValue, input.centerRadius.z, input.shape.x);
-    float ripple = sin(distanceValue * input.wave.y - timeSeconds * input.wave.z);
+    float normalizedDistance = saturate(distanceValue / max(input.centerRadius.z, 0.001));
+    float legacyPhase = distanceValue * input.wave.y - timeSeconds * input.wave.z;
+    float radialPhase = pow(normalizedDistance, input.wave.w) * input.wave.y - timeSeconds * input.wave.z;
+    float ripple = input.wave.w > 0.0 ? cos(radialPhase) : sin(legacyPhase);
     float signedHeight = input.shape.y * well + ripple * well * input.wave.x;
     return signedHeight;
 }
