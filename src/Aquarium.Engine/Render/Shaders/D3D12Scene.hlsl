@@ -47,7 +47,9 @@ static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
 static const int BODY_LIGHT_COUNT = 8;
 static const float STUDIO_PMREM_MAX_LOD = 8.0;
 static const float STUDIO_PMREM_SPECULAR_INTENSITY = 0.34;
-static const float GRID_FLAT_REFLECTION_MAX_LOD = 5.2;
+static const float GRID_FLAT_REFLECTION_MAX_LOD = 3.0;
+static const float BACKGROUND_PMREM_LOD = 3.0;
+static const float BACKGROUND_PMREM_CONE = 0.16;
 static const float GRID_FLAT_SLOPE_START = 0.018;
 static const float GRID_FLAT_SLOPE_END = 0.16;
 
@@ -437,6 +439,35 @@ float3 studioPmremDirection(float3 worldDirection)
     return normalize(float3(worldDirection.x, worldDirection.z, worldDirection.y));
 }
 
+void directionBasis(float3 direction, out float3 tangent, out float3 bitangent)
+{
+    float3 up = abs(direction.z) > 0.94 ? float3(0.0, 1.0, 0.0) : float3(0.0, 0.0, 1.0);
+    tangent = normalize(cross(up, direction));
+    bitangent = cross(direction, tangent);
+}
+
+float3 studioPmremSample(float3 worldDirection, float lod)
+{
+    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(worldDirection), lod).rgb;
+}
+
+float3 studioPmremConeSample(float3 worldDirection, float lod, float cone)
+{
+    float3 direction = normalize(worldDirection);
+    float3 tangent;
+    float3 bitangent;
+    directionBasis(direction, tangent, bitangent);
+
+    float3 sum = studioPmremSample(direction, lod) * 2.0;
+    sum += studioPmremSample(normalize(direction + tangent * cone), lod);
+    sum += studioPmremSample(normalize(direction - tangent * cone), lod);
+    sum += studioPmremSample(normalize(direction + bitangent * cone), lod);
+    sum += studioPmremSample(normalize(direction - bitangent * cone), lod);
+    sum += studioPmremSample(normalize(direction + (tangent + bitangent) * (cone * 0.7071)), lod);
+    sum += studioPmremSample(normalize(direction + (-tangent + bitangent) * (cone * 0.7071)), lod);
+    return sum * 0.125;
+}
+
 float3 gridMirrorRadiance(float3 p, float3 direction, out float3 normal)
 {
     float2 gradient = terrainGradient(p.xy);
@@ -444,13 +475,18 @@ float3 gridMirrorRadiance(float3 p, float3 direction, out float3 normal)
     float3 reflectionDirection = reflect(direction, normal);
     float flatness = 1.0 - smoothstep(GRID_FLAT_SLOPE_START, GRID_FLAT_SLOPE_END, length(gradient));
     float lod = flatness * GRID_FLAT_REFLECTION_MAX_LOD;
-    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(reflectionDirection), lod).rgb;
+    return studioPmremConeSample(reflectionDirection, lod, flatness * 0.055);
+}
+
+float3 backgroundRadiance(float3 direction)
+{
+    return studioPmremConeSample(direction, BACKGROUND_PMREM_LOD, BACKGROUND_PMREM_CONE);
 }
 
 RayMarchResult traverseRay(float2 uv, float2 screenUv, float3 origin, float3 direction)
 {
     RayMarchResult result;
-    result.color = float3(0.0, 0.0, 0.0);
+    result.color = backgroundRadiance(direction);
     result.travel = farDistance + 1.0;
     result.fieldId = 0.0;
     result.normal = 0.0;
@@ -593,7 +629,7 @@ float3 studioPmremSpecularRadiance(float3 p, float3 normal, float roughness, flo
     float ndv = saturate(dot(normal, viewDirection));
     float3 reflectionDirection = reflect(-viewDirection, normal);
     float lod = saturate(roughness) * STUDIO_PMREM_MAX_LOD;
-    float3 radiance = studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(reflectionDirection), lod).rgb;
+    float3 radiance = studioPmremSample(reflectionDirection, lod);
     float3 fresnel = fresnelSchlickRoughness(ndv, f0, roughness);
     return radiance * fresnel * STUDIO_PMREM_SPECULAR_INTENSITY;
 }
