@@ -3,19 +3,27 @@ static const int BODY_INDEX = 0;
 #include "D3D12BodyCommon.hlsli"
 #include "D3D12SdfMath.hlsli"
 
-BodySurface bodySurface(float3 p, int agentIndex)
+float bodyDistance(float3 p, int agentIndex)
 {
     AgentVisual agent = agentVisuals[agentIndex];
     float radius = max(agent.centerRadius.w, 0.001);
     float3 local = (p - agent.centerRadius.xyz) / radius;
+    return sdSphere(local, 1.0) * radius;
+}
 
+BodySurface bodySurface(float3 p, int agentIndex)
+{
     BodySurface surface;
-    surface.distanceValue = sdSphere(local, 1.0) * radius;
+    surface.distanceValue = bodyDistance(p, agentIndex);
     surface.materialId = 0.0;
     surface.fieldId = FIELD_ID_SELF;
     surface.roleId = 0.0;
     surface.lodTier = 0.0;
     surface.costTier = 0.0;
+    surface.albedo = 0.0;
+    surface.roughness = 0.0;
+    surface.f0 = 0.0;
+    surface.emission = primitiveEmissionRadiance(FIELD_ID_SELF);
     return surface;
 }
 

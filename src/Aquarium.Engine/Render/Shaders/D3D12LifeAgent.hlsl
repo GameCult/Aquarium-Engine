@@ -4,6 +4,14 @@ static const int BODY_INDEX = 7;
 #include "D3D12SdfMath.hlsli"
 #include "D3D12AgentCharacters.hlsli"
 
+float bodyDistance(float3 p, int agentIndex)
+{
+    AgentVisual agent = agentVisuals[agentIndex];
+    float radius = max(agent.centerRadius.w, 0.001);
+    float3 local = (p - agent.centerRadius.xyz) / radius;
+    return agentFallbackSdf(local, agent).distanceValue * radius;
+}
+
 BodySurface bodySurface(float3 p, int agentIndex)
 {
     AgentVisual agent = agentVisuals[agentIndex];
@@ -18,6 +26,10 @@ BodySurface bodySurface(float3 p, int agentIndex)
     surface.roleId = agent.previousCenterRole.w;
     surface.lodTier = agent.lodIndexFlags.x;
     surface.costTier = agentSurface.costTier;
+    surface.albedo = 0.0;
+    surface.roughness = 0.0;
+    surface.f0 = 0.0;
+    surface.emission = 0.0;
     return surface;
 }
 

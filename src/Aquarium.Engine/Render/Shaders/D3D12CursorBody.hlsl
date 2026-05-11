@@ -5,6 +5,15 @@ static const int BODY_INDEX = 8;
 
 static const float CURSOR_RADIUS = 0.56;
 
+struct CursorHibiscusParts
+{
+    float petals;
+    float throat;
+    float stamen;
+    float calyx;
+    float distanceValue;
+};
+
 float2 hibiscusPetalCenter(float u)
 {
     float radial = 0.92 * u * u * (1.0 - 0.10 * u);
@@ -55,7 +64,7 @@ float sdHibiscusStamen(float3 local)
     return min(column, beads);
 }
 
-float sdHibiscusCursor(float3 local, float timeSeconds)
+CursorHibiscusParts cursorHibiscusParts(float3 local, float timeSeconds)
 {
     float sway = 0.10 * sin(timeSeconds * 0.85);
     float petal0 = sdHibiscusCursorPetal(local, 1.45 + sway, timeSeconds);
@@ -76,54 +85,56 @@ float sdHibiscusCursor(float3 local, float timeSeconds)
 
     float blossom = smoothUnion(petals, throat, 0.10);
     blossom = smoothUnion(blossom, stamen, 0.065);
-    return smoothUnion(blossom, calyx, 0.120);
+    CursorHibiscusParts parts;
+    parts.petals = petals;
+    parts.throat = throat;
+    parts.stamen = stamen;
+    parts.calyx = calyx;
+    parts.distanceValue = smoothUnion(blossom, calyx, 0.120);
+    return parts;
 }
 
-float cursorHibiscusSdf(float3 p)
+float bodyDistance(float3 p, int agentIndex)
 {
     AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
-    return sdHibiscusCursor(local, timeSeconds) * CURSOR_RADIUS;
+    return cursorHibiscusParts(local, timeSeconds).distanceValue * CURSOR_RADIUS;
 }
 
 BodySurface bodySurface(float3 p, int agentIndex)
 {
+    AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
+    float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
+    CursorHibiscusParts parts = cursorHibiscusParts(local, timeSeconds);
+    float blossomPart = min(parts.petals, min(parts.throat, parts.stamen));
+    float isCalyx = parts.calyx <= blossomPart ? 1.0 : 0.0;
+    float isStamen = (1.0 - isCalyx) * (parts.stamen <= min(parts.petals, parts.throat) ? 1.0 : 0.0);
+    float isThroat = (1.0 - isCalyx) * (1.0 - isStamen) * (parts.throat <= parts.petals ? 1.0 : 0.0);
+    float isPetal = (1.0 - isCalyx) * (1.0 - isStamen) * (1.0 - isThroat);
+
+    float petalTone = 0.55 + 0.45 * cos(atan2(local.y, local.x) * 3.0 - timeSeconds * 1.8);
+    float3 petalAlbedo = lerp(float3(1.0, 0.34, 0.62), float3(1.0, 0.78, 0.90), petalTone);
+    float3 throatAlbedo = float3(1.0, 0.20, 0.48);
+    float3 stamenAlbedo = float3(1.0, 0.72, 0.18);
+    float3 calyxAlbedo = float3(0.34, 0.66, 0.12);
+
     BodySurface surface;
-    surface.distanceValue = cursorHibiscusSdf(p);
-    surface.materialId = 5.0;
+    surface.distanceValue = parts.distanceValue * CURSOR_RADIUS;
+    surface.materialId = 5.0 + isStamen * 0.1 + isCalyx * 0.2 + isThroat * 0.3;
     surface.fieldId = FIELD_ID_CURSOR;
     surface.roleId = 0.0;
     surface.lodTier = 0.0;
     surface.costTier = 1.0;
+    surface.albedo = petalAlbedo * isPetal + throatAlbedo * isThroat + stamenAlbedo * isStamen + calyxAlbedo * isCalyx;
+    surface.roughness = isCalyx > 0.5 ? 0.46 : 0.22;
+    surface.f0 = lerp(float3(1.0, 0.38, 0.72), float3(0.04, 0.06, 0.03), isCalyx);
+    surface.emission = surface.albedo * (isCalyx > 0.5 ? 0.05 : 0.56);
     return surface;
-}
-
-float3 cursorEmissionRadiance(float3 p, float3 normal)
-{
-    AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
-    float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
-    float petal = 0.55 + 0.45 * cos(atan2(local.y, local.x) * 3.0 - timeSeconds * 1.8);
-    float throat = exp(-dot(local.xy, local.xy) * 7.0) * smoothstep(0.30, -0.18, local.z);
-    float stamen = smoothstep(0.018, -0.035, sdHibiscusStamen(local));
-    float calyxCore = sdQuadraticTube(local, float3(0.0, 0.0, -1.0), float3(0.06, -0.04, -0.62), float3(0.0, 0.0, -0.18), 0.018, 0.130);
-    float calyxSepals = min(sdHibiscusSepal(local, 1.57), min(sdHibiscusSepal(local, 3.66), sdHibiscusSepal(local, 5.75)));
-    float calyx = smoothstep(0.08, -0.02, min(calyxCore, calyxSepals));
-    float rim = pow(1.0 - saturate(dot(normal, normalize(cameraPosition - p))), 2.0);
-    float3 petalColor = lerp(float3(1.12, 0.28, 0.58), float3(1.0, 0.78, 0.90), petal);
-    float3 throatColor = float3(1.0, 0.18, 0.45);
-    float3 stamenColor = float3(1.0, 0.70, 0.10);
-    float3 calyxColor = float3(0.36, 0.68, 0.10);
-    float3 blossom = petalColor * (0.82 + rim * 0.75) + throatColor * throat * 1.7 + stamenColor * stamen * 1.35;
-    return lerp(blossom, calyxColor * (0.55 + rim * 0.25), calyx);
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentIndex, BodySurface surface)
 {
-    static const float CursorRoughness = 0.22;
-    float3 cursorF0 = float3(1.0, 0.38, 0.72);
-    return cursorEmissionRadiance(p, normal)
-        + bodyLightSpecularRadiance(p, normal, CursorRoughness, cursorF0, 7.0)
-        + studioPmremSpecularRadiance(p, normal, CursorRoughness, cursorF0);
+    return shadeBodyPbr(p, normal, surface);
 }
 
 #include "D3D12BodyProxy.hlsli"

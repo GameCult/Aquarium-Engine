@@ -80,6 +80,10 @@ struct BodySurface
     float roleId;
     float lodTier;
     float costTier;
+    float3 albedo;
+    float roughness;
+    float3 f0;
+    float3 emission;
 };
 
 void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
@@ -248,6 +252,15 @@ float3 studioIrradianceDiffuseRadiance(float3 p, float3 normal, float3 albedo, f
     float3 diffuseShare = 1.0 - fresnel;
     float3 irradiance = studioIrradianceTexture.SampleLevel(gridSampler, studioPmremDirection(normal), 0.0).rgb;
     return diffuseShare * albedo * irradiance * (STUDIO_IRRADIANCE_INTENSITY / PI);
+}
+
+float3 shadeBodyPbr(float3 p, float3 normal, BodySurface surface)
+{
+    return surface.emission
+        + surface.albedo * bodyLightIrradianceAt(p, normal) / PI
+        + studioIrradianceDiffuseRadiance(p, normal, surface.albedo, surface.roughness, surface.f0)
+        + bodyLightSpecularRadiance(p, normal, surface.roughness, surface.f0, 7.0)
+        + studioPmremSpecularRadiance(p, normal, surface.roughness, surface.f0);
 }
 
 float3 shadeRoleAgentBody(float3 p, float3 normal, int agentIndex)
