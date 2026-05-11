@@ -307,18 +307,36 @@ float sdSuperellipsoid(float3 p, float3 scale, float exponent)
     return (value - 1.0) * min(scale.x, min(scale.y, scale.z));
 }
 
+float smoothUnion(float a, float b, float radius)
+{
+    float h = saturate(0.5 + 0.5 * (b - a) / radius);
+    return lerp(b, a, h) - radius * h * (1.0 - h);
+}
+
+float harmonic5(float2 direction, float phase)
+{
+    float x = direction.x;
+    float y = direction.y;
+    float x2 = x * x;
+    float y2 = y * y;
+    float cos5 = x * (x2 * x2 - 10.0 * x2 * y2 + 5.0 * y2 * y2);
+    float sin5 = y * (5.0 * x2 * x2 - 10.0 * x2 * y2 + y2 * y2);
+    return cos5 * cos(phase) + sin5 * sin(phase);
+}
+
 AgentSurface agentBodySdf(float3 local, AgentVisual agent)
 {
     float pulse = agent.state.y;
-    float core = sdSuperellipsoid(local, float3(0.92, 0.78, 0.66 + pulse * 0.06), 1.45);
-    float ribA = sdTorus(local.xzy, float2(0.68, 0.026));
-    float ribB = sdTorus(local.yxz, float2(0.58, 0.022));
+    float core = sdSuperellipsoid(local, float3(0.92, 0.78, 0.62 + pulse * 0.06), 1.26);
+    float ribA = sdTorus(local.xzy, float2(0.70, 0.024));
+    float ribB = sdTorus(local.yxz, float2(0.56, 0.020));
     float3 nodeA = local - float3(0.45, -0.36, 0.24);
     float3 nodeB = local - float3(-0.38, 0.28, -0.18);
     float node = min(sdSphere(nodeA, 0.13), sdSphere(nodeB, 0.11));
+    float shell = min(ribA, min(ribB, node));
     AgentSurface surface;
-    surface.distanceValue = min(core, min(ribA, min(ribB, node)));
-    surface.materialId = core <= min(ribA, min(ribB, node)) ? 4.0 : 4.35;
+    surface.distanceValue = smoothUnion(core, shell, 0.045);
+    surface.materialId = core <= shell ? 4.0 : 4.35;
     surface.costTier = 2.0;
     return surface;
 }
@@ -327,14 +345,18 @@ AgentSurface agentImaginationSdf(float3 local, AgentVisual agent)
 {
     float activity = agent.state.x;
     float heartbeat = agent.state.y;
-    float angle = atan2(local.y, local.x);
-    float polar = 0.58 + sin(angle * 5.0 + timeSeconds * 1.7) * (0.08 + activity * 0.1);
-    float lobe = length(local) - polar * (1.0 + 0.09 * sin(local.z * 7.0 + heartbeat * 6.28318));
-    float ring = sdTorus(local, float2(0.72 + activity * 0.08, 0.035));
-    float halo = sdTorus(local.zxy, float2(0.50, 0.026));
+    float radial = max(length(local.xy), 0.0001);
+    float2 direction = local.xy / radial;
+    float lobeWave = harmonic5(direction, timeSeconds * 1.7);
+    float verticalWave = sin(local.z * 7.0 + heartbeat * 6.28318);
+    float polar = 0.58 + lobeWave * (0.07 + activity * 0.09);
+    float lobe = length(local) - polar * (1.0 + 0.06 * verticalWave);
+    float ring = sdTorus(local, float2(0.72 + activity * 0.08, 0.032));
+    float halo = sdTorus(local.zxy, float2(0.50, 0.024));
+    float detail = min(ring, halo);
     AgentSurface surface;
-    surface.distanceValue = min(lobe, min(ring, halo));
-    surface.materialId = lobe <= min(ring, halo) ? 2.0 : 2.4;
+    surface.distanceValue = smoothUnion(lobe, detail, 0.035);
+    surface.materialId = lobe <= detail ? 2.0 : 2.4;
     surface.costTier = 2.0;
     return surface;
 }
@@ -342,11 +364,15 @@ AgentSurface agentImaginationSdf(float3 local, AgentVisual agent)
 AgentSurface agentFallbackSdf(float3 local, AgentVisual agent)
 {
     float roleId = agent.previousCenterRole.w;
-    float core = sdSphere(local, 0.74);
-    float belt = sdTorus(local, float2(0.61, 0.025));
+    float pulse = agent.state.y;
+    float squareness = lerp(1.18, 1.72, frac(roleId * 0.37));
+    float core = sdSuperellipsoid(local, float3(0.70, 0.58 + pulse * 0.04, 0.62), squareness);
+    float belt = sdTorus(local.xzy, float2(0.56, 0.026));
+    float crown = sdTorus((local - float3(0.0, 0.0, 0.16)).yzx, float2(0.40, 0.018));
+    float detail = min(belt, crown);
     AgentSurface surface;
-    surface.distanceValue = min(core, belt);
-    surface.materialId = roleId + (core <= belt ? 0.0 : 0.22);
+    surface.distanceValue = smoothUnion(core, detail, 0.032);
+    surface.materialId = roleId + (core <= detail ? 0.0 : 0.22);
     surface.costTier = 1.0;
     return surface;
 }
@@ -383,7 +409,7 @@ float3 agentVisualNormal(float3 p, int agentIndex)
 bool traceAgentVisual(float3 origin, float3 direction, int agentIndex, float intervalStart, float intervalEnd, out float travel, out float3 normal, out float materialId, out float stepCount, out float costTier)
 {
     AgentVisual agent = agentVisuals[agentIndex];
-    float boundRadius = max(agent.centerRadius.w * 1.22, 0.001);
+    float boundRadius = max(agent.centerRadius.w * 1.42, 0.001);
     if (!traceSphere(origin, direction, agent.centerRadius.xyz, boundRadius, travel))
     {
         normal = 0.0;
@@ -423,7 +449,7 @@ bool traceAgentVisual(float3 origin, float3 direction, int agentIndex, float int
             return true;
         }
 
-        travel += max(abs(surface.distanceValue) * 0.34, 0.0025);
+        travel += max(abs(surface.distanceValue) * 0.24, 0.0025);
     }
 
     return false;
