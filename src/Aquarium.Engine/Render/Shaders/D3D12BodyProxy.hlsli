@@ -3,11 +3,15 @@
 #endif
 
 #ifndef BODY_TRACE_STEP_SCALE
-#define BODY_TRACE_STEP_SCALE 0.055
+#define BODY_TRACE_STEP_SCALE 0.20
 #endif
 
 #ifndef BODY_TRACE_MIN_STEP
 #define BODY_TRACE_MIN_STEP 0.0009
+#endif
+
+#ifndef BODY_TRACE_MAX_STEP_RADIUS_SCALE
+#define BODY_TRACE_MAX_STEP_RADIUS_SCALE 0.012
 #endif
 
 float3 bodyNormal(float3 p, int agentIndex)
@@ -17,6 +21,32 @@ float3 bodyNormal(float3 p, int agentIndex)
     float dy = bodySurface(p + float3(0.0, epsilon, 0.0), agentIndex).distanceValue - bodySurface(p - float3(0.0, epsilon, 0.0), agentIndex).distanceValue;
     float dz = bodySurface(p + float3(0.0, 0.0, epsilon), agentIndex).distanceValue - bodySurface(p - float3(0.0, 0.0, epsilon), agentIndex).distanceValue;
     return normalize(float3(dx, dy, dz));
+}
+
+bool refineBodyHit(float3 origin, float3 direction, int agentIndex, float lowTravel, float highTravel, out float travel, out float3 normal, out BodySurface surface)
+{
+    BodySurface highSurface = bodySurface(origin + direction * highTravel, agentIndex);
+
+    [unroll]
+    for (int i = 0; i < 8; i++)
+    {
+        float midTravel = (lowTravel + highTravel) * 0.5;
+        BodySurface midSurface = bodySurface(origin + direction * midTravel, agentIndex);
+        if (midSurface.distanceValue <= 0.0)
+        {
+            highTravel = midTravel;
+            highSurface = midSurface;
+        }
+        else
+        {
+            lowTravel = midTravel;
+        }
+    }
+
+    travel = highTravel;
+    surface = highSurface;
+    normal = bodyNormal(origin + direction * travel, agentIndex);
+    return true;
 }
 
 bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel, out float3 normal, out BodySurface surface, out float stepCount)
@@ -40,6 +70,9 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
     normal = 0.0;
     stepCount = 0.0;
     surface = bodySurface(origin + direction * travel, agentIndex);
+    float previousTravel = travel;
+    float previousDistance = surface.distanceValue;
+    float maxStep = max(agent.centerRadius.w * BODY_TRACE_MAX_STEP_RADIUS_SCALE, BODY_TRACE_MIN_STEP);
 
     [loop]
     for (int stepIndex = 0; stepIndex < BODY_TRACE_STEPS; stepIndex++)
@@ -52,13 +85,20 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
         float3 p = origin + direction * travel;
         surface = bodySurface(p, agentIndex);
         stepCount = (float)(stepIndex + 1);
+        if (previousDistance > 0.0 && surface.distanceValue <= 0.0)
+        {
+            return refineBodyHit(origin, direction, agentIndex, previousTravel, travel, travel, normal, surface);
+        }
+
         if (abs(surface.distanceValue) < max(BODY_TRACE_MIN_STEP, travel * 0.00018))
         {
             normal = bodyNormal(p, agentIndex);
             return true;
         }
 
-        travel += max(abs(surface.distanceValue) * BODY_TRACE_STEP_SCALE, BODY_TRACE_MIN_STEP);
+        previousTravel = travel;
+        previousDistance = surface.distanceValue;
+        travel += clamp(abs(surface.distanceValue) * BODY_TRACE_STEP_SCALE, BODY_TRACE_MIN_STEP, maxStep);
     }
 
     return false;

@@ -41,6 +41,12 @@ float smoothUnion(float a, float b, float radius)
     return lerp(b, a, h) - radius * h * (1.0 - h);
 }
 
+float sdEllipseFootprint(float2 p, float2 radius)
+{
+    float2 safeRadius = max(radius, 0.001);
+    return (length(p / safeRadius) - 1.0) * min(safeRadius.x, safeRadius.y);
+}
+
 float teardropProfileRadius(float z, float contactZ, float tipZ, float radiusScale, float ripplePhase, float rippleAmount)
 {
     float u = saturate((z - contactZ) / (tipZ - contactZ));
@@ -68,14 +74,16 @@ float sdHibiscusCursorPetal(float3 local, float angle, float timeSeconds)
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
     float phase = timeSeconds * 0.95 + angle * 1.7;
-    float3 center = float3(radial * 0.36, 0.08 + 0.030 * sin(phase));
+    float3 center = float3(radial * 0.34, 0.10 + 0.030 * sin(phase));
     float3 p = local - center;
     float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
-    float flare = saturate((q.x + 0.28) * 1.25);
-    float ruffle = 0.035 * sin(q.y * 28.0 + q.x * 7.0 + phase) * flare;
-    float curl = 0.075 * sin(q.x * 3.8 + phase) * flare;
-    float petal = sdEllipsoid(q + float3(0.0, ruffle, curl), float3(0.86, 0.25, 0.24));
-    return petal;
+    float flare = saturate((q.x + 0.34) * 1.18);
+    float surfaceZ = -0.08 * q.x * q.x + 0.10 * sin(q.x * 2.6 + phase) * flare;
+    float rib = 0.018 * sin(q.y * 34.0 + q.x * 9.0 + phase) * flare;
+    float sheet = abs(q.z - surfaceZ - rib) - 0.026;
+    float footprint = sdEllipseFootprint(float2(q.x - 0.12, q.y), float2(0.92, 0.26));
+    float notch = sdEllipseFootprint(float2(q.x + 0.54, q.y), float2(0.20, 0.18));
+    return max(max(sheet, footprint), -notch);
 }
 
 float sdHibiscusCursor(float3 local, float timeSeconds)
