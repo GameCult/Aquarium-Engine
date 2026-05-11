@@ -57,7 +57,7 @@ renderer_state:
     - Deferred scalar Grid height target rendered from additive brush passes.
     - Self Grid brush uses a widened 17-world-unit gravity bowl plus an Aetheria-style radial cosine wave; CPU, Grid shader, scene placement, and temporal reprojection share the same brush equation.
     - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
-    - SDF/analytic solids for Self, planets, and the cursor locator.
+    - SDF/analytic solids for Self, CPU-authored agent visuals, and the cursor locator. The first agent visual path keeps fixed fallback orbit data, uploads current and previous centers through `AgentVisualGpu`, and renders Body plus Imagination with LOD 1 role SDFs.
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
@@ -68,7 +68,7 @@ renderer_state:
   next:
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Promote bodies and body lights from fixed renderer tables to CPU-owned registries with typed controls.
-    - Add an AgentVisualState contract before replacing fixed sub-agent bodies with role-specific SDF organs.
+    - Add per-agent proxy rasterization before the role SDFs grow beyond the current fullscreen bounded-march slice.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.
 
 next_actions:

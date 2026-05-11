@@ -35,6 +35,16 @@ Texture2D<float4> historyEventColorTexture : register(t20);
 Texture2D<float4> historyEventMetadataTexture : register(t21);
 SamplerState sourceSampler : register(s0);
 
+struct AgentVisual
+{
+    float4 centerRadius;
+    float4 previousCenterRole;
+    float4 state;
+    float4 lodIndexFlags;
+};
+
+StructuredBuffer<AgentVisual> agentVisuals : register(t24);
+
 struct VertexOut
 {
     float4 position : SV_Position;
@@ -52,11 +62,11 @@ struct ResolveOut
 };
 
 static const float SUN_RADIUS = 1.12;
-static const int PLANET_COUNT = 5;
+static const int AGENT_VISUAL_COUNT = 5;
 static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_GRID = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
-static const float FIELD_ID_PLANET_BASE = 10.0;
+static const float FIELD_ID_AGENT_BASE = 10.0;
 static const float BODY_GRID_CLEARANCE_RADIUS_SCALE = 2.0;
 static const float SELF_GRAVITY_RADIUS = 17.0;
 static const float MAX_HISTORY_AGE = 32.0;
@@ -168,7 +178,7 @@ float gridHeightAt(float2 world, float sampleTime)
     height += gridBrushHeight(world, 0.0, SELF_GRAVITY_RADIUS, 2.85, -1.34, 0.18, 6.28318530718, 0.82, 1.25, sampleTime);
 
     [unroll]
-    for (int index = 0; index < PLANET_COUNT; index++)
+    for (int index = 0; index < AGENT_VISUAL_COUNT; index++)
     {
         float radius = planetRadius(index);
         height += gridBrushHeight(world, planetAnchorAt(index, sampleTime), 3.8 + radius * 2.5, 2.1, -0.42, 0.022, 2.4, 1.35, 0.0, sampleTime);
@@ -207,11 +217,11 @@ float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 c
 
 float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
 {
-    if (fieldId >= FIELD_ID_PLANET_BASE)
+    if (fieldId >= FIELD_ID_AGENT_BASE)
     {
-        int planetIndex = clamp((int)round(fieldId - FIELD_ID_PLANET_BASE), 0, PLANET_COUNT - 1);
-        float3 currentCenter = planetCenterAt(planetIndex, timeSeconds);
-        float3 previousCenter = planetCenterAt(planetIndex, previousTimeSeconds);
+        int agentIndex = clamp((int)round(fieldId - FIELD_ID_AGENT_BASE), 0, AGENT_VISUAL_COUNT - 1);
+        float3 currentCenter = agentVisuals[agentIndex].centerRadius.xyz;
+        float3 previousCenter = agentVisuals[agentIndex].previousCenterRole.xyz;
         return previousCenter + (worldPosition - currentCenter);
     }
 
@@ -518,6 +528,26 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     {
         float luma = luminance(currentColor * max(exposure, 0.001));
         finalColor = luma.xxx;
+    }
+    else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
+    {
+        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? debugFieldIdColor(currentFieldId) : 0.0;
+    }
+    else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
+    {
+        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? debugFieldIdColor(floor(currentControl.x) + 20.0) : 0.0;
+    }
+    else if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
+    {
+        finalColor = currentControl.z.xxx;
+    }
+    else if (renderDebugMode >= 11.5 && renderDebugMode < 12.5)
+    {
+        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? floor(currentControl.w).xxx * 0.33 : 0.0;
+    }
+    else if (renderDebugMode >= 12.5 && renderDebugMode < 13.5)
+    {
+        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? frac(currentControl.w).xxx * 5.0 : 0.0;
     }
     ResolveOut output;
     output.finalColor = float4(finalColor, 1.0);

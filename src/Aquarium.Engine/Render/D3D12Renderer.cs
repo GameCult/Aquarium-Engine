@@ -23,10 +23,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
 {
     private const int BackBufferCount = 2;
     private const int GridHeightTextureSize = 128;
-    private const int CursorPrimitiveId = PlanetCount + 1;
+    private const int CursorPrimitiveId = AgentVisualCount + 1;
     private const Format GridHeightFormat = Format.R16_Float;
-    private const int PlanetCount = 5;
-    private const int GridHeightBrushCount = PlanetCount + 1;
+    private const int AgentVisualCount = 5;
+    private const int GridHeightBrushCount = AgentVisualCount + 1;
     private const int BodyLightCount = 8;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
@@ -53,6 +53,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(6, "Lane Identity"),
         new(7, "Bloom"),
         new(8, "Exposed Luminance"),
+        new(9, "Agent Role"),
+        new(10, "Agent Material"),
+        new(11, "Agent Steps"),
+        new(12, "Agent LOD"),
+        new(13, "Agent Cost"),
     ];
 
     private readonly IDXGIFactory4 factory;
@@ -95,9 +100,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] bloomRenderTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12StructuredBuffer bodyLightBuffer;
+    private readonly D3D12StructuredBuffer agentVisualBuffer;
     private readonly D3D12CubeTexture studioPmremTexture;
     private readonly D3D12CubeTexture studioIrradianceTexture;
     private readonly BodyLightGpu[] bodyLights = new BodyLightGpu[BodyLightCount];
+    private readonly AgentVisualGpu[] agentVisuals = new AgentVisualGpu[AgentVisualCount];
     private readonly GridHeightBrushCpu[] gridHeightBrushes = new GridHeightBrushCpu[GridHeightBrushCount];
     private Viewport viewport;
     private RawRect scissorRect;
@@ -186,7 +193,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
         bodyLightBuffer = new D3D12StructuredBuffer(device, BodyLightCount, Marshal.SizeOf<BodyLightGpu>(), "Aquarium D3D12 Body Light Buffer");
+        agentVisualBuffer = new D3D12StructuredBuffer(device, AgentVisualCount, Marshal.SizeOf<AgentVisualGpu>(), "Aquarium D3D12 Agent Visual Buffer");
         resourceRegistry.Add("body-light-buffer", bodyLightBuffer);
+        resourceRegistry.Add("agent-visual-buffer", agentVisualBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
         commandList.Close();
@@ -286,6 +295,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         BuildGridHeightBrushes(frame);
+        BuildAgentVisualTable(frame);
         BuildBodyLightTable(frame);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
@@ -318,6 +328,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         frameResources.BodyLightDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         bodyLightBuffer.CreateShaderResourceView(device, frameResources.BodyLightDescriptor);
+        frameResources.AgentVisualDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        agentVisualBuffer.CreateShaderResourceView(device, frameResources.AgentVisualDescriptor);
         frameResources.StudioPmremDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         studioPmremTexture.CreateShaderResourceView(device, frameResources.StudioPmremDescriptor);
         frameResources.StudioIrradianceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -440,6 +452,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         fullscreenRootSignature.Dispose();
         studioIrradianceTexture.Dispose();
         studioPmremTexture.Dispose();
+        agentVisualBuffer.Dispose();
         bodyLightBuffer.Dispose();
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
@@ -811,6 +824,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.BodyLightDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(14, frameResources.StudioPmremDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(15, frameResources.StudioIrradianceDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(16, frameResources.AgentVisualDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -945,6 +959,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(11, frameResources.SceneEventMetadataDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(12, frameResources.HistoryEventColorDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(13, frameResources.HistoryEventMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(16, frameResources.AgentVisualDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
@@ -969,10 +984,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private void UploadBodyLightResources(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
     {
-        activeCommandList.BeginEvent("Body Light Upload");
+        activeCommandList.BeginEvent("Body State Upload");
         try
         {
             bodyLightBuffer.Upload(activeCommandList, frameResources.UploadRing, bodyLights);
+            agentVisualBuffer.Upload(activeCommandList, frameResources.UploadRing, agentVisuals);
         }
         finally
         {
@@ -1022,10 +1038,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
             0.82f,
             1.25f);
 
-        for (var index = 0; index < PlanetCount; index++)
+        for (var index = 0; index < AgentVisualCount; index++)
         {
-            var radius = PlanetRadius(index);
-            var center = PlanetAnchor(index, frame.TimeSeconds);
+            var radius = AgentRadius(index);
+            var center = AgentAnchor(index, frame.TimeSeconds);
             SetGridHeightBrush(
                 index + 1,
                 center,
@@ -1036,6 +1052,29 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 2.4f,
                 1.35f,
                 0.0f);
+        }
+    }
+
+    private void BuildAgentVisualTable(AquariumFrame frame)
+    {
+        Array.Clear(agentVisuals);
+        for (var index = 0; index < AgentVisualCount; index++)
+        {
+            var radius = AgentRadius(index);
+            var center = AgentCenterAtGridHeight(index, frame.TimeSeconds);
+            var previousCenter = AgentCenterAtGridHeight(index, previousTimeSeconds);
+            var roleId = AgentRoleId(index);
+            var activity = 0.45f + 0.45f * Hash21(index + 2.7f, 31.0f);
+            var heartbeat = 0.5f + 0.5f * MathF.Sin(frame.TimeSeconds * (1.2f + index * 0.09f) + index * 1.37f);
+            var pressure = 0.25f + 0.25f * MathF.Sin(frame.TimeSeconds * 0.31f + index * 0.71f);
+            var expression = Math.Abs(roleId - 2.0f) < 0.01f || Math.Abs(roleId - 4.0f) < 0.01f ? 0.72f : 0.38f;
+            var lod = 1.0f;
+
+            agentVisuals[index] = new AgentVisualGpu(
+                new Vector4(center, radius),
+                new Vector4(previousCenter, roleId),
+                new Vector4(activity, heartbeat, pressure, expression),
+                new Vector4(lod, index, 0.0f, 0.0f));
         }
     }
 
@@ -1483,6 +1522,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             23,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var agentVisualRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            24,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -1501,6 +1546,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([historyEventMetadataRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([studioPmremRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([studioIrradianceRange]), ShaderVisibility.Pixel),
+            new RootParameter(new RootDescriptorTable([agentVisualRange]), ShaderVisibility.Pixel),
         };
         var staticSamplers = new[]
         {
@@ -1641,12 +1687,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return Compiler.CompileFromFile(path, entryPoint, profile, shaderFlags, EffectFlags.None);
     }
 
-    private static float PlanetRadius(int index)
+    private static float AgentRadius(int index)
     {
         return Lerp(0.34f, 0.62f, Hash21(index, 19.7f));
     }
 
-    private static Vector2 PlanetAnchor(int index, float timeSeconds)
+    private static Vector2 AgentAnchor(int index, float timeSeconds)
     {
         var f = (float)index;
         var angle = f * 0.8975979f + timeSeconds * (0.08f + 0.011f * f);
@@ -1654,6 +1700,61 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return new Vector2(
             MathF.Cos(angle) * orbitRadius,
             MathF.Sin(angle) * orbitRadius);
+    }
+
+    private static float AgentRoleId(int index)
+    {
+        ReadOnlySpan<float> roleIds = [1.0f, 2.0f, 3.0f, 4.0f, 5.0f];
+        return roleIds[Math.Clamp(index, 0, roleIds.Length - 1)];
+    }
+
+    private static Vector3 AgentCenterAtGridHeight(int index, float timeSeconds)
+    {
+        var radius = AgentRadius(index);
+        var xy = AgentAnchor(index, timeSeconds);
+        return new Vector3(xy.X, xy.Y, EvaluateAgentGridHeight(timeSeconds, xy) + radius * BodyGridClearanceRadiusScale);
+    }
+
+    private static float EvaluateAgentGridHeight(float timeSeconds, Vector2 world)
+    {
+        var height = MathF.Sin((world.X * 0.08f + world.Y * 0.06f) + timeSeconds * 0.27f)
+            * MathF.Sin((world.X * -0.04f + world.Y * 0.07f) - timeSeconds * 0.19f)
+            * 0.035f;
+        height += GridBrushHeight(world, Vector2.Zero, SelfGravityRadius, 2.85f, -1.34f, 0.18f, MathF.Tau, 0.82f, 1.25f, timeSeconds);
+        for (var index = 0; index < AgentVisualCount; index++)
+        {
+            var radius = AgentRadius(index);
+            height += GridBrushHeight(world, AgentAnchor(index, timeSeconds), 3.8f + radius * 2.5f, 2.1f, -0.42f, 0.022f, 2.4f, 1.35f, 0.0f, timeSeconds);
+        }
+
+        return height;
+    }
+
+    private static float GridBrushHeight(
+        Vector2 world,
+        Vector2 center,
+        float radius,
+        float power,
+        float amplitude,
+        float waveAmplitude,
+        float waveFrequency,
+        float waveSpeed,
+        float waveSinePower,
+        float timeSeconds)
+    {
+        var distanceValue = Vector2.Distance(world, center);
+        if (distanceValue > radius)
+        {
+            return 0.0f;
+        }
+
+        var well = PowerPulse(distanceValue, radius, power);
+        var normalized = Math.Clamp(distanceValue / MathF.Max(radius, 0.001f), 0.0f, 1.0f);
+        var wavePhase = waveSinePower > 0.0f
+            ? MathF.Pow(normalized, waveSinePower) * waveFrequency - timeSeconds * waveSpeed
+            : distanceValue * waveFrequency - timeSeconds * waveSpeed;
+        var ripple = waveSinePower > 0.0f ? MathF.Cos(wavePhase) : MathF.Sin(wavePhase);
+        return amplitude * well + ripple * well * waveAmplitude;
     }
 
     private static float Hash21(float x, float y)
@@ -1778,6 +1879,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Vector4 CenterRadius,
         Vector4 RadianceFieldId);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct AgentVisualGpu(
+        Vector4 CenterRadius,
+        Vector4 PreviousCenterRole,
+        Vector4 State,
+        Vector4 LodIndexFlags);
+
     private sealed record D3D12ShaderPaths(
         string Grid,
         string Scene,
@@ -1833,6 +1941,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot GridBrushConstantsDescriptor { get; set; }
 
         public D3D12DescriptorSlot BodyLightDescriptor { get; set; }
+
+        public D3D12DescriptorSlot AgentVisualDescriptor { get; set; }
 
         public D3D12DescriptorSlot StudioPmremDescriptor { get; set; }
 

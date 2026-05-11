@@ -6,8 +6,8 @@ explicit frame graph.
 ## Current Path
 
 1. `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
-2. `D3D12Scene.hlsl` traces the Self emitter, planets, cursor locator, and Grid
-   event lane into scene-linear HDR targets.
+2. `D3D12Scene.hlsl` traces the Self emitter, CPU-authored agent visuals,
+   cursor locator, and Grid event lane into scene-linear HDR targets.
 3. `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
    exposure and ACES, then presents.
 4. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
@@ -31,14 +31,21 @@ and fade out on flat surfaces.
 
 The Grid is not an opaque surface. The scene shader traces it before the nearest
 solid and emits premultiplied event radiance plus event metadata. The opaque
-surface packet belongs to Self, planets, cursor, or empty space.
+surface packet belongs to Self, agent visuals, cursor, or empty space.
 
 ## Solids
 
-Self and planets are analytic sphere hits. The cursor is a revolved MathWorld
-teardrop SDF with SDF ripples and brass GGX material. It carries current and
-previous cursor world anchors so temporal reprojection can account for object
-motion.
+Self remains an analytic sphere hit. Agent visuals are uploaded through
+`AgentVisualGpu`, including current center, previous center, role id, activity,
+heartbeat, pressure, expression, and LOD tier. The first visual slice keeps the
+fixed orbit fallback, renders Body and Imagination as LOD 1 role SDFs inside
+bounded per-agent intervals, and keeps the remaining roles as simple distinct
+fallback organs.
+
+The cursor is a revolved MathWorld teardrop SDF with SDF ripples and brass GGX
+material. It carries current and previous cursor world anchors so temporal
+reprojection can account for object motion. Agent visuals carry their previous
+centers in the structured buffer for the same reason.
 
 Lighting is currently direct and diegetic: Self is the emitter. No ambient fill
 is allowed to quietly solve a bad light story.
@@ -61,6 +68,11 @@ Debug modes:
 - `6` current field identity
 - `7` bloom contribution
 - `8` exposed luminance
+- `9` agent role identity
+- `10` agent material id
+- `11` agent SDF step count
+- `12` agent LOD tier
+- `13` agent SDF cost tier
 
 `F1` cycles modes. Number keys select the first modes directly. Startup mode can
 be set with `--render-debug` or `AQUARIUM_RENDER_DEBUG_MODE`.
