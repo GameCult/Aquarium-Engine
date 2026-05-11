@@ -9,6 +9,8 @@ project:
 
 current_model:
   host:
+    rider_solution: Aquarium.Engine.sln
+    cli_solution: Aquarium.Engine.slnx
     window: src/Aquarium.Engine/Platform/Win32Window.cs
     renderer: src/Aquarium.Engine/Render/D3D12Renderer.cs
     grid_shader: src/Aquarium.Engine/Render/Shaders/D3D12Grid.hlsl

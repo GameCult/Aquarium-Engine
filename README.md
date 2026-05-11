@@ -40,6 +40,9 @@ dotnet build Aquarium.Engine.slnx
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj
 ```
 
+For Rider, open `Aquarium.Engine.sln`. The `.slnx` stays as the compact
+CLI-friendly solution, but Rider may show empty project trees when opening it.
+
 For iteration while an Aquarium window is already open, use the dev reload
 runner instead of `dotnet run`:
 
