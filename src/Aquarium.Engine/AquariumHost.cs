@@ -50,9 +50,14 @@ public static class AquariumHost
             lastFrame = now;
 
             renderer.UpdateUi(input, runtimeLoader.Runtime.Ui);
-            ApplyRendererDebugInput(renderer, input);
+            var runtimeInput = renderer.CapturesInput ? input.WithoutInteractiveInput() : input;
+            if (!renderer.CapturesInput)
+            {
+                ApplyRendererDebugInput(renderer, input);
+            }
+
             SyncRendererSettingsToRuntime(renderer, runtimeLoader.Runtime);
-            runtimeLoader.Update(deltaSeconds, input);
+            runtimeLoader.Update(deltaSeconds, runtimeInput);
             synthHost.Update(AquariumSynthDocument.Combine(runtimeLoader.Runtime.Synth, renderer.DebugSynth), deltaSeconds);
             if (!ReferenceEquals(settingsRuntime, runtimeLoader.Runtime))
             {

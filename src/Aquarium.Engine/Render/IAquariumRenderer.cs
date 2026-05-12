@@ -12,6 +12,8 @@ public interface IAquariumRenderer : IDisposable
 
     bool HasPresentedReadyFrame { get; }
 
+    bool CapturesInput { get; }
+
     AquariumSynthDocument DebugSynth { get; }
 
     void UpdateUi(InputState input, AquariumUiDocument clientUi);

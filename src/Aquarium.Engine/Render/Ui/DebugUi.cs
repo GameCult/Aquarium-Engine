@@ -69,6 +69,8 @@ internal sealed class DebugUi
 
     public bool WantsMouse { get; private set; }
 
+    public bool WantsKeyboard { get; private set; }
+
     public static DebugUi FromContract(AquariumUiPanel source)
     {
         var ui = new DebugUi(source.Title, source.Left, source.Top, source.Width);
@@ -137,6 +139,7 @@ internal sealed class DebugUi
         if (!IsVisible)
         {
             WantsMouse = false;
+            WantsKeyboard = false;
             activeSliderId = null;
             focusedTextId = null;
             return;
@@ -144,6 +147,12 @@ internal sealed class DebugUi
 
         Layout();
         mousePosition = input.MousePosition;
+        if (focusedTextId is { } focusedId && controls.All(control => !control.IsVisible || control.Id != focusedId))
+        {
+            focusedTextId = null;
+        }
+
+        WantsKeyboard = focusedTextId is not null;
         WantsMouse = Contains(panelBounds, mousePosition);
         closeButtonHovered = Contains(CloseButtonBounds(), mousePosition);
         closeButtonActive = closeButtonHovered && input.LeftMouseDown;
@@ -168,6 +177,15 @@ internal sealed class DebugUi
             }
 
             return;
+        }
+
+        if (activeControlId is { } textDragId && input.LeftMouseDown)
+        {
+            if (controls.FirstOrDefault(control => control.IsVisible && control.Id == textDragId) is ITextInputControl textControl)
+            {
+                textControl.SelectToPoint(mousePosition);
+                return;
+            }
         }
 
         if (!input.IsMousePressed(MouseButton.Left))
@@ -559,6 +577,8 @@ internal sealed class DebugUi
     private interface ITextInputControl
     {
         void ApplyTextInput(InputState input);
+
+        void SelectToPoint(Vector2 point);
     }
 
     internal abstract class DebugUiControl(string label, string? tooltip = null, Func<bool>? isVisible = null)
@@ -909,6 +929,10 @@ internal sealed class DebugUi
             }
         }
 
+        public void SelectToPoint(Vector2 point)
+        {
+        }
+
         public override void Draw(
             ID2D1RenderTarget target,
             IDWriteFactory6 directWriteFactory,
@@ -944,6 +968,12 @@ internal sealed class DebugUi
         private const float LabelHeight = 20.0f;
         private const float TextLineHeight = 18.0f;
         private const float VerticalPadding = 9.0f;
+        private const float CharacterWidth = 7.0f;
+        private const float TextInsetX = 8.0f;
+        private const float TextInsetY = 6.0f;
+        private int caretIndex = -1;
+        private int selectionAnchor = -1;
+        private string lastValue = string.Empty;
 
         public override float LayoutHeight => LabelLineHeight + VerticalPadding * 2.0f + Math.Max(1, lines) * TextLineHeight;
 
@@ -951,47 +981,106 @@ internal sealed class DebugUi
 
         public void ApplyTextInput(InputState input)
         {
-            var value = read();
+            SyncEditingState();
+            var value = NormalizedValue;
+            var selecting = input.IsKeyDown(KeyCode.Shift);
+            if (input.IsKeyPressed(KeyCode.LeftArrow))
+            {
+                MoveCaret(Math.Max(0, caretIndex - 1), selecting);
+            }
+
+            if (input.IsKeyPressed(KeyCode.RightArrow))
+            {
+                MoveCaret(Math.Min(value.Length, caretIndex + 1), selecting);
+            }
+
+            if (input.IsKeyPressed(KeyCode.Home))
+            {
+                MoveCaret(LineStart(value, caretIndex), selecting);
+            }
+
+            if (input.IsKeyPressed(KeyCode.End))
+            {
+                MoveCaret(LineEnd(value, caretIndex), selecting);
+            }
+
+            if (input.IsKeyPressed(KeyCode.Backspace))
+            {
+                if (submit is not null && !acceptsReturn && IsEmptyPrompt(value))
+                {
+                    return;
+                }
+
+                if (HasSelection)
+                {
+                    value = DeleteSelection(value);
+                }
+                else if (caretIndex > 0)
+                {
+                    value = value.Remove(caretIndex - 1, 1);
+                    MoveCaret(caretIndex - 1, selecting: false);
+                }
+            }
+
+            if (input.IsKeyPressed(KeyCode.Delete))
+            {
+                if (HasSelection)
+                {
+                    value = DeleteSelection(value);
+                }
+                else if (caretIndex < value.Length)
+                {
+                    value = value.Remove(caretIndex, 1);
+                }
+            }
+
             foreach (var ch in input.TextInput)
             {
                 switch (ch)
                 {
                     case '\b':
-                        if (submit is not null && !acceptsReturn && IsEmptyPrompt(value))
-                        {
-                            break;
-                        }
-
-                        if (value.Length > 0)
-                        {
-                            value = value[..^1];
-                        }
                         break;
                     case '\r':
                     case '\n':
                         if (acceptsReturn)
                         {
-                            value += "\n";
+                            value = InsertText(value, "\n");
                         }
                         else
                         {
                             submit?.Invoke();
-                            value = read();
+                            caretIndex = -1;
+                            selectionAnchor = -1;
+                            value = NormalizedValue;
+                            SyncEditingState(force: true);
                         }
                         break;
                     default:
                         if (!char.IsControl(ch))
                         {
-                            value += ch;
+                            value = InsertText(value, ch.ToString());
                         }
                         break;
                 }
             }
 
-            if (value != read())
+            if (value != NormalizedValue)
             {
                 write(value);
+                lastValue = value;
             }
+        }
+
+        public void SelectToPoint(Vector2 point)
+        {
+            SyncEditingState();
+            MoveCaret(IndexFromPoint(point), selecting: true);
+        }
+
+        public override void Click(Vector2 mouse)
+        {
+            SyncEditingState();
+            MoveCaret(IndexFromPoint(mouse), selecting: false);
         }
 
         public override void Draw(
@@ -1022,8 +1111,9 @@ internal sealed class DebugUi
             target.FillRectangle(box, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
             target.DrawRectangle(box, focused ? accentBrush : outlineBrush, focused ? 1.5f : 1.0f);
 
+            DrawSelection(target, activeRowBrush, box);
             DrawBoxText(target, directWriteFactory, format, primaryBrush, box);
-
+            DrawCaret(target, accentBrush, box);
         }
 
         private string DisplayText()
@@ -1033,7 +1123,7 @@ internal sealed class DebugUi
 
         private Rect TextBounds(Rect box)
         {
-            return RectFromEdges(box.Left + 8.0f, box.Top + 6.0f, box.Right - 8.0f, box.Bottom - 6.0f);
+            return RectFromEdges(box.Left + TextInsetX, box.Top + TextInsetY, box.Right - TextInsetX, box.Bottom - TextInsetY);
         }
 
         private void DrawBoxText(
@@ -1045,9 +1135,7 @@ internal sealed class DebugUi
         {
             var bounds = TextBounds(box);
             var displayLines = DisplayLines();
-            var top = alignBottom
-                ? Math.Max(bounds.Top, bounds.Bottom - displayLines.Length * TextLineHeight)
-                : bounds.Top;
+            var top = TextTop(bounds, displayLines.Length);
             for (var index = 0; index < displayLines.Length; index++)
             {
                 using var layout = directWriteFactory.CreateTextLayout(displayLines[index], format, bounds.Width, TextLineHeight);
@@ -1057,14 +1145,199 @@ internal sealed class DebugUi
 
         private string[] DisplayLines()
         {
-            var value = read().Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-            var split = value.Split('\n');
+            var split = NormalizedValue.Split('\n');
             return split.Length <= lines ? split : split.Skip(split.Length - lines).ToArray();
+        }
+
+        private int DisplayStartIndex()
+        {
+            var split = NormalizedValue.Split('\n');
+            if (split.Length <= lines)
+            {
+                return 0;
+            }
+
+            var skippedLines = split.Length - lines;
+            var index = 0;
+            for (var line = 0; line < skippedLines; line++)
+            {
+                index += split[line].Length + 1;
+            }
+
+            return index;
+        }
+
+        private void SyncEditingState(bool force = false)
+        {
+            var value = NormalizedValue;
+            if (!force && caretIndex >= 0 && string.Equals(value, lastValue, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            lastValue = value;
+            caretIndex = value.Length;
+            selectionAnchor = caretIndex;
+        }
+
+        private void MoveCaret(int index, bool selecting)
+        {
+            caretIndex = Math.Clamp(index, 0, NormalizedValue.Length);
+            if (!selecting)
+            {
+                selectionAnchor = caretIndex;
+            }
+        }
+
+        private string InsertText(string value, string text)
+        {
+            if (HasSelection)
+            {
+                value = DeleteSelection(value);
+            }
+
+            value = value.Insert(caretIndex, text);
+            MoveCaret(caretIndex + text.Length, selecting: false);
+            return value;
+        }
+
+        private string DeleteSelection(string value)
+        {
+            var start = SelectionStart;
+            var length = SelectionEnd - SelectionStart;
+            value = value.Remove(start, length);
+            MoveCaret(start, selecting: false);
+            return value;
+        }
+
+        private int IndexFromPoint(Vector2 point)
+        {
+            var bounds = TextBounds(BoxBounds);
+            var displayLines = DisplayLines();
+            var top = TextTop(bounds, displayLines.Length);
+            var line = Math.Clamp((int)MathF.Floor((point.Y - top) / TextLineHeight), 0, Math.Max(0, displayLines.Length - 1));
+            var column = Math.Max(0, (int)MathF.Round((point.X - bounds.Left) / CharacterWidth));
+            var index = DisplayStartIndex();
+            for (var lineIndex = 0; lineIndex < line; lineIndex++)
+            {
+                index += displayLines[lineIndex].Length + 1;
+            }
+
+            return Math.Min(index + Math.Min(column, displayLines[line].Length), NormalizedValue.Length);
+        }
+
+        private void DrawSelection(ID2D1RenderTarget target, ID2D1SolidColorBrush activeRowBrush, Rect box)
+        {
+            if (!HasSelection)
+            {
+                return;
+            }
+
+            var bounds = TextBounds(box);
+            var displayLines = DisplayLines();
+            var displayStart = DisplayStartIndex();
+            var displayEnd = displayStart + DisplayText().Length;
+            var start = Math.Max(SelectionStart, displayStart);
+            var end = Math.Min(SelectionEnd, displayEnd);
+            if (start >= end)
+            {
+                return;
+            }
+
+            var top = TextTop(bounds, displayLines.Length);
+            var lineStart = displayStart;
+            for (var line = 0; line < displayLines.Length; line++)
+            {
+                var lineEnd = lineStart + displayLines[line].Length;
+                var startColumn = Math.Max(0, start - lineStart);
+                var endColumn = Math.Min(displayLines[line].Length, end - lineStart);
+                if (endColumn > startColumn)
+                {
+                    target.FillRectangle(
+                        RectFromEdges(
+                            bounds.Left + startColumn * CharacterWidth,
+                            top + line * TextLineHeight + 2.0f,
+                            bounds.Left + endColumn * CharacterWidth,
+                            top + (line + 1) * TextLineHeight),
+                        activeRowBrush);
+                }
+
+                lineStart = lineEnd + 1;
+            }
+        }
+
+        private void DrawCaret(ID2D1RenderTarget target, ID2D1SolidColorBrush accentBrush, Rect box)
+        {
+            if (!IsFocused)
+            {
+                return;
+            }
+
+            var bounds = TextBounds(box);
+            var displayLines = DisplayLines();
+            var displayStart = DisplayStartIndex();
+            var displayEnd = displayStart + DisplayText().Length;
+            if (caretIndex < displayStart || caretIndex > displayEnd)
+            {
+                return;
+            }
+
+            var top = TextTop(bounds, displayLines.Length);
+            var lineStart = displayStart;
+            for (var line = 0; line < displayLines.Length; line++)
+            {
+                var lineEnd = lineStart + displayLines[line].Length;
+                if (caretIndex <= lineEnd || line == displayLines.Length - 1)
+                {
+                    var column = Math.Clamp(caretIndex - lineStart, 0, displayLines[line].Length);
+                    var x = bounds.Left + column * CharacterWidth;
+                    var y = top + line * TextLineHeight + 2.0f;
+                    target.DrawLine(new Vector2(x, y), new Vector2(x, y + TextLineHeight - 2.0f), accentBrush, 1.25f);
+                    return;
+                }
+
+                lineStart = lineEnd + 1;
+            }
+        }
+
+        private static int LineStart(string value, int index)
+        {
+            var clamped = Math.Clamp(index, 0, value.Length);
+            if (clamped == 0)
+            {
+                return 0;
+            }
+
+            var previousNewline = value.LastIndexOf('\n', Math.Max(0, clamped - 1));
+            return previousNewline < 0 ? 0 : previousNewline + 1;
+        }
+
+        private static int LineEnd(string value, int index)
+        {
+            var nextNewline = value.IndexOf('\n', Math.Clamp(index, 0, value.Length));
+            return nextNewline < 0 ? value.Length : nextNewline;
+        }
+
+        private float TextTop(Rect bounds, int lineCount)
+        {
+            return alignBottom
+                ? Math.Max(bounds.Top, bounds.Bottom - lineCount * TextLineHeight)
+                : bounds.Top;
         }
 
         private bool HasLabel => !string.IsNullOrWhiteSpace(Label);
 
         private float LabelLineHeight => HasLabel ? LabelHeight : 0.0f;
+
+        private Rect BoxBounds => RectFromEdges(Bounds.Left, Bounds.Top + LabelLineHeight, Bounds.Right, Bounds.Bottom);
+
+        private string NormalizedValue => read().Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+
+        private bool HasSelection => caretIndex != selectionAnchor;
+
+        private int SelectionStart => Math.Min(caretIndex, selectionAnchor);
+
+        private int SelectionEnd => Math.Max(caretIndex, selectionAnchor);
 
         private static bool IsEmptyPrompt(string value)
         {

@@ -90,6 +90,13 @@ public sealed class InputState
     {
         textInput.Add(value);
     }
+
+    public InputState WithoutInteractiveInput()
+    {
+        var snapshot = new InputState();
+        snapshot.SetMousePosition(MousePosition);
+        return snapshot;
+    }
 }
 
 public enum MouseButton
@@ -118,5 +125,11 @@ public enum KeyCode
     RenderDebugCycle,
     DebugUiToggle,
     Backspace,
+    Delete,
     Enter,
+    LeftArrow,
+    RightArrow,
+    Home,
+    End,
+    Shift,
 }

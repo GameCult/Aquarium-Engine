@@ -262,6 +262,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public bool HasPresentedReadyFrame => hasPresentedReadyFrame;
 
+    public bool CapturesInput => debugUi.WantsKeyboard;
+
     public AquariumSynthDocument DebugSynth => new AquariumSynthDocument
     {
         MasterGain = 1.0f,

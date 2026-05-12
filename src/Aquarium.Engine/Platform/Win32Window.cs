@@ -64,7 +64,13 @@ public sealed class Win32Window : IDisposable
     private const int VK_F1 = 0x70;
     private const int VK_F2 = 0x71;
     private const int VK_BACK = 0x08;
+    private const int VK_DELETE = 0x2E;
     private const int VK_RETURN = 0x0D;
+    private const int VK_LEFT = 0x25;
+    private const int VK_RIGHT = 0x27;
+    private const int VK_HOME = 0x24;
+    private const int VK_END = 0x23;
+    private const int VK_SHIFT = 0x10;
     private const int WHEEL_DELTA = 120;
 
     private readonly WndProc windowProcedure;
@@ -694,8 +700,26 @@ public sealed class Win32Window : IDisposable
             case VK_BACK:
                 input.SetKey(KeyCode.Backspace, isDown);
                 break;
+            case VK_DELETE:
+                input.SetKey(KeyCode.Delete, isDown);
+                break;
             case VK_RETURN:
                 input.SetKey(KeyCode.Enter, isDown);
+                break;
+            case VK_LEFT:
+                input.SetKey(KeyCode.LeftArrow, isDown);
+                break;
+            case VK_RIGHT:
+                input.SetKey(KeyCode.RightArrow, isDown);
+                break;
+            case VK_HOME:
+                input.SetKey(KeyCode.Home, isDown);
+                break;
+            case VK_END:
+                input.SetKey(KeyCode.End, isDown);
+                break;
+            case VK_SHIFT:
+                input.SetKey(KeyCode.Shift, isDown);
                 break;
         }
     }
