@@ -12,6 +12,36 @@ public static class EpiphanySceneBuilder
     private const float SunRadius = 1.12f;
     private const float CursorBodyRadius = 0.56f;
     private const float CursorBodyBoundRadius = 0.88f;
+    private static readonly float[] AgentOrbitPhase =
+    [
+        0.23f,
+        2.91f,
+        5.47f,
+        1.36f,
+        4.18f,
+        0.97f,
+        3.74f,
+    ];
+    private static readonly float[] AgentOrbitSpeed =
+    [
+        0.0437f,
+        -0.0613f,
+        0.0789f,
+        0.0271f,
+        0.0967f,
+        -0.0521f,
+        0.0695f,
+    ];
+    private static readonly float[] AgentOrbitRadius =
+    [
+        4.1f,
+        5.08f,
+        5.63f,
+        6.52f,
+        7.24f,
+        8.11f,
+        8.92f,
+    ];
 
     public static AquariumSceneState Build(AquariumFrame frame, float previousTimeSeconds, Vector2 previousCursorWorld)
     {
@@ -173,9 +203,12 @@ public static class EpiphanySceneBuilder
 
     private static Vector2 AgentAnchor(int index, float timeSeconds)
     {
-        var f = (float)index;
-        var angle = f * 0.8975979f + timeSeconds * (0.08f + 0.011f * f);
-        var orbitRadius = 4.1f + f * 0.77f;
+        var phase = AgentOrbitPhase[index];
+        var speed = AgentOrbitSpeed[index];
+        var angleWander = 0.12f * MathF.Sin(timeSeconds * (0.037f + index * 0.0061f) + phase * 1.73f);
+        var radiusWander = 0.16f * MathF.Sin(timeSeconds * (0.021f + index * 0.0047f) + phase * 2.41f);
+        var angle = phase + timeSeconds * speed + angleWander;
+        var orbitRadius = AgentOrbitRadius[index] + radiusWander;
         return new Vector2(
             MathF.Cos(angle) * orbitRadius,
             MathF.Sin(angle) * orbitRadius);
