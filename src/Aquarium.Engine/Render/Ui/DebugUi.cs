@@ -119,7 +119,7 @@ internal sealed class DebugUi
                 controls.Add(new TextControl(text.Label, text.Read, text.Write, text.Tooltip, () => text.Visible));
                 break;
             case AquariumUiTextBox textBox:
-                controls.Add(new TextBoxControl(textBox.Label, textBox.Read, textBox.Write, textBox.Lines, textBox.AcceptsReturn, textBox.Submit, textBox.Tooltip, () => textBox.Visible));
+                controls.Add(new TextBoxControl(textBox.Label, textBox.Read, textBox.Write, textBox.Lines, textBox.AcceptsReturn, textBox.Submit, textBox.Monospace, textBox.AlignBottom, textBox.Tooltip, () => textBox.Visible));
                 break;
             case AquariumUiReadout readout:
                 controls.Add(new ReadoutControl(readout.Label, readout.Read, readout.Tooltip, () => readout.Visible));
@@ -254,6 +254,7 @@ internal sealed class DebugUi
         ID2D1RenderTarget target,
         IDWriteTextFormat titleFormat,
         IDWriteTextFormat smallFormat,
+        IDWriteTextFormat monospaceFormat,
         ID2D1SolidColorBrush panelBrush,
         ID2D1SolidColorBrush rowBrush,
         ID2D1SolidColorBrush hoverRowBrush,
@@ -325,7 +326,7 @@ internal sealed class DebugUi
             control.IsFocused = control.Id == focusedTextId;
             control.Draw(
                 target,
-                smallFormat,
+                control.UseMonospace ? monospaceFormat : smallFormat,
                 rowBrush,
                 hoverRowBrush,
                 activeRowBrush,
@@ -538,9 +539,9 @@ internal sealed class DebugUi
             return this;
         }
 
-        public DebugUiPanel TextBox(string label, Func<string> read, Action<string> write, int lines = 3, bool acceptsReturn = true, Action? submit = null, string? tooltip = null, Func<bool>? isVisible = null)
+        public DebugUiPanel TextBox(string label, Func<string> read, Action<string> write, int lines = 3, bool acceptsReturn = true, Action? submit = null, bool monospace = false, bool alignBottom = false, string? tooltip = null, Func<bool>? isVisible = null)
         {
-            controls.Add(new TextBoxControl(label, read, write, Math.Max(1, lines), acceptsReturn, submit, tooltip, isVisible));
+            controls.Add(new TextBoxControl(label, read, write, Math.Max(1, lines), acceptsReturn, submit, monospace, alignBottom, tooltip, isVisible));
             return this;
         }
 
@@ -579,6 +580,8 @@ internal sealed class DebugUi
         public bool IsFocused { get; set; }
 
         public virtual bool IsInteractive => true;
+
+        public virtual bool UseMonospace => false;
 
         public virtual float LayoutHeight => this is SectionControl ? SectionHeight : RowHeight;
 
@@ -927,7 +930,7 @@ internal sealed class DebugUi
         }
     }
 
-    private sealed class TextBoxControl(string label, Func<string> read, Action<string> write, int lines, bool acceptsReturn, Action? submit, string? tooltip, Func<bool>? isVisible)
+    private sealed class TextBoxControl(string label, Func<string> read, Action<string> write, int lines, bool acceptsReturn, Action? submit, bool monospace, bool alignBottom, string? tooltip, Func<bool>? isVisible)
         : DebugUiControl(label, tooltip, isVisible), ITextInputControl
     {
         private const float LabelHeight = 20.0f;
@@ -935,6 +938,8 @@ internal sealed class DebugUi
         private const float VerticalPadding = 9.0f;
 
         public override float LayoutHeight => LabelHeight + VerticalPadding * 2.0f + Math.Max(1, lines) * TextLineHeight;
+
+        public override bool UseMonospace => monospace;
 
         public void ApplyTextInput(InputState input)
         {
@@ -944,6 +949,11 @@ internal sealed class DebugUi
                 switch (ch)
                 {
                     case '\b':
+                        if (submit is not null && !acceptsReturn && IsEmptyPrompt(value))
+                        {
+                            break;
+                        }
+
                         if (value.Length > 0)
                         {
                             value = value[..^1];
@@ -1002,7 +1012,7 @@ internal sealed class DebugUi
             target.DrawText(
                 DisplayText(),
                 format,
-                RectFromEdges(box.Left + 8.0f, box.Top + 6.0f, box.Right - 8.0f, box.Bottom - 6.0f),
+                TextBounds(box),
                 primaryBrush,
                 DrawTextOptions.Clip);
 
@@ -1020,10 +1030,27 @@ internal sealed class DebugUi
             var split = value.Split('\n');
             if (split.Length <= lines)
             {
-                return value;
+                return alignBottom
+                    ? string.Join('\n', Enumerable.Repeat(string.Empty, Math.Max(0, lines - split.Length)).Concat(split))
+                    : value;
             }
 
             return string.Join('\n', split.Skip(split.Length - lines));
+        }
+
+        private Rect TextBounds(Rect box)
+        {
+            var bottom = box.Bottom - 6.0f;
+            var top = alignBottom
+                ? Math.Max(box.Top + 6.0f, bottom - Math.Max(1, lines) * TextLineHeight)
+                : box.Top + 6.0f;
+            return RectFromEdges(box.Left + 8.0f, top, box.Right - 8.0f, bottom);
+        }
+
+        private static bool IsEmptyPrompt(string value)
+        {
+            var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+            return normalized.EndsWith("\n> ", StringComparison.Ordinal) || normalized == "> ";
         }
     }
 

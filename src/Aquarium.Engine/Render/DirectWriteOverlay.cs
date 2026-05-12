@@ -31,6 +31,7 @@ internal sealed class DirectWriteOverlay : IDisposable
     private readonly ID2D1SolidColorBrush trackActiveBrush;
     private readonly IDWriteTextFormat titleFormat;
     private readonly IDWriteTextFormat smallFormat;
+    private readonly IDWriteTextFormat monospaceFormat;
     private readonly int width;
     private readonly int height;
 
@@ -80,6 +81,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         trackActiveBrush = renderTarget.CreateSolidColorBrush(new Color4(0.45f, 0.38f, 0.34f, 1.0f));
         titleFormat = CreateTextFormat("Montserrat", 18.0f, FontWeight.Thin);
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
+        monospaceFormat = CreateTextFormat("Ubuntu Sans Mono", 11.0f, FontWeight.Regular);
     }
 
     public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi, IReadOnlyList<DebugUi> clientUiPanels)
@@ -115,6 +117,7 @@ internal sealed class DirectWriteOverlay : IDisposable
             renderTarget,
             titleFormat,
             smallFormat,
+            monospaceFormat,
             panelBrush,
             rowBrush,
             hoverRowBrush,
@@ -136,6 +139,7 @@ internal sealed class DirectWriteOverlay : IDisposable
                 renderTarget,
                 titleFormat,
                 smallFormat,
+                monospaceFormat,
                 panelBrush,
                 rowBrush,
                 hoverRowBrush,
@@ -158,6 +162,7 @@ internal sealed class DirectWriteOverlay : IDisposable
     public void Dispose()
     {
         smallFormat.Dispose();
+        monospaceFormat.Dispose();
         titleFormat.Dispose();
         smallCapsTypography.Dispose();
         fontCollection.Dispose();
@@ -199,6 +204,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         using var builder = directWriteFactory.CreateFontSetBuilder();
         builder.AddFontFile(FontAssetPath("Montserrat[wght].ttf"));
         builder.AddFontFile(FontAssetPath("UbuntuSans[wdth,wght].ttf"));
+        builder.AddFontFile(FontAssetPath("UbuntuSansMono.ttf"));
         using var fontSet = builder.CreateFontSet();
         return directWriteFactory.CreateFontCollectionFromFontSet(fontSet, FontFamilyModel.Typographic);
     }
