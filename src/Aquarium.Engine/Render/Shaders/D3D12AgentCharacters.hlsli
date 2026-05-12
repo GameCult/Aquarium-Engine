@@ -1,11 +1,6 @@
 #ifndef AQUARIUM_D3D12_AGENT_CHARACTERS_HLSLI
 #define AQUARIUM_D3D12_AGENT_CHARACTERS_HLSLI
 
-struct AgentSurface
-{
-    float distanceValue;
-};
-
 float imaginationPetalSdf(float3 local, float angle, float activity, float heartbeat, float timeSeconds)
 {
     float2 radial = float2(cos(angle), sin(angle));
@@ -18,7 +13,7 @@ float imaginationPetalSdf(float3 local, float angle, float activity, float heart
     return sdEllipsoid(q, petalRadius);
 }
 
-AgentSurface agentBodySdf(float3 local, AgentVisual agent)
+float agentBodySdf(float3 local, AgentVisual agent)
 {
     float pulse = agent.state.y;
     float core = sdSuperellipsoid(local, float3(0.92, 0.78, 0.62 + pulse * 0.06), 1.26);
@@ -28,12 +23,10 @@ AgentSurface agentBodySdf(float3 local, AgentVisual agent)
     float3 nodeB = local - float3(-0.38, 0.28, -0.18);
     float node = min(sdSphere(nodeA, 0.13), sdSphere(nodeB, 0.11));
     float shell = min(ribA, min(ribB, node));
-    AgentSurface surface;
-    surface.distanceValue = smoothUnion(core, shell, 0.045);
-    return surface;
+    return smoothUnion(core, shell, 0.045);
 }
 
-AgentSurface agentImaginationSdf(float3 local, AgentVisual agent, float timeSeconds)
+float agentImaginationSdf(float3 local, AgentVisual agent, float timeSeconds)
 {
     float activity = agent.state.x;
     float heartbeat = agent.state.y;
@@ -49,21 +42,17 @@ AgentSurface agentImaginationSdf(float3 local, AgentVisual agent, float timeSeco
     float ring = sdTorus(local, float2(0.72 + activity * 0.08, 0.032));
     float halo = sdTorus(local.zxy, float2(0.50, 0.024));
     float detail = min(ring, halo);
-    AgentSurface surface;
-    surface.distanceValue = smoothUnion(bloom, detail, 0.05);
-    return surface;
+    return smoothUnion(bloom, detail, 0.05);
 }
 
-AgentSurface agentFallbackSdf(float3 local, AgentVisual agent)
+float agentFallbackSdf(float3 local, AgentVisual agent)
 {
     float pulse = agent.state.y;
     float core = sdSuperellipsoid(local, float3(0.70, 0.58 + pulse * 0.04, 0.62), 1.34);
     float belt = sdTorus(local.xzy, float2(0.56, 0.026));
     float crown = sdTorus((local - float3(0.0, 0.0, 0.16)).yzx, float2(0.40, 0.018));
     float detail = min(belt, crown);
-    AgentSurface surface;
-    surface.distanceValue = smoothUnion(core, detail, 0.032);
-    return surface;
+    return smoothUnion(core, detail, 0.032);
 }
 
 #endif

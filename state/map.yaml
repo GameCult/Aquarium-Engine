@@ -73,12 +73,13 @@ renderer_state:
     - Fullscreen scene pass owns background and Grid only; each visible body owns a separate proxy pipeline and shader file, with shared proxy plumbing factored into HLSL includes. Body proxy marching evaluates only bodyDistance; bodySurface runs once at the refined hit and returns only PBR material values. Field identity is written by the proxy as temporal ownership metadata, not carried inside the surface packet.
     - Reusable SDF primitives live in D3D12SdfMath.hlsli; current role character organs live in D3D12AgentCharacters.hlsli.
     - Cursor is a luminous five-petal hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
-    - SDF/analytic bodies for Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor locator upload current and previous centers through `AgentVisualGpu`; Body plus Imagination use LOD 1 role SDFs.
+    - SDF/analytic bodies for Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor locator upload current centers, previous centers, and state scalars through `AgentVisualGpu`.
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
+    - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
     - D3D11 scene renderer, runtime volumetrics, cloud/fog research, medium/froxel render targets, and the SDF-field renderer plan are shelved and removed from live repo state.
   next:

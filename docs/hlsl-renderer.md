@@ -64,9 +64,10 @@ is allowed to quietly solve a bad light story.
 ## Temporal Diagnostics
 
 The temporal resolver is documented in `docs/tsr-inspired-taa-spec.md`. The live
-frame currently keeps history and control targets for inspection and future
-work, but projection jitter is disabled and final presentation favors current
-truth over stale history.
+frame keeps color, metadata, and control history for inspection. Projection
+jitter is disabled and final presentation favors current truth over stale
+history. Dormant event lanes are not preserved without a producer and pass
+contract.
 
 Debug modes:
 
@@ -75,15 +76,12 @@ Debug modes:
 - `2` reprojected history sample
 - `3` history age
 - `4` history weight
-- `5` current temporal control
+- `5` coverage and step ratio
 - `6` current field identity
 - `7` bloom contribution
 - `8` exposed luminance
-- `9` agent role identity
-- `10` agent material id
-- `11` agent SDF step count
-- `12` agent LOD tier
-- `13` agent SDF cost tier
+- `9` agent identity
+- `10` agent SDF step count
 
 `F1` cycles modes. Number keys select the first modes directly. Startup mode can
 be set with `--render-debug` or `AQUARIUM_RENDER_DEBUG_MODE`.

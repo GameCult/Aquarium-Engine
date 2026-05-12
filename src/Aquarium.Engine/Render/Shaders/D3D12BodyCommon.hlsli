@@ -37,7 +37,6 @@ struct AgentVisual
     float4 centerRadius;
     float4 previousCenterPad;
     float4 state;
-    float4 lodIndexFlags;
 };
 
 StructuredBuffer<AgentVisual> agentVisuals : register(t24);
@@ -67,8 +66,6 @@ struct SceneOut
     float4 colorTravel : SV_Target0;
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
-    float4 eventColor : SV_Target3;
-    float4 eventMetadata : SV_Target4;
     float depth : SV_Depth;
 };
 

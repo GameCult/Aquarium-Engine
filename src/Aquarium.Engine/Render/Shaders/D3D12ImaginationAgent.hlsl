@@ -9,7 +9,7 @@ float bodyDistance(float3 p, int agentIndex)
     AgentVisual agent = agentVisuals[agentIndex];
     float radius = max(agent.centerRadius.w, 0.001);
     float3 local = (p - agent.centerRadius.xyz) / radius;
-    return agentImaginationSdf(local, agent, timeSeconds).distanceValue * radius;
+    return agentImaginationSdf(local, agent, timeSeconds) * radius;
 }
 
 BodySurface bodySurface(float3 p, int agentIndex)

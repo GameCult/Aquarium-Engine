@@ -127,9 +127,7 @@ SceneOut D3D12BodyProxyPS(AgentProxyVertexOut input)
     SceneOut output;
     output.colorTravel = float4(shadeBody(uv, travel, p, normal, agentIndex, surface), min(travel, farDistance + 1.0));
     output.metadata = float4(fieldId, normal);
-    output.control = float4(0.0, 1.0, stepCount / (float)BODY_TRACE_STEPS, 0.0);
-    output.eventColor = float4(0.0, 0.0, 0.0, 0.0);
-    output.eventMetadata = float4(FIELD_ID_GRID, farDistance + 1.0, 0.0, 0.0);
+    output.control = float4(1.0, stepCount / (float)BODY_TRACE_STEPS, 0.0, 0.0);
     output.depth = saturate(travel / max(farDistance, 0.001));
     return output;
 }

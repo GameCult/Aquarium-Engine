@@ -29,10 +29,6 @@ Texture2D<float4> historyControlTexture : register(t8);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
-Texture2D<float4> currentEventColorTexture : register(t18);
-Texture2D<float4> currentEventMetadataTexture : register(t19);
-Texture2D<float4> historyEventColorTexture : register(t20);
-Texture2D<float4> historyEventMetadataTexture : register(t21);
 SamplerState sourceSampler : register(s0);
 
 struct AgentVisual
@@ -40,7 +36,6 @@ struct AgentVisual
     float4 centerRadius;
     float4 previousCenterPad;
     float4 state;
-    float4 lodIndexFlags;
 };
 
 StructuredBuffer<AgentVisual> agentVisuals : register(t24);
@@ -57,8 +52,6 @@ struct ResolveOut
     float4 historyColor : SV_Target1;
     float4 historyMetadata : SV_Target2;
     float4 historyControl : SV_Target3;
-    float4 historyEventColor : SV_Target4;
-    float4 historyEventMetadata : SV_Target5;
 };
 
 static const float SUN_RADIUS = 1.12;
@@ -279,26 +272,6 @@ float4 loadHistoryControl(float2 uv)
     return historyControlTexture.Load(int3(pixelFromUv(uv), 0));
 }
 
-float4 loadCurrentEventColor(float2 uv)
-{
-    return currentEventColorTexture.Load(int3(pixelFromUv(uv), 0));
-}
-
-float4 loadCurrentEventMetadata(float2 uv)
-{
-    return currentEventMetadataTexture.Load(int3(pixelFromUv(uv), 0));
-}
-
-float4 loadHistoryEventColor(float2 uv)
-{
-    return historyEventColorTexture.Load(int3(pixelFromUv(uv), 0));
-}
-
-float4 loadHistoryEventMetadata(float2 uv)
-{
-    return historyEventMetadataTexture.Load(int3(pixelFromUv(uv), 0));
-}
-
 void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
 {
     float2 texel = 1.0 / resolution;
@@ -404,21 +377,12 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float4 currentControl = loadCurrentControl(input.uv);
     float currentFieldId = currentMetadata.x;
     float3 currentNormal = currentMetadata.yzw;
-    float currentReactive = saturate(currentControl.x);
-    float currentCoverage = saturate(currentControl.y);
-    float4 currentEventColor = loadCurrentEventColor(input.uv);
-    float4 currentEventMetadata = loadCurrentEventMetadata(input.uv);
-    float currentEventFieldId = currentEventMetadata.x;
-    float currentEventTravel = currentEventMetadata.y;
-    float currentEventCoverage = saturate(currentEventMetadata.z);
-    float3 currentEventRadiance = currentEventColor.rgb;
+    float currentCoverage = saturate(currentControl.x);
+    float currentStepRatio = saturate(currentControl.y);
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
     float3 historyColor = currentColor;
-    float eventHistoryWeight = 0.0;
-    float eventHistoryAge = 0.0;
-    float3 eventHistoryColor = currentEventRadiance;
     if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
     {
         float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
@@ -434,7 +398,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float previousFieldId = previousMetadata.x;
             float previousTravel = previous.a;
             float3 previousNormal = previousMetadata.yzw;
-            float previousCoverage = saturate(previousControl.y);
+            float previousCoverage = saturate(previousControl.x);
             float previousHistoryAge = max(previousControl.w, 0.0);
             float expectedPreviousTravel = distance(previousCameraPosition, previousWorldPosition);
             float travelDelta = abs(previousTravel - expectedPreviousTravel);
@@ -453,11 +417,10 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
             float colorDelta = length(clampedHistory - currentColor);
             float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
-            float reactiveWeight = 1.0 - currentReactive;
             float coverageWeight = smoothstep(0.02, 0.55, currentCoverage);
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
-            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * reactiveWeight * coverageWeight * coverageContinuityWeight;
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight;
 
             historyColor = clampedHistory;
             historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
@@ -465,44 +428,17 @@ ResolveOut D3D12ResolvePS(VertexOut input)
         }
     }
 
-    if (frameIndex > 0.5 && currentEventCoverage > 0.001 && currentEventTravel <= farDistance)
-    {
-        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
-        float3 eventWorldPosition = cameraPosition + currentRay * currentEventTravel;
-        float2 previousEventUv = projectWorldToPreviousHistoryUv(eventWorldPosition);
-        if (all(previousEventUv >= 0.0) && all(previousEventUv <= 1.0))
-        {
-            float4 previousEventMetadata = loadHistoryEventMetadata(previousEventUv);
-            float previousEventAge = max(previousEventMetadata.x, 0.0);
-            float previousEventTravel = previousEventMetadata.y;
-            float previousEventCoverage = saturate(previousEventMetadata.z);
-            float previousEventFieldId = previousEventMetadata.w;
-            float expectedPreviousEventTravel = distance(previousCameraPosition, eventWorldPosition);
-            float travelDelta = abs(previousEventTravel - expectedPreviousEventTravel);
-            float travelTolerance = max(0.045, expectedPreviousEventTravel * 0.020);
-            float travelWeight = 1.0 - smoothstep(travelTolerance, travelTolerance * 4.5, travelDelta);
-            float fieldWeight = abs(previousEventFieldId - currentEventFieldId) < 0.001 ? 1.0 : 0.0;
-            float coverageContinuityWeight = 1.0 - smoothstep(0.12, 0.65, abs(previousEventCoverage - currentEventCoverage));
-            float eventConfidence = smoothstep(0.0, 8.0, previousEventAge);
-            float validationWeight = travelWeight * fieldWeight * coverageContinuityWeight * smoothstep(0.001, 0.08, currentEventCoverage);
-            eventHistoryWeight = 0.985 * lerp(0.72, 1.0, eventConfidence) * validationWeight;
-            eventHistoryAge = validationWeight > 0.01 ? min(previousEventAge + 1.0, MAX_HISTORY_AGE) : 0.0;
-            eventHistoryColor = loadHistoryEventColor(previousEventUv).rgb;
-        }
-    }
-
     float combinedHistoryWeight = historyWeight;
-    float combinedHistoryAge = max(historyAge, eventHistoryAge);
+    float combinedHistoryAge = historyAge;
     float3 resolved = lerp(currentColor, historyColor, combinedHistoryWeight);
-    float3 resolvedEvent = lerp(currentEventRadiance, eventHistoryColor, eventHistoryWeight);
-    float3 finalColor = presentColor(resolved + resolvedEvent, input.uv);
+    float3 finalColor = presentColor(resolved, input.uv);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
-        finalColor = aces((rawCurrentColor + currentEventRadiance) * max(exposure, 0.001));
+        finalColor = aces(rawCurrentColor * max(exposure, 0.001));
     }
     else if (renderDebugMode >= 1.5 && renderDebugMode < 2.5)
     {
-        finalColor = aces((historyColor + eventHistoryColor) * max(exposure, 0.001));
+        finalColor = aces(historyColor * max(exposure, 0.001));
     }
     else if (renderDebugMode >= 2.5 && renderDebugMode < 3.5)
     {
@@ -510,15 +446,15 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 3.5 && renderDebugMode < 4.5)
     {
-        finalColor = max(combinedHistoryWeight, eventHistoryWeight).xxx;
+        finalColor = combinedHistoryWeight.xxx;
     }
     else if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
     {
-        finalColor = saturate(float3(currentReactive, max(currentCoverage, currentEventCoverage), 0.0));
+        finalColor = saturate(float3(currentCoverage, currentStepRatio, 0.0));
     }
     else if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
     {
-        finalColor = currentEventCoverage > 0.001 ? debugFieldIdColor(FIELD_ID_GRID) : debugFieldIdColor(currentFieldId);
+        finalColor = debugFieldIdColor(currentFieldId);
     }
     else if (renderDebugMode >= 6.5 && renderDebugMode < 7.5)
     {
@@ -536,14 +472,12 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {
-        finalColor = currentControl.z.xxx;
+        finalColor = currentStepRatio.xxx;
     }
     ResolveOut output;
     output.finalColor = float4(finalColor, 1.0);
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
-    output.historyControl = float4(currentControl.xyz, combinedHistoryAge);
-    output.historyEventColor = float4(resolvedEvent, currentEventCoverage);
-    output.historyEventMetadata = float4(eventHistoryAge, currentEventTravel, currentEventCoverage, currentEventFieldId);
+    output.historyControl = float4(currentControl.xy, 0.0, combinedHistoryAge);
     return output;
 }
