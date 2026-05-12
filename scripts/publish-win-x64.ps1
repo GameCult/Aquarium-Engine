@@ -54,11 +54,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "client runtime publish failed with exit code $LASTEXITCODE."
 }
 
+& (Join-Path $PSScriptRoot "sync-faust-toolchain.ps1") -DestinationRoot (Join-Path $publishPath "Tools\Faust")
+
 $requiredFiles = @(
     "Aquarium.Engine.exe",
     "Aquarium.Epiphany.dll",
     "Aquarium.Engine.Contracts.dll",
     "AquariumSynth.Dsl.dll",
+    "Tools\Faust\lib\faust.dll",
+    "Tools\Faust\share\faust\stdfaust.lib",
     "Assets\Aquarium-Engine-Icon.ico",
     "Assets\Fonts\Montserrat[wght].ttf",
     "Assets\Fonts\UbuntuSans[wdth,wght].ttf",

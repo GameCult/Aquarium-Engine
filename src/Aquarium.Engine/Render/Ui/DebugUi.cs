@@ -105,6 +105,9 @@ internal sealed class DebugUi
             case AquariumUiText text:
                 controls.Add(new TextControl(text.Label, text.Read, text.Write, text.Tooltip, () => text.Visible));
                 break;
+            case AquariumUiReadout readout:
+                controls.Add(new ReadoutControl(readout.Label, readout.Read, readout.Tooltip, () => readout.Visible));
+                break;
         }
     }
 
@@ -431,6 +434,12 @@ internal sealed class DebugUi
         public DebugUiPanel Text(string label, Func<string> read, Action<string> write, string? tooltip = null, Func<bool>? isVisible = null)
         {
             controls.Add(new TextControl(label, read, write, tooltip, isVisible));
+            return this;
+        }
+
+        public DebugUiPanel Readout(string label, Func<string> read, string? tooltip = null, Func<bool>? isVisible = null)
+        {
+            controls.Add(new ReadoutControl(label, read, tooltip, isVisible));
             return this;
         }
     }
@@ -801,6 +810,33 @@ internal sealed class DebugUi
             }
 
             target.DrawText(display, format, RectFromEdges(Bounds.Left + 8.0f, Bounds.Top + RowHeight - 4.0f, Bounds.Right - 8.0f, Bounds.Bottom), primaryBrush, DrawTextOptions.Clip);
+        }
+    }
+
+    private sealed class ReadoutControl(string label, Func<string> read, string? tooltip, Func<bool>? isVisible)
+        : DebugUiControl(label, tooltip, isVisible)
+    {
+        public override bool IsInteractive => !string.IsNullOrWhiteSpace(Tooltip);
+
+        public override void Draw(
+            ID2D1RenderTarget target,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
+            ID2D1SolidColorBrush outlineBrush,
+            ID2D1SolidColorBrush primaryBrush,
+            ID2D1SolidColorBrush quietBrush,
+            ID2D1SolidColorBrush accentBrush,
+            ID2D1SolidColorBrush accentHoverBrush,
+            ID2D1SolidColorBrush accentActiveBrush,
+            ID2D1SolidColorBrush dimAccentBrush,
+            ID2D1SolidColorBrush trackHoverBrush,
+            ID2D1SolidColorBrush trackActiveBrush)
+        {
+            DrawRow(target, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush);
+            target.DrawText(Label.ToUpperInvariant(), format, LabelBounds(), accentBrush, DrawTextOptions.Clip);
+            target.DrawText(read(), format, RectFromEdges(Bounds.Left + LabelWidth + 10.0f, Bounds.Top, Bounds.Right - 8.0f, Bounds.Bottom), primaryBrush, DrawTextOptions.Clip);
         }
     }
 

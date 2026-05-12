@@ -18,9 +18,10 @@ public sealed class AquariumSynthDocument
         AquariumSynthTrigger trigger,
         float gain = 1.0f,
         int faustCompileRevision = 0,
-        string? faustName = null)
+        string? faustName = null,
+        Action<AquariumSynthPatchStatus>? statusSink = null)
     {
-        patches.Add(new AquariumSynthPatch(id, script, trigger, gain, faustCompileRevision, faustName ?? id));
+        patches.Add(new AquariumSynthPatch(id, script, trigger, gain, faustCompileRevision, faustName ?? id, statusSink));
         return this;
     }
 }
@@ -31,7 +32,24 @@ public sealed record AquariumSynthPatch(
     AquariumSynthTrigger Trigger,
     float Gain = 1.0f,
     int FaustCompileRevision = 0,
-    string FaustName = "aquarium_patch");
+    string FaustName = "aquarium_patch",
+    Action<AquariumSynthPatchStatus>? StatusSink = null);
+
+public sealed record AquariumSynthPatchStatus(
+    string Id,
+    AquariumSynthPatchCompileState State,
+    string Message,
+    int Revision,
+    double ChangedAtSeconds);
+
+public enum AquariumSynthPatchCompileState
+{
+    Idle,
+    Queued,
+    Compiling,
+    Ready,
+    Failed
+}
 
 public readonly record struct AquariumSynthTrigger(float IntervalSeconds, float PhaseSeconds = 0.0f)
 {

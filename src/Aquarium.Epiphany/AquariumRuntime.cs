@@ -26,6 +26,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private string patchScript = "v w=sin f=440 g=.18 a=.002 s=.05 d=.35 pu=.28;v w=tri f=880 g=.04 s=.03 d=.28";
     private int patchRate = 4;
     private int faustCompileRevision;
+    private AquariumSynthPatchStatus synthPatchStatus = new("epiphany-editor", AquariumSynthPatchCompileState.Idle, "idle", 0, 0.0);
 
     public AquariumRuntime(AquariumRuntimeOptions options)
     {
@@ -54,9 +55,10 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 .Slider("Time", () => timeSeconds, value => timeSeconds = MathF.Max(0.0f, value), 0.0f, 720.0f, "0.0", "Scrubs Epiphany simulation time.")
                 .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache.")
                 .Section("Synth")
+                .Readout("Faust", () => $"{synthPatchStatus.State}: {synthPatchStatus.Message}", "Patch compilation status from Aquarium's bundled Faust toolchain.")
                 .Text("Patch", () => patchScript, value => patchScript = value, "Aquarium patch DSL. Enter inserts ';'.")
                 .Slider("Rate", () => patchRate, value => patchRate = Math.Clamp(value, 1, 12), 1, 12, "Triggers per 16 seconds.")
-                .Button("Compile Faust", () => faustCompileRevision++, "Exports Faust DSP and compiles C# output when Faust is installed."));
+                .Button("Compile Faust", () => faustCompileRevision++, "Forces an async Faust compile through Aquarium's bundled toolchain."));
     }
 
     public AquariumRuntimeOptions Options { get; }
@@ -75,7 +77,8 @@ public sealed class AquariumRuntime : IAquariumRuntime
         AquariumSynthTrigger.Repeat(16.0f / Math.Max(patchRate, 1)),
         1.0f,
         faustCompileRevision,
-        "epiphany_editor");
+        "epiphany_editor",
+        status => synthPatchStatus = status);
 
     public AquariumFrame Frame => new(ViewFrame, cameraRig.Position, timeSeconds);
 

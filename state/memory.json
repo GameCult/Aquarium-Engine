@@ -76,7 +76,9 @@
     "audio": [
       "Aquarium.Engine.Contracts exposes AquariumSynthDocument as the client-facing synth composition surface. Clients declare patch scripts, trigger cadence, gain, and Faust compile revision; Aquarium.Engine owns patch preview playback, Faust DSP export, and eventual optimized DSP hosting.",
       "AquariumSynth.Dsl is the patch language dependency. Keep the DSL parser and Faust emitter in the synth library; Aquarium should host and schedule patches through contracts rather than baking client sound policy into the engine.",
-      "Current Aquarium synth playback is a pre-rendered preview path for editor experimentation. Faust export and compile requests write DSP and generated output when Faust is installed, but generated realtime DSP loading is still the next optimization pass. Do not overclaim it as complete."
+      "Aquarium bundles Faust as a runtime toolchain under Tools/Faust for published builds and falls back to AQUARIUM_FAUST_HOME or C:/Program Files/Faust in dev. Do not require users to install Faust separately.",
+      "Aquarium synth patches compile asynchronously through libfaust's LLVM C ABI, not generated C#. The editor should surface Queued, Compiling, Ready, and Failed states; the render/audio frame must never block on DSP compilation.",
+      "Current SFX playback renders one-shot buffers from compiled Faust DSP instances and plays them through the temporary WinMM path. The next audio cut is a real streaming mixer/device backend that calls ready compiled DSP instances from the audio engine, never from UI or compile code."
     ],
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",
