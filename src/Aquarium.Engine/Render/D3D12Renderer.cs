@@ -1,4 +1,5 @@
 using Aquarium.Engine.Input;
+using Aquarium.Engine.Render.Graph;
 using SharpGen.Runtime;
 using Aquarium.Engine.Render.Ui;
 using Vortice;
@@ -25,38 +26,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int GridHeightTextureSize = 128;
     private const Format GridHeightFormat = Format.R16_Float;
     private const Format SceneDepthFormat = Format.D32_Float;
-    private const int RoleAgentCount = 7;
-    private const int AgentVisualCount = RoleAgentCount + 2;
-    private const int SelfObjectIndex = 0;
-    private const int RoleAgentBaseIndex = 1;
-    private const int CursorObjectIndex = AgentVisualCount - 1;
-    private const int GridHeightBrushCount = RoleAgentCount + 1;
-    private const int BodyLightCount = 8;
+    private const int MaxGridHeightBrushCount = 8;
+    private const int MaxBodyLightCount = 64;
+    private const int MaxBodyVisualCount = 64;
     private const float GridTransparentMinZ = -1.85f;
     private const float GridTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
-    private const float SunRadius = 1.12f;
-    private const float BodyGridClearanceRadiusScale = 2.0f;
-    private const float SelfGravityRadius = 17.0f;
-    private const float CursorBodyRadius = 0.56f;
-    private const float CursorBodyBoundRadius = 0.88f;
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
-    private const string GridShaderRelativePath = "Render/Shaders/D3D12Grid.hlsl";
-    private const string SceneShaderRelativePath = "Render/Shaders/D3D12Scene.hlsl";
-    private const string BodyCommonShaderRelativePath = "Render/Shaders/D3D12BodyCommon.hlsli";
-    private const string BodyProxyShaderRelativePath = "Render/Shaders/D3D12BodyProxy.hlsli";
-    private const string FaceAgentShaderRelativePath = "Render/Shaders/D3D12FaceAgent.hlsl";
-    private const string ImaginationAgentShaderRelativePath = "Render/Shaders/D3D12ImaginationAgent.hlsl";
-    private const string EyesAgentShaderRelativePath = "Render/Shaders/D3D12EyesAgent.hlsl";
-    private const string BodyAgentShaderRelativePath = "Render/Shaders/D3D12BodyAgent.hlsl";
-    private const string HandsAgentShaderRelativePath = "Render/Shaders/D3D12HandsAgent.hlsl";
-    private const string SoulAgentShaderRelativePath = "Render/Shaders/D3D12SoulAgent.hlsl";
-    private const string LifeAgentShaderRelativePath = "Render/Shaders/D3D12LifeAgent.hlsl";
-    private const string SelfBodyShaderRelativePath = "Render/Shaders/D3D12SelfBody.hlsl";
-    private const string CursorBodyShaderRelativePath = "Render/Shaders/D3D12CursorBody.hlsl";
-    private const string SdfMathShaderRelativePath = "Render/Shaders/D3D12SdfMath.hlsli";
-    private const string AgentCharactersShaderRelativePath = "Render/Shaders/D3D12AgentCharacters.hlsli";
-    private const string PostShaderRelativePath = "Render/Shaders/D3D12Post.hlsl";
     private const string StudioPmremRelativePath = "Assets/Textures/studio2_pmrem.dds";
     private const string StudioIrradianceRelativePath = "Assets/Textures/studio2_irradiance.dds";
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
@@ -91,7 +67,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? gridHeightBasePipelineState;
     private ID3D12PipelineState? gridHeightBrushPipelineState;
     private ID3D12PipelineState? scenePipelineState;
-    private readonly ID3D12PipelineState?[] bodyProxyPipelineStates = new ID3D12PipelineState?[AgentVisualCount];
+    private ID3D12PipelineState?[] bodyProxyPipelineStates = [];
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
     private ID3D12PipelineState? bloomBlurHorizontalPipelineState;
@@ -117,9 +93,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12StructuredBuffer agentVisualBuffer;
     private readonly D3D12CubeTexture studioPmremTexture;
     private readonly D3D12CubeTexture studioIrradianceTexture;
-    private readonly BodyLightGpu[] bodyLights = new BodyLightGpu[BodyLightCount];
-    private readonly AgentVisualGpu[] agentVisuals = new AgentVisualGpu[AgentVisualCount];
-    private readonly GridHeightBrushCpu[] gridHeightBrushes = new GridHeightBrushCpu[GridHeightBrushCount];
+    private readonly AquariumBodyLight[] bodyLights = new AquariumBodyLight[MaxBodyLightCount];
+    private readonly AquariumBodyVisual[] bodyVisuals = new AquariumBodyVisual[MaxBodyVisualCount];
+    private readonly AquariumGridHeightBrush[] gridHeightBrushes = new AquariumGridHeightBrush[MaxGridHeightBrushCount];
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
@@ -140,6 +116,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private int accumulatedTimingFrames;
     private readonly string shaderSourceRoot;
     private readonly D3D12ShaderPaths shaderPaths;
+    private readonly CompiledRenderGraph renderGraph;
     private readonly Stopwatch shaderReloadClock = Stopwatch.StartNew();
     private readonly Dictionary<string, DateTime> shaderWriteTimesUtc = new(StringComparer.OrdinalIgnoreCase);
     private Task<D3D12PipelineSet>? pipelineBuildTask;
@@ -156,14 +133,18 @@ public sealed class D3D12Renderer : IAquariumRenderer
         int width,
         int height,
         string? shaderPath = null,
+        AquariumRenderPlan? renderPlan = null,
         GraphicsSettings? graphicsSettings = null,
         Action<string>? startupProgress = null)
     {
         ApplyGraphicsSettings(graphicsSettings ?? GraphicsSettings.Default);
         this.width = width;
         this.height = height;
-        shaderSourceRoot = ResolveShaderSourceRoot(shaderPath);
-        shaderPaths = D3D12ShaderPaths.FromRoot(shaderSourceRoot);
+        var activeRenderPlan = renderPlan ?? new AquariumRenderPlan();
+        renderGraph = D3D12RenderGraphCompiler.Compile(activeRenderPlan);
+        shaderSourceRoot = ResolveShaderSourceRoot(shaderPath, activeRenderPlan.Shaders);
+        shaderPaths = D3D12ShaderPaths.FromManifest(shaderSourceRoot, activeRenderPlan.Shaders);
+        bodyProxyPipelineStates = new ID3D12PipelineState?[shaderPaths.BodyShaders.Count];
         ReportStartupProgress(startupProgress, "Creating D3D12 device and swapchain");
 
         factory = DXGI.CreateDXGIFactory2<IDXGIFactory4>(false);
@@ -207,8 +188,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneDepthTarget = CreateSceneDepthTarget(sceneDepthStencilView);
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
-        bodyLightBuffer = new D3D12StructuredBuffer(device, BodyLightCount, Marshal.SizeOf<BodyLightGpu>(), "Aquarium D3D12 Body Light Buffer");
-        agentVisualBuffer = new D3D12StructuredBuffer(device, AgentVisualCount, Marshal.SizeOf<AgentVisualGpu>(), "Aquarium D3D12 Agent Visual Buffer");
+        bodyLightBuffer = new D3D12StructuredBuffer(device, MaxBodyLightCount, Marshal.SizeOf<AquariumBodyLight>(), "Aquarium D3D12 Body Light Buffer");
+        agentVisualBuffer = new D3D12StructuredBuffer(device, MaxBodyVisualCount, Marshal.SizeOf<AquariumBodyVisual>(), "Aquarium D3D12 Body Visual Buffer");
         resourceRegistry.Add("body-light-buffer", bodyLightBuffer);
         resourceRegistry.Add("agent-visual-buffer", agentVisualBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
@@ -231,6 +212,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
         Console.WriteLine($"D3D12 resource registry: {resourceRegistry.Describe()}");
+        Console.WriteLine($"Aquarium render graph declared: {renderGraph.Describe()}");
         Console.WriteLine("D3D12 device and swapchain created.");
     }
 
@@ -309,9 +291,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             previousTimeSeconds = frame.TimeSeconds;
         }
 
-        BuildGridHeightBrushes(frame);
-        BuildAgentVisualTable(frame);
-        BuildBodyLightTable(frame);
+        CopySceneState(frame.Scene);
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -596,8 +576,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBrush.Name = "Aquarium D3D12 Grid Height Brush Pipeline";
         var scene = CreateScenePipelineState(paths.Scene);
         scene.Name = "Aquarium D3D12 Scene Pipeline";
-        var bodyProxies = new ID3D12PipelineState[AgentVisualCount];
-        for (var index = 0; index < AgentVisualCount; index++)
+        var bodyProxies = new ID3D12PipelineState[paths.BodyShaders.Count];
+        for (var index = 0; index < paths.BodyShaders.Count; index++)
         {
             bodyProxies[index] = CreateAgentProxyPipelineState(paths.BodyShaders[index]);
             bodyProxies[index].Name = $"Aquarium D3D12 Body Proxy Pipeline {index}";
@@ -876,7 +856,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.CommandList.DrawInstanced(3, 1, 0, 0);
 
-            for (var bodyIndex = 0; bodyIndex < AgentVisualCount; bodyIndex++)
+            for (var bodyIndex = 0; bodyIndex < bodyProxyPipelineStates.Length; bodyIndex++)
             {
                 context.CommandList.SetPipelineState(bodyProxyPipelineStates[bodyIndex]!);
                 context.CommandList.DrawInstanced(6, 1, 0, 0);
@@ -1017,7 +997,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         try
         {
             bodyLightBuffer.Upload(activeCommandList, frameResources.UploadRing, bodyLights);
-            agentVisualBuffer.Upload(activeCommandList, frameResources.UploadRing, agentVisuals);
+        agentVisualBuffer.Upload(activeCommandList, frameResources.UploadRing, bodyVisuals);
         }
         finally
         {
@@ -1046,7 +1026,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.DrawInstanced(3, 1, 0, 0);
             activeCommandList.SetPipelineState(gridHeightBrushPipelineState!);
             activeCommandList.SetGraphicsRootDescriptorTable(2, frameResources.GridBrushConstantsDescriptor.Gpu);
-            activeCommandList.DrawInstanced(6, GridHeightBrushCount, 0, 0);
+            activeCommandList.DrawInstanced(6, MaxGridHeightBrushCount, 0, 0);
         }
         finally
         {
@@ -1054,133 +1034,36 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
-    private void BuildGridHeightBrushes(AquariumFrame frame)
+    private void CopySceneState(AquariumSceneState scene)
     {
-        SetGridHeightBrush(
-            0,
-            new Vector2(0.0f, 0.0f),
-            SelfGravityRadius,
-            2.85f,
-            -1.34f,
-            0.18f,
-            MathF.Tau,
-            0.82f,
-            1.25f);
-
-        for (var index = 0; index < RoleAgentCount; index++)
-        {
-            var radius = AgentRadius(index);
-            var center = AgentAnchor(index, frame.TimeSeconds);
-            SetGridHeightBrush(
-                index + 1,
-                center,
-                3.8f + radius * 2.5f,
-                2.1f,
-                -0.42f,
-                0.022f,
-                2.4f,
-                1.35f,
-                0.0f);
-        }
-    }
-
-    private void BuildAgentVisualTable(AquariumFrame frame)
-    {
-        Array.Clear(agentVisuals);
-        var selfCenter = BodyCenterAtGridHeight(frame, Vector2.Zero, SunRadius);
-        agentVisuals[SelfObjectIndex] = new AgentVisualGpu(
-            new Vector4(selfCenter, SunRadius),
-            new Vector4(selfCenter, 0.0f),
-            new Vector4(1.0f, 1.0f, 0.0f, 0.0f));
-
-        for (var index = 0; index < RoleAgentCount; index++)
-        {
-            var visualIndex = RoleAgentBaseIndex + index;
-            var radius = AgentRadius(index);
-            var center = AgentCenterAtGridHeight(index, frame.TimeSeconds);
-            var previousCenter = AgentCenterAtGridHeight(index, previousTimeSeconds);
-            var activity = 0.45f + 0.45f * Hash21(index + 2.7f, 31.0f);
-            var heartbeat = 0.5f + 0.5f * MathF.Sin(frame.TimeSeconds * (1.2f + index * 0.09f) + index * 1.37f);
-            var pressure = 0.25f + 0.25f * MathF.Sin(frame.TimeSeconds * 0.31f + index * 0.71f);
-
-            agentVisuals[visualIndex] = new AgentVisualGpu(
-                new Vector4(center, radius),
-                new Vector4(previousCenter, 0.0f),
-                new Vector4(activity, heartbeat, pressure, 0.0f));
-        }
-
-        var cursorCenter = new Vector3(frame.CursorWorld, CursorBodyRadius);
-        var previousCursorCenter = new Vector3(previousCursorWorld, CursorBodyRadius);
-        agentVisuals[CursorObjectIndex] = new AgentVisualGpu(
-            new Vector4(cursorCenter, CursorBodyBoundRadius),
-            new Vector4(previousCursorCenter, -1.0f),
-            new Vector4(1.0f, 0.5f, 0.0f, 0.0f));
-    }
-
-    private void SetGridHeightBrush(
-        int index,
-        Vector2 center,
-        float radius,
-        float power,
-        float amplitude,
-        float waveAmplitude,
-        float waveFrequency,
-        float waveSpeed,
-        float waveSinePower)
-    {
-        var centerRadius = new Vector4(center, radius, 0.0f);
-        var shape = new Vector4(power, amplitude, 0.0f, 0.0f);
-        var wave = new Vector4(waveAmplitude, waveFrequency, waveSpeed, waveSinePower);
-        gridHeightBrushConstants.Set(index, centerRadius, shape, wave);
-        gridHeightBrushes[index] = new GridHeightBrushCpu(center, radius, power, amplitude, waveAmplitude, waveFrequency, waveSpeed, waveSinePower);
-    }
-
-    private void BuildBodyLightTable(AquariumFrame frame)
-    {
+        Array.Clear(gridHeightBrushes);
+        Array.Clear(bodyVisuals);
         Array.Clear(bodyLights);
-        var selfCenter = BodyCenterAtGridHeight(frame, Vector2.Zero, SunRadius);
-        bodyLights[0] = new BodyLightGpu(
-            new Vector4(selfCenter, SunRadius),
-            new Vector4(10.0f, 8.7f, 4.2f, 2.0f));
-    }
+        gridHeightBrushConstants = default;
 
-    private float EvaluateGridHeight(AquariumFrame frame, Vector2 world)
-    {
-        var slow = MathF.Sin((world.X * 0.08f + world.Y * 0.06f) + frame.TimeSeconds * 0.27f)
-            * MathF.Sin((world.X * -0.04f + world.Y * 0.07f) - frame.TimeSeconds * 0.19f)
-            * 0.035f;
-        var height = slow;
-        for (var index = 0; index < GridHeightBrushCount; index++)
+        var brushCount = Math.Min(scene.GridHeightBrushes.Count, MaxGridHeightBrushCount);
+        for (var index = 0; index < brushCount; index++)
         {
-            var brush = gridHeightBrushes[index];
-            var distanceValue = Vector2.Distance(world, brush.Center);
-            if (distanceValue > brush.Radius)
-            {
-                continue;
-            }
-
-            var well = PowerPulse(distanceValue, brush.Radius, brush.Power);
-            var normalized = Math.Clamp(distanceValue / MathF.Max(brush.Radius, 0.001f), 0.0f, 1.0f);
-            var wavePhase = brush.WaveSinePower > 0.0f
-                ? MathF.Pow(normalized, brush.WaveSinePower) * brush.WaveFrequency - frame.TimeSeconds * brush.WaveSpeed
-                : distanceValue * brush.WaveFrequency - frame.TimeSeconds * brush.WaveSpeed;
-            var ripple = brush.WaveSinePower > 0.0f ? MathF.Cos(wavePhase) : MathF.Sin(wavePhase);
-            height += brush.Amplitude * well + ripple * well * brush.WaveAmplitude;
+            var brush = scene.GridHeightBrushes[index];
+            gridHeightBrushes[index] = brush;
+            gridHeightBrushConstants.Set(
+                index,
+                new Vector4(brush.Center, brush.Radius, 0.0f),
+                new Vector4(brush.Power, brush.Amplitude, 0.0f, 0.0f),
+                new Vector4(brush.WaveAmplitude, brush.WaveFrequency, brush.WaveSpeed, brush.WaveSinePower));
         }
 
-        return height;
-    }
+        var visualCount = Math.Min(scene.BodyVisuals.Count, MaxBodyVisualCount);
+        for (var index = 0; index < visualCount; index++)
+        {
+            bodyVisuals[index] = scene.BodyVisuals[index];
+        }
 
-    private static float PowerPulse(float distanceValue, float radius, float power)
-    {
-        var normalized = Math.Clamp(distanceValue / MathF.Max(radius, 0.001f), 0.0f, 1.0f);
-        var shaped = MathF.Pow(1.0f - normalized, power);
-        return shaped * shaped * (3.0f - 2.0f * shaped);
-    }
-
-    private Vector3 BodyCenterAtGridHeight(AquariumFrame frame, Vector2 world, float radius)
-    {
-        return new Vector3(world.X, world.Y, EvaluateGridHeight(frame, world) + radius * BodyGridClearanceRadiusScale);
+        var lightCount = Math.Min(scene.BodyLights.Count, MaxBodyLightCount);
+        for (var index = 0; index < lightCount; index++)
+        {
+            bodyLights[index] = scene.BodyLights[index];
+        }
     }
 
     private void SignalFrame(FrameResources frameResources)
@@ -1225,7 +1108,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
     }
 
-    private static string ResolveShaderSourceRoot(string? shaderPath)
+    private static string ResolveShaderSourceRoot(string? shaderPath, AquariumShaderManifest manifest)
     {
         if (!string.IsNullOrWhiteSpace(shaderPath))
         {
@@ -1234,6 +1117,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
             {
                 return sourceDirectory;
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(manifest.ShaderRoot))
+        {
+            return Path.GetFullPath(manifest.ShaderRoot);
         }
 
         return Path.Combine(AppContext.BaseDirectory, "Render", "Shaders");
@@ -1401,7 +1289,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gridHeightBasePipelineState = pipelines.GridHeightBase;
         gridHeightBrushPipelineState = pipelines.GridHeightBrush;
         scenePipelineState = pipelines.Scene;
-        for (var index = 0; index < AgentVisualCount; index++)
+        for (var index = 0; index < bodyProxyPipelineStates.Length; index++)
         {
             bodyProxyPipelineStates[index] = pipelines.BodyProxies[index];
         }
@@ -1776,90 +1664,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return string.Join(Environment.NewLine, expanded);
     }
 
-    private static float AgentRadius(int index)
-    {
-        return Lerp(0.34f, 0.62f, Hash21(index, 19.7f));
-    }
-
-    private static Vector2 AgentAnchor(int index, float timeSeconds)
-    {
-        var f = (float)index;
-        var angle = f * 0.8975979f + timeSeconds * (0.08f + 0.011f * f);
-        var orbitRadius = 4.1f + f * 0.77f;
-        return new Vector2(
-            MathF.Cos(angle) * orbitRadius,
-            MathF.Sin(angle) * orbitRadius);
-    }
-
-    private static Vector3 AgentCenterAtGridHeight(int index, float timeSeconds)
-    {
-        var radius = AgentRadius(index);
-        var xy = AgentAnchor(index, timeSeconds);
-        return new Vector3(xy.X, xy.Y, EvaluateAgentGridHeight(timeSeconds, xy) + radius * BodyGridClearanceRadiusScale);
-    }
-
-    private static float EvaluateAgentGridHeight(float timeSeconds, Vector2 world)
-    {
-        var height = MathF.Sin((world.X * 0.08f + world.Y * 0.06f) + timeSeconds * 0.27f)
-            * MathF.Sin((world.X * -0.04f + world.Y * 0.07f) - timeSeconds * 0.19f)
-            * 0.035f;
-        height += GridBrushHeight(world, Vector2.Zero, SelfGravityRadius, 2.85f, -1.34f, 0.18f, MathF.Tau, 0.82f, 1.25f, timeSeconds);
-        for (var index = 0; index < RoleAgentCount; index++)
-        {
-            var radius = AgentRadius(index);
-            height += GridBrushHeight(world, AgentAnchor(index, timeSeconds), 3.8f + radius * 2.5f, 2.1f, -0.42f, 0.022f, 2.4f, 1.35f, 0.0f, timeSeconds);
-        }
-
-        return height;
-    }
-
-    private static float GridBrushHeight(
-        Vector2 world,
-        Vector2 center,
-        float radius,
-        float power,
-        float amplitude,
-        float waveAmplitude,
-        float waveFrequency,
-        float waveSpeed,
-        float waveSinePower,
-        float timeSeconds)
-    {
-        var distanceValue = Vector2.Distance(world, center);
-        if (distanceValue > radius)
-        {
-            return 0.0f;
-        }
-
-        var well = PowerPulse(distanceValue, radius, power);
-        var normalized = Math.Clamp(distanceValue / MathF.Max(radius, 0.001f), 0.0f, 1.0f);
-        var wavePhase = waveSinePower > 0.0f
-            ? MathF.Pow(normalized, waveSinePower) * waveFrequency - timeSeconds * waveSpeed
-            : distanceValue * waveFrequency - timeSeconds * waveSpeed;
-        var ripple = waveSinePower > 0.0f ? MathF.Cos(wavePhase) : MathF.Sin(wavePhase);
-        return amplitude * well + ripple * well * waveAmplitude;
-    }
-
-    private static float Hash21(float x, float y)
-    {
-        x = Frac(x * 123.34f);
-        y = Frac(y * 456.21f);
-        var d = x * (x + 45.32f) + y * (y + 45.32f);
-        x += d;
-        y += d;
-        return Frac(x * y);
-    }
-
-    private static float Frac(float value)
-    {
-        return value - MathF.Floor(value);
-    }
-
-    private static float Lerp(float a, float b, float t)
-    {
-        return a + (b - a) * t;
-    }
-
     private readonly record struct D3D12PassContext(
         ID3D12GraphicsCommandList CommandList,
         D3D12TrackedResource BackBuffer,
@@ -1963,27 +1767,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
-    private readonly record struct GridHeightBrushCpu(
-        Vector2 Center,
-        float Radius,
-        float Power,
-        float Amplitude,
-        float WaveAmplitude,
-        float WaveFrequency,
-        float WaveSpeed,
-        float WaveSinePower);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct BodyLightGpu(
-        Vector4 CenterRadius,
-        Vector4 RadianceFieldId);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct AgentVisualGpu(
-        Vector4 CenterRadius,
-        Vector4 PreviousCenterPad,
-        Vector4 State);
-
     private sealed record D3D12ShaderPaths(
         string Grid,
         string Scene,
@@ -1991,33 +1774,26 @@ public sealed class D3D12Renderer : IAquariumRenderer
         string BodyProxy,
         IReadOnlyList<string> BodyShaders,
         string SdfMath,
-        string AgentCharacters,
+        IReadOnlyList<string> Includes,
         string Post)
     {
-        public IReadOnlyList<string> All { get; } = [Grid, Scene, BodyCommon, BodyProxy, ..BodyShaders, SdfMath, AgentCharacters, Post];
+        public IReadOnlyList<string> All { get; } = [Grid, Scene, BodyCommon, BodyProxy, ..BodyShaders, SdfMath, ..Includes, Post];
 
-        public static D3D12ShaderPaths FromRoot(string root)
+        public static D3D12ShaderPaths FromManifest(string root, AquariumShaderManifest manifest)
         {
-            string shaderPath(string relativePath) => Path.Combine(root, Path.GetFileName(relativePath));
+            string shaderPath(string path) => Path.IsPathRooted(path) ? path : Path.Combine(root, path);
+            var includes = manifest.BodyLibraryInclude is null
+                ? manifest.IncludePaths
+                : [.. manifest.IncludePaths, manifest.BodyLibraryInclude];
             return new D3D12ShaderPaths(
-                shaderPath(GridShaderRelativePath),
-                shaderPath(SceneShaderRelativePath),
-                shaderPath(BodyCommonShaderRelativePath),
-                shaderPath(BodyProxyShaderRelativePath),
-                [
-                    shaderPath(SelfBodyShaderRelativePath),
-                    shaderPath(FaceAgentShaderRelativePath),
-                    shaderPath(ImaginationAgentShaderRelativePath),
-                    shaderPath(EyesAgentShaderRelativePath),
-                    shaderPath(BodyAgentShaderRelativePath),
-                    shaderPath(HandsAgentShaderRelativePath),
-                    shaderPath(SoulAgentShaderRelativePath),
-                    shaderPath(LifeAgentShaderRelativePath),
-                    shaderPath(CursorBodyShaderRelativePath),
-                ],
-                shaderPath(SdfMathShaderRelativePath),
-                shaderPath(AgentCharactersShaderRelativePath),
-                shaderPath(PostShaderRelativePath));
+                shaderPath(manifest.GridShader),
+                shaderPath(manifest.SceneShader),
+                shaderPath(manifest.BodyCommonInclude),
+                shaderPath(manifest.BodyProxyInclude),
+                manifest.BodyShaderPaths.Select(shaderPath).ToArray(),
+                shaderPath(manifest.SdfMathInclude),
+                includes.Select(shaderPath).ToArray(),
+                shaderPath(manifest.PostShader));
         }
     }
 

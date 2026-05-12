@@ -633,7 +633,7 @@ Every migration pass should run:
 ```powershell
 dotnet build Aquarium.Engine.slnx --no-restore
 .\scripts\dev-reload.ps1 -Headless -RetainSlots 4
-rg -n -S -- "Aquarium\.Epiphany|Self|Imagination|CultNet|hibiscus" src\Aquarium.Engine
+.\scripts\verify-boundaries.ps1
 ```
 
 The final `rg` should shrink over time. At the end it should be empty except

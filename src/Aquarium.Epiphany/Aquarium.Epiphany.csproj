@@ -15,4 +15,9 @@
     <ProjectReference Include="..\..\..\CultLib\src\GameCult.Networking\GameCult.Networking.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Shaders\**\*.hlsl" CopyToOutputDirectory="PreserveNewest" TargetPath="Render\Shaders\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Include="Shaders\**\*.hlsli" CopyToOutputDirectory="PreserveNewest" TargetPath="Render\Shaders\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

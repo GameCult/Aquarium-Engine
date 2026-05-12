@@ -1,6 +1,7 @@
 using System.Numerics;
 using Aquarium.Engine;
 using Aquarium.Engine.Input;
+using Aquarium.Engine.Render;
 using Aquarium.Epiphany.State;
 
 namespace Aquarium.Epiphany;
@@ -15,6 +16,8 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private GridFrame gridFrame;
     private GraphicsSettings graphicsSettings;
     private float timeSeconds;
+    private float previousFrameTimeSeconds;
+    private Vector2 previousCursorWorld;
     private float secondsSinceStateSave;
     private bool graphicsSettingsDirty;
 
@@ -36,9 +39,13 @@ public sealed class AquariumRuntime : IAquariumRuntime
             distance: liveState.CameraDistance);
         timeSeconds = liveState.TimeSeconds;
         gridFrame = GridFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
+        previousFrameTimeSeconds = timeSeconds;
+        previousCursorWorld = gridFrame.Center;
     }
 
     public AquariumRuntimeOptions Options { get; }
+
+    public AquariumRenderPlan RenderPlan { get; } = EpiphanyRenderPlan.Create();
 
     public AquariumFrame Frame => new(gridFrame, cameraRig.Position, timeSeconds);
 
@@ -56,6 +63,23 @@ public sealed class AquariumRuntime : IAquariumRuntime
             graphicsSettings = normalized;
             graphicsSettingsDirty = true;
         }
+    }
+
+    public AquariumFrame ComposeFrame(AquariumFrame frame, AquariumFrameInput input)
+    {
+        var frameWithCursor = frame with
+        {
+            CursorWorld = EpiphanySceneBuilder.ProjectMouseToGridPlane(
+                input.MousePosition,
+                input.Width,
+                input.Height,
+                frame.CameraPosition,
+                frame.Grid.Center),
+        };
+        var scene = EpiphanySceneBuilder.Build(frameWithCursor, previousFrameTimeSeconds, previousCursorWorld);
+        previousFrameTimeSeconds = frameWithCursor.TimeSeconds;
+        previousCursorWorld = frameWithCursor.CursorWorld;
+        return frameWithCursor with { Scene = scene };
     }
 
     public void Start()

@@ -28,6 +28,7 @@
     <Content Include="Assets\Fonts\**\*.ttf" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Textures\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Render\Shaders\**\*.hlsl" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Render\Shaders\**\*.hlsli" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

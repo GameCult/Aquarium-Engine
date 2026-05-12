@@ -23,7 +23,6 @@ $buildStatePath = Join-Path $devRoot "last-build.clixml"
 $liveReloadPointerPath = Join-Path $devRoot "live-current.txt"
 $cultCacheDirectory = if ($Headless) { "headless-cultcache" } else { "cultcache" }
 $cultCachePath = Join-Path $devRoot "$cultCacheDirectory\aquarium-client.msgpack"
-$shaderSourcePath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
 $logName = if ($Headless) { "headless" } else { "latest" }
 $stdoutLogPath = Join-Path $devRoot "$logName.out.log"
 $stderrLogPath = Join-Path $devRoot "$logName.err.log"
@@ -191,7 +190,7 @@ function Start-AquariumProcess {
 
     $arguments = @(
         "--cache", $cultCachePath,
-        "--shader-source", $shaderSourcePath,
+        "--shader-source", (Join-Path $SlotPath "Render\Shaders\D3D12Grid.hlsl"),
         "--client-assembly", $LiveAssemblyPath,
         "--client-reload-pointer", $liveReloadPointerPath
     )

@@ -18,17 +18,7 @@ current_model:
     scene_shader: src/Aquarium.Engine/Render/Shaders/D3D12Scene.hlsl
     body_common_include: src/Aquarium.Engine/Render/Shaders/D3D12BodyCommon.hlsli
     body_proxy_include: src/Aquarium.Engine/Render/Shaders/D3D12BodyProxy.hlsli
-    face_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12FaceAgent.hlsl
-    imagination_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12ImaginationAgent.hlsl
-    eyes_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12EyesAgent.hlsl
-    body_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12BodyAgent.hlsl
-    hands_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12HandsAgent.hlsl
-    soul_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12SoulAgent.hlsl
-    life_agent_shader: src/Aquarium.Engine/Render/Shaders/D3D12LifeAgent.hlsl
-    self_body_shader: src/Aquarium.Engine/Render/Shaders/D3D12SelfBody.hlsl
-    cursor_body_shader: src/Aquarium.Engine/Render/Shaders/D3D12CursorBody.hlsl
     sdf_math_include: src/Aquarium.Engine/Render/Shaders/D3D12SdfMath.hlsli
-    agent_characters_include: src/Aquarium.Engine/Render/Shaders/D3D12AgentCharacters.hlsli
     post_shader: src/Aquarium.Engine/Render/Shaders/D3D12Post.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
     debug_ui: src/Aquarium.Engine/Render/Ui/DebugUi.cs
@@ -38,6 +28,9 @@ current_model:
   epiphany_client:
     contracts: src/Aquarium.Engine.Contracts
     implementation: src/Aquarium.Epiphany
+    render_plan: src/Aquarium.Epiphany/EpiphanyRenderPlan.cs
+    scene_builder: src/Aquarium.Epiphany/EpiphanySceneBuilder.cs
+    shaders: src/Aquarium.Epiphany/Shaders
     state_store: src/Aquarium.Epiphany/State/AquariumCultStateStore.cs
     state_document: epiphany.aquarium.live_state
     graphics_settings_document: epiphany.aquarium.graphics_settings
@@ -71,12 +64,12 @@ renderer_state:
   current:
     - D3D12 default renderer behind IAquariumRenderer with explicit device/queue/swapchain, command allocators, fences, descriptor arenas, upload ring constants, tracked render targets, command events, resize rebuild, HDR/bloom/present, temporal diagnostics, and DirectWrite overlay bridge.
     - Deferred scalar Grid height target rendered from additive brush passes.
-    - Self Grid brush uses a widened 17-world-unit gravity bowl plus an Aetheria-style radial cosine wave; CPU, Grid shader, scene placement, and temporal reprojection share the same brush equation.
+    - Epiphany now owns its Grid brush list, body visual table, body light table, body shader manifest, and cursor projection policy through Aquarium.Engine.Contracts; the engine consumes those as rendering data.
     - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
-    - Fullscreen scene pass owns background and Grid only; each visible body owns a separate proxy pipeline and shader file, with shared proxy plumbing factored into HLSL includes. Body proxy marching evaluates only bodyDistance; bodySurface runs once at the refined hit and returns only PBR material values. Field identity is written by the proxy as temporal ownership metadata, not carried inside the surface packet.
-    - Reusable SDF primitives live in D3D12SdfMath.hlsli; current role character organs live in D3D12AgentCharacters.hlsli.
-    - Cursor is a luminous five-petal hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
-    - SDF/analytic bodies for Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor locator upload current centers, previous centers, and state scalars through `AgentVisualGpu`.
+    - Fullscreen scene pass owns background and Grid only; each client-declared body shader owns a separate proxy pipeline, with shared proxy plumbing factored into engine HLSL includes. Body proxy marching evaluates only bodyDistance; bodySurface runs once at the refined hit and returns only PBR material values.
+    - Reusable SDF primitives live in engine D3D12SdfMath.hlsli; current Epiphany role character organs live under src/Aquarium.Epiphany/Shaders.
+    - Epiphany's cursor is a luminous five-petal hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
+    - SDF/analytic bodies for Epiphany roles upload current centers, previous centers, and state scalars through the public `AquariumBodyVisual` contract.
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
     - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
@@ -87,7 +80,7 @@ renderer_state:
     - D3D11 scene renderer, runtime volumetrics, cloud/fog research, medium/froxel render targets, and the SDF-field renderer plan are shelved and removed from live repo state.
   next:
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
-    - Promote bodies and body lights from fixed renderer tables to CPU-owned registries with typed controls.
+    - Replace the current legacy fixed D3D12 pass execution with the declared AquariumRenderPlan graph compiler and executor.
     - Replace fixed fallback role motion with real CultNet-derived AgentVisualState.
     - Build each agent role body from one coherent low-cost SDF form model before adding ornamental or state-reactive detail.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.

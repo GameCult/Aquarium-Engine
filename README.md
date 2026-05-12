@@ -134,6 +134,12 @@ Headless reload smoke without touching the normal build output:
 .\scripts\dev-reload.ps1 -Headless
 ```
 
+Renderer/client boundary check:
+
+```powershell
+.\scripts\verify-boundaries.ps1
+```
+
 Headless watch smoke:
 
 ```powershell

@@ -5,16 +5,16 @@ explicit frame graph.
 
 ## Current Path
 
-1. `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
-2. `D3D12Scene.hlsl` traces the background and Grid into scene-linear HDR
-   targets.
-3. Each visible body has its own proxy shader and pipeline:
+1. Engine-owned `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
+2. Engine-owned `D3D12Scene.hlsl` traces the background and Grid into
+   scene-linear HDR targets.
+3. Epiphany-owned body shaders each get their own proxy pipeline:
    `D3D12FaceAgent.hlsl`, `D3D12ImaginationAgent.hlsl`,
    `D3D12EyesAgent.hlsl`, `D3D12BodyAgent.hlsl`, `D3D12HandsAgent.hlsl`,
    `D3D12SoulAgent.hlsl`, `D3D12LifeAgent.hlsl`, `D3D12SelfBody.hlsl`, and
    `D3D12CursorBody.hlsl`. Shared proxy mechanics live in
    `D3D12BodyCommon.hlsli` and `D3D12BodyProxy.hlsli`.
-4. `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
+4. Engine-owned `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
    exposure and ACES, then presents.
 5. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
 
@@ -45,12 +45,11 @@ visibility through the depth target.
 
 ## Solids
 
-Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor are uploaded through `AgentVisualGpu`,
-including current center, previous center, role id, activity, heartbeat,
-pressure, expression, object kind, and LOD tier. The first visual slice keeps
-the fixed orbit fallback, renders Body and Imagination as LOD 1 role SDFs inside
-bounded per-object proxy draws, and keeps the remaining roles as simple distinct
-fallback organs.
+Epiphany uploads Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the
+cursor through the engine `AquariumBodyVisual` buffer, including current center,
+previous center, and state scalars. Aquarium owns the D3D12 upload, proxy draw,
+depth, and presentation machinery; Epiphany owns which bodies exist, where they
+are, and which shader files describe them.
 
 The cursor is a luminous three-lobed hibiscus SDF that lives on the XY plane:
 its center is one cursor radius above XY, so its lower contact tip lands at
