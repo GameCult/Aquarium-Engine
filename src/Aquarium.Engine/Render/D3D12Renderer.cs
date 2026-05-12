@@ -262,7 +262,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public bool HasPresentedReadyFrame => hasPresentedReadyFrame;
 
-    public bool CapturesInput => debugUi.WantsKeyboard;
+    public bool CapturesInput => debugUi.WantsKeyboard || debugUi.WantsMouse;
 
     public AquariumSynthDocument DebugSynth => new AquariumSynthDocument
     {
