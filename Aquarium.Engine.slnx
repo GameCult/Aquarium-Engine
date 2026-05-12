@@ -4,5 +4,6 @@
     <Project Path="src/Aquarium.Engine/Aquarium.Engine.csproj" />
     <Project Path="src/Aquarium.Epiphany/Aquarium.Epiphany.csproj" />
     <Project Path="src/Aquarium.Sample.Minimal/Aquarium.Sample.Minimal.csproj" />
+    <Project Path="../AquariumSynthCSharp/src/AquariumSynth.Dsl/AquariumSynth.Dsl.csproj" />
   </Folder>
 </Solution>

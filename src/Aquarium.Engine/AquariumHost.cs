@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Platform;
 using Aquarium.Engine.Render;
@@ -19,6 +20,7 @@ public static class AquariumHost
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Aquarium-Engine-Icon.ico");
         using var window = Win32Window.Create("Aquarium Engine", width, height, input, iconPath, visible: !runtime.Options.Headless);
         window.PaintSplash("Aquarium", "Preparing runtime state");
+        using var synthHost = new AquariumSynthHost();
         using var renderer = CreateRenderer(
             window.Handle,
             window.ClientWidth,
@@ -51,6 +53,7 @@ public static class AquariumHost
             ApplyRendererDebugInput(renderer, input);
             SyncRendererSettingsToRuntime(renderer, runtimeLoader.Runtime);
             runtimeLoader.Update(deltaSeconds, input);
+            synthHost.Update(runtimeLoader.Runtime.Synth, deltaSeconds);
             if (!ReferenceEquals(settingsRuntime, runtimeLoader.Runtime))
             {
                 settingsRuntime = runtimeLoader.Runtime;

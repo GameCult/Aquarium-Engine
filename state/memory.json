@@ -73,6 +73,11 @@
       "Debug UI feedback needs honest element-specific states: base, hover, and active. Sliders respond on track/fill and handle separately, keep geometry stable, and brighten by lerping accent colors toward white.",
       "Scene/diegetic labels should use renderer-owned MSDF/SDF billboards when they live in world space. Overlay text should not be shoved into HDR for convenience."
     ],
+    "audio": [
+      "Aquarium.Engine.Contracts exposes AquariumSynthDocument as the client-facing synth composition surface. Clients declare patch scripts, trigger cadence, gain, and Faust compile revision; Aquarium.Engine owns patch preview playback, Faust DSP export, and eventual optimized DSP hosting.",
+      "AquariumSynth.Dsl is the patch language dependency. Keep the DSL parser and Faust emitter in the synth library; Aquarium should host and schedule patches through contracts rather than baking client sound policy into the engine.",
+      "Current Aquarium synth playback is a pre-rendered preview path for editor experimentation. Faust export and compile requests write DSP and generated output when Faust is installed, but generated realtime DSP loading is still the next optimization pass. Do not overclaim it as complete."
+    ],
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",
       "Global graphics presentation settings live in epiphany.aquarium.graphics_settings. The debug UI edits the renderer copy; the host syncs changed renderer settings back to the client runtime; the runtime flushes dirty settings through CultCache.",

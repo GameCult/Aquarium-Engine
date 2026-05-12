@@ -1,5 +1,6 @@
 using System.Numerics;
 using Aquarium.Engine;
+using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
@@ -22,6 +23,9 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private float secondsSinceStateSave;
     private bool graphicsSettingsDirty;
     private bool timePaused;
+    private string patchScript = "v w=sin f=440 g=.18 a=.002 s=.05 d=.35 pu=.28;v w=tri f=880 g=.04 s=.03 d=.28";
+    private int patchRate = 4;
+    private int faustCompileRevision;
 
     public AquariumRuntime(AquariumRuntimeOptions options)
     {
@@ -48,7 +52,11 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 .Section("Runtime")
                 .Toggle("Pause Time", () => timePaused, value => timePaused = value, "Stops Epiphany simulation time while leaving the renderer alive.")
                 .Slider("Time", () => timeSeconds, value => timeSeconds = MathF.Max(0.0f, value), 0.0f, 720.0f, "0.0", "Scrubs Epiphany simulation time.")
-                .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache."));
+                .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache.")
+                .Section("Synth")
+                .Text("Patch", () => patchScript, value => patchScript = value, "Aquarium patch DSL. Enter inserts ';'.")
+                .Slider("Rate", () => patchRate, value => patchRate = Math.Clamp(value, 1, 12), 1, 12, "Triggers per 16 seconds.")
+                .Button("Compile Faust", () => faustCompileRevision++, "Exports Faust DSP and compiles C# output when Faust is installed."));
     }
 
     public AquariumRuntimeOptions Options { get; }
@@ -56,6 +64,18 @@ public sealed class AquariumRuntime : IAquariumRuntime
     public AquariumRenderPlan RenderPlan { get; } = EpiphanyRenderPlan.Create();
 
     public AquariumUiDocument Ui { get; }
+
+    public AquariumSynthDocument Synth => new AquariumSynthDocument
+    {
+        MasterGain = 0.42f,
+        Enabled = true
+    }.Patch(
+        "epiphany-editor",
+        patchScript,
+        AquariumSynthTrigger.Repeat(16.0f / Math.Max(patchRate, 1)),
+        1.0f,
+        faustCompileRevision,
+        "epiphany_editor");
 
     public AquariumFrame Frame => new(ViewFrame, cameraRig.Position, timeSeconds);
 

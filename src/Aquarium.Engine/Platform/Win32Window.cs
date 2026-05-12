@@ -11,6 +11,7 @@ public sealed class Win32Window : IDisposable
     private const uint WM_CLOSE = 0x0010;
     private const uint WM_KEYDOWN = 0x0100;
     private const uint WM_KEYUP = 0x0101;
+    private const uint WM_CHAR = 0x0102;
     private const uint WM_MOUSEMOVE = 0x0200;
     private const uint WM_LBUTTONDOWN = 0x0201;
     private const uint WM_LBUTTONUP = 0x0202;
@@ -62,6 +63,8 @@ public sealed class Win32Window : IDisposable
     private const int VK_9 = 0x39;
     private const int VK_F1 = 0x70;
     private const int VK_F2 = 0x71;
+    private const int VK_BACK = 0x08;
+    private const int VK_RETURN = 0x0D;
     private const int WHEEL_DELTA = 120;
 
     private readonly WndProc windowProcedure;
@@ -158,6 +161,9 @@ public sealed class Win32Window : IDisposable
                         return IntPtr.Zero;
                     case WM_KEYUP:
                         SetKey(input, wParam, false);
+                        return IntPtr.Zero;
+                    case WM_CHAR:
+                        AddTextInput(input, (UIntPtr)wParam);
                         return IntPtr.Zero;
                 }
 
@@ -685,6 +691,21 @@ public sealed class Win32Window : IDisposable
             case VK_F2:
                 input.SetKey(KeyCode.DebugUiToggle, isDown);
                 break;
+            case VK_BACK:
+                input.SetKey(KeyCode.Backspace, isDown);
+                break;
+            case VK_RETURN:
+                input.SetKey(KeyCode.Enter, isDown);
+                break;
+        }
+    }
+
+    private static void AddTextInput(InputState input, UIntPtr wParam)
+    {
+        var value = (char)wParam.ToUInt32();
+        if (!char.IsControl(value) || value is '\r' or '\n' or '\b')
+        {
+            input.AddTextInput(value);
         }
     }
 

@@ -1,3 +1,4 @@
+using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
@@ -15,6 +16,8 @@ public interface IAquariumRuntime : IDisposable
     AquariumRenderPlan RenderPlan { get; }
 
     AquariumUiDocument Ui { get; }
+
+    AquariumSynthDocument Synth { get; }
 
     void Start();
 

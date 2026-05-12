@@ -66,6 +66,12 @@ public sealed class AquariumUiPanelBuilder(List<AquariumUiControl> controls)
         controls.Add(new AquariumUiOptions(label, read, write, options, tooltip, isVisible));
         return this;
     }
+
+    public AquariumUiPanelBuilder Text(string label, Func<string> read, Action<string> write, string? tooltip = null, Func<bool>? isVisible = null)
+    {
+        controls.Add(new AquariumUiText(label, read, write, tooltip, isVisible));
+        return this;
+    }
 }
 
 public readonly record struct AquariumUiOption(int Value, string Label);
@@ -91,4 +97,7 @@ public sealed record AquariumUiIntSlider(string Label, Func<int> Read, Action<in
     : AquariumUiControl(Label, Tooltip, IsVisible);
 
 public sealed record AquariumUiOptions(string Label, Func<int> Read, Action<int> Write, IReadOnlyList<AquariumUiOption> Options, string? Tooltip = null, Func<bool>? IsVisible = null)
+    : AquariumUiControl(Label, Tooltip, IsVisible);
+
+public sealed record AquariumUiText(string Label, Func<string> Read, Action<string> Write, string? Tooltip = null, Func<bool>? IsVisible = null)
     : AquariumUiControl(Label, Tooltip, IsVisible);

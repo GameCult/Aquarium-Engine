@@ -22,6 +22,7 @@ current_model:
     post_shader: src/Aquarium.Engine/Render/Shaders/D3D12Post.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
     debug_ui: src/Aquarium.Engine/Render/Ui/DebugUi.cs
+    synth_host: src/Aquarium.Engine/Audio/AquariumSynthHost.cs
     runtime_loader: src/Aquarium.Engine/Runtime/ClientRuntimeLoader.cs
     dev_reload: scripts/dev-reload.ps1
     dev_watch: scripts/dev-watch.ps1
@@ -39,6 +40,7 @@ current_model:
   dependencies:
     cult_math: E:\Projects\CultMath
     cult_lib: E:\Projects\CultLib
+    aquarium_synth_dsl: E:\Projects\AquariumSynthCSharp\src\AquariumSynth.Dsl
   docs:
     doctrine: docs/aquarium-engine-doctrine.md
     engine_client_boundary: docs/engine-client-boundary.md
@@ -76,6 +78,7 @@ renderer_state:
     - SDF light buffer feeds Self emission and direct object lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
+    - AquariumSynthDocument exposes client-declared patch scripts, trigger cadence, gain, and Faust compile revision; Aquarium.Engine hosts editor preview playback and writes Faust DSP/generated output when requested.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
@@ -94,6 +97,7 @@ next_actions:
   - Keep scripts/verify-boundaries.ps1 green: Aquarium.Engine and Aquarium.Engine.Contracts must not contain Epiphany/client policy nouns such as grid, agent, body, or epiphany.
   - Verify publish output after every packaging-affecting change.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
+  - Replace synth preview playback with generated Faust DSP loading when the optimized realtime host is ready.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.

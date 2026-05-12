@@ -58,6 +58,7 @@ $requiredFiles = @(
     "Aquarium.Engine.exe",
     "Aquarium.Epiphany.dll",
     "Aquarium.Engine.Contracts.dll",
+    "AquariumSynth.Dsl.dll",
     "Assets\Aquarium-Engine-Icon.ico",
     "Assets\Fonts\Montserrat[wght].ttf",
     "Assets\Fonts\UbuntuSans[wdth,wght].ttf",

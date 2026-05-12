@@ -8,12 +8,15 @@ public sealed class InputState
     private readonly HashSet<KeyCode> pressedKeys = [];
     private readonly HashSet<MouseButton> downMouseButtons = [];
     private readonly HashSet<MouseButton> pressedMouseButtons = [];
+    private readonly List<char> textInput = [];
 
     public Vector2 MousePosition { get; private set; }
 
     public Vector2 MouseDelta { get; private set; }
 
     public float WheelDelta { get; private set; }
+
+    public IReadOnlyList<char> TextInput => textInput;
 
     public bool LeftMouseDown => IsMouseDown(MouseButton.Left);
 
@@ -35,6 +38,7 @@ public sealed class InputState
         WheelDelta = 0.0f;
         pressedKeys.Clear();
         pressedMouseButtons.Clear();
+        textInput.Clear();
     }
 
     public void SetMousePosition(Vector2 position)
@@ -81,6 +85,11 @@ public sealed class InputState
             downKeys.Remove(key);
         }
     }
+
+    public void AddTextInput(char value)
+    {
+        textInput.Add(value);
+    }
 }
 
 public enum MouseButton
@@ -108,4 +117,6 @@ public enum KeyCode
     Digit9,
     RenderDebugCycle,
     DebugUiToggle,
+    Backspace,
+    Enter,
 }

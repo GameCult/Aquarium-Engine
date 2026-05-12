@@ -31,6 +31,7 @@ internal sealed class DebugUi
     private readonly float panelWidth;
     private int? activeSliderId;
     private int? activeControlId;
+    private int? focusedTextId;
     private bool closeButtonHovered;
     private bool closeButtonActive;
     private Rect panelBounds;
@@ -101,6 +102,9 @@ internal sealed class DebugUi
                     options.Tooltip,
                     () => options.Visible));
                 break;
+            case AquariumUiText text:
+                controls.Add(new TextControl(text.Label, text.Read, text.Write, text.Tooltip, () => text.Visible));
+                break;
         }
     }
 
@@ -115,6 +119,7 @@ internal sealed class DebugUi
         {
             WantsMouse = false;
             activeSliderId = null;
+            focusedTextId = null;
             return;
         }
 
@@ -148,16 +153,19 @@ internal sealed class DebugUi
 
         if (!input.IsMousePressed(MouseButton.Left))
         {
+            ApplyTextInput(input);
             return;
         }
 
         if (closeButtonHovered)
         {
             IsVisible = false;
+            focusedTextId = null;
             return;
         }
 
         DebugUiControl? clickedControl = null;
+        focusedTextId = null;
         for (var index = controls.Count - 1; index >= 0; index--)
         {
             var control = controls[index];
@@ -174,6 +182,11 @@ internal sealed class DebugUi
             control.Click(mousePosition);
             activeControlId = control.Id;
             control.IsActive = true;
+            if (control is TextControl)
+            {
+                focusedTextId = control.Id;
+            }
+
             if (control is SliderControl slider)
             {
                 activeSliderId = slider.Id;
@@ -190,6 +203,21 @@ internal sealed class DebugUi
             {
                 control.DismissTransientState();
             }
+        }
+
+        ApplyTextInput(input);
+    }
+
+    private void ApplyTextInput(InputState input)
+    {
+        if (focusedTextId is not { } textId)
+        {
+            return;
+        }
+
+        if (controls.FirstOrDefault(control => control.Id == textId) is TextControl textControl)
+        {
+            textControl.ApplyTextInput(input);
         }
     }
 
@@ -397,6 +425,12 @@ internal sealed class DebugUi
         public DebugUiPanel Options(string label, Func<int> read, Action<int> write, IReadOnlyList<DebugUiOption> options, string? tooltip = null, Func<bool>? isVisible = null)
         {
             controls.Add(new OptionControl(label, read, write, options, tooltip, isVisible));
+            return this;
+        }
+
+        public DebugUiPanel Text(string label, Func<string> read, Action<string> write, string? tooltip = null, Func<bool>? isVisible = null)
+        {
+            controls.Add(new TextControl(label, read, write, tooltip, isVisible));
             return this;
         }
     }
@@ -702,6 +736,71 @@ internal sealed class DebugUi
         {
             var top = Bounds.Top + RowHeight + index * RowHeight;
             return RectFromEdges(Bounds.Left + 8.0f, top, Bounds.Right, top + RowHeight);
+        }
+    }
+
+    private sealed class TextControl(string label, Func<string> read, Action<string> write, string? tooltip, Func<bool>? isVisible)
+        : DebugUiControl(label, tooltip, isVisible)
+    {
+        public override float LayoutHeight => RowHeight * 2.0f;
+
+        public void ApplyTextInput(InputState input)
+        {
+            var value = read();
+            foreach (var ch in input.TextInput)
+            {
+                switch (ch)
+                {
+                    case '\b':
+                        if (value.Length > 0)
+                        {
+                            value = value[..^1];
+                        }
+                        break;
+                    case '\r':
+                    case '\n':
+                        value += ";";
+                        break;
+                    default:
+                        if (!char.IsControl(ch))
+                        {
+                            value += ch;
+                        }
+                        break;
+                }
+            }
+
+            if (value != read())
+            {
+                write(value);
+            }
+        }
+
+        public override void Draw(
+            ID2D1RenderTarget target,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
+            ID2D1SolidColorBrush outlineBrush,
+            ID2D1SolidColorBrush primaryBrush,
+            ID2D1SolidColorBrush quietBrush,
+            ID2D1SolidColorBrush accentBrush,
+            ID2D1SolidColorBrush accentHoverBrush,
+            ID2D1SolidColorBrush accentActiveBrush,
+            ID2D1SolidColorBrush dimAccentBrush,
+            ID2D1SolidColorBrush trackHoverBrush,
+            ID2D1SolidColorBrush trackActiveBrush)
+        {
+            DrawRow(target, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush);
+            target.DrawText(Label.ToUpperInvariant(), format, RectFromEdges(Bounds.Left + 8.0f, Bounds.Top, Bounds.Right - 8.0f, Bounds.Top + RowHeight), accentBrush, DrawTextOptions.Clip);
+            var display = read();
+            if (display.Length > 92)
+            {
+                display = "..." + display[^89..];
+            }
+
+            target.DrawText(display, format, RectFromEdges(Bounds.Left + 8.0f, Bounds.Top + RowHeight - 4.0f, Bounds.Right - 8.0f, Bounds.Bottom), primaryBrush, DrawTextOptions.Clip);
         }
     }
 

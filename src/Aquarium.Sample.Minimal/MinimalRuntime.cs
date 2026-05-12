@@ -1,5 +1,6 @@
 using System.Numerics;
 using Aquarium.Engine;
+using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
 using Aquarium.Engine.Ui;
@@ -17,6 +18,8 @@ public sealed class MinimalRuntime : IAquariumRuntime
     public AquariumRenderPlan RenderPlan { get; } = CreateRenderPlan();
 
     public AquariumUiDocument Ui { get; } = AquariumUiDocument.Empty;
+
+    public AquariumSynthDocument Synth { get; } = AquariumSynthDocument.Empty;
 
     public AquariumFrame Frame => new(
         new ViewFrame(Vector2.Zero, 24.0f),
