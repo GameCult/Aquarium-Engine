@@ -20,7 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aquarium.Engine\Aquarium.Engine.csproj" />
-    <ProjectReference Include="..\..\..\AquariumSynthCSharp\src\AquariumSynth.Dsl\AquariumSynth.Dsl.csproj" />
   </ItemGroup>
 
 </Project>
