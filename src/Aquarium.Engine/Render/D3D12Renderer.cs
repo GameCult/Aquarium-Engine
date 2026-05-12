@@ -64,10 +64,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(9, "SdfObject Identity"),
         new(10, "SdfObject Steps"),
     ];
-    private static readonly DebugUi.DebugUiOption[] SynthPresetOptions = AquariumSynth.Dsl.BuiltInScripts.PrimitiveGolfScripts()
+    private static readonly DebugUi.DebugUiOption[] SynthPresetOptions = AquariumSynth.Dsl.BuiltInScripts.ReferenceScripts()
         .Select((preset, index) => new DebugUi.DebugUiOption(index, $"{preset.Family}/{preset.Name}"))
         .ToArray();
-    private static readonly (string Family, string Name, string Script)[] SynthPresets = AquariumSynth.Dsl.BuiltInScripts.PrimitiveGolfScripts().ToArray();
+    private static readonly (string Family, string Name, string Script)[] SynthPresets = AquariumSynth.Dsl.BuiltInScripts.ReferenceScripts().ToArray();
 
     private readonly IDXGIFactory4 factory;
     private readonly ID3D12Device device;
@@ -101,7 +101,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private string terminalInput = "help";
     private readonly List<string> terminalLines = ["Aquarium terminal ready. Type help."];
     private IReadOnlyList<AquariumConsoleCommand> clientCommands = [];
-    private string synthPlaygroundScript = AquariumSynth.Dsl.BuiltInScripts.ClassicSfxrPrimitiveGolfScripts[0].Script;
+    private string synthPlaygroundScript = SynthPresets[0].Script;
     private int synthPlaygroundPreset;
     private int synthPlaygroundPlayRevision;
     private float synthPlaygroundGain = 0.45f;
