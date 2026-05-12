@@ -5,7 +5,7 @@ param(
     [switch]$Reopen,
     [int]$RetainSlots = 12,
     [int]$StartupTimeoutSeconds = 5,
-    [int]$HeadlessTimeoutSeconds = 30
+    [int]$HeadlessTimeoutSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"

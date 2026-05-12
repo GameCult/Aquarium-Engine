@@ -82,6 +82,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private D3D12RenderTarget sceneRenderTarget;
     private D3D12RenderTarget sceneMetadataRenderTarget;
     private D3D12RenderTarget sceneControlRenderTarget;
+    private readonly Dictionary<string, D3D12RenderTarget> graphRenderTargets = new(StringComparer.Ordinal);
     private D3D12TrackedResource sceneDepthTarget;
     private D3D12DescriptorSlot sceneDepthStencilView;
     private readonly D3D12RenderTarget[] historyRenderTargets = new D3D12RenderTarget[2];
@@ -188,6 +189,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneDepthTarget = CreateSceneDepthTarget(sceneDepthStencilView);
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
+        CreateGraphRenderTargets();
         bodyLightBuffer = new D3D12StructuredBuffer(device, MaxBodyLightCount, Marshal.SizeOf<AquariumBodyLight>(), "Aquarium D3D12 Body Light Buffer");
         agentVisualBuffer = new D3D12StructuredBuffer(device, MaxBodyVisualCount, Marshal.SizeOf<AquariumBodyVisual>(), "Aquarium D3D12 Body Visual Buffer");
         resourceRegistry.Add("body-light-buffer", bodyLightBuffer);
@@ -444,6 +446,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         bodyLightBuffer.Dispose();
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
+        DisposeGraphRenderTargets();
         sceneRenderTarget.Dispose();
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
@@ -619,6 +622,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         DisposeBackBufferOverlays();
         RemoveBloomRenderTargets();
         RemoveHistoryRenderTargets();
+        RemoveGraphRenderTargets();
         resourceRegistry.RemoveRenderTarget("scene-hdr-target");
         resourceRegistry.RemoveRenderTarget("scene-metadata-target");
         resourceRegistry.RemoveRenderTarget("scene-control-target");
@@ -626,6 +630,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         resourceRegistry.RemoveRenderTarget("grid-height-target");
         DisposeBloomRenderTargets();
         DisposeHistoryRenderTargets();
+        DisposeGraphRenderTargets();
         sceneRenderTarget.Dispose();
         sceneMetadataRenderTarget.Dispose();
         sceneControlRenderTarget.Dispose();
@@ -658,6 +663,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sceneDepthTarget = CreateSceneDepthTarget(sceneDepthStencilView);
         CreateHistoryRenderTargets();
         CreateBloomRenderTargets();
+        CreateGraphRenderTargets();
         viewport = new Viewport(0.0f, 0.0f, width, height);
         scissorRect = new RawRect(0, 0, width, height);
         Console.WriteLine($"D3D12 resized: {width}x{height}; {resourceRegistry.Describe()}");
@@ -819,6 +825,81 @@ public sealed class D3D12Renderer : IAquariumRenderer
             "Aquarium D3D12 Grid Height Target");
         resourceRegistry.Add("grid-height-target", target);
         return target;
+    }
+
+    private void CreateGraphRenderTargets()
+    {
+        foreach (var targetDescription in renderGraph.RenderTargets)
+        {
+            if (IsLegacyGraphTarget(targetDescription.Handle.Name) || graphRenderTargets.ContainsKey(targetDescription.Handle.Name))
+            {
+                continue;
+            }
+
+            var targetSize = ResolveGraphTargetSize(targetDescription.Size);
+            var target = new D3D12RenderTarget(
+                device,
+                targetSize.Width,
+                targetSize.Height,
+                ToDxgiFormat(targetDescription.Format),
+                renderTargetViewArena.Allocate(),
+                null,
+                null,
+                allowUnorderedAccess: false,
+                new Color4(0.0f, 0.0f, 0.0f, 1.0f),
+                $"Aquarium D3D12 Graph Target {targetDescription.Handle.Name}");
+            graphRenderTargets.Add(targetDescription.Handle.Name, target);
+            resourceRegistry.Add($"graph-target:{targetDescription.Handle.Name}", target);
+        }
+    }
+
+    private void RemoveGraphRenderTargets()
+    {
+        foreach (var name in graphRenderTargets.Keys)
+        {
+            resourceRegistry.RemoveRenderTarget($"graph-target:{name}");
+        }
+    }
+
+    private void DisposeGraphRenderTargets()
+    {
+        foreach (var target in graphRenderTargets.Values)
+        {
+            target.Dispose();
+        }
+
+        graphRenderTargets.Clear();
+    }
+
+    private (int Width, int Height) ResolveGraphTargetSize(AquariumTargetSize size)
+    {
+        return size.Kind switch
+        {
+            AquariumTargetSizeKind.Fixed => (Math.Max(1, size.Width), Math.Max(1, size.Height)),
+            AquariumTargetSizeKind.MatchWindow => (
+                Math.Max(1, (int)MathF.Ceiling(width * MathF.Max(size.Scale, 0.001f))),
+                Math.Max(1, (int)MathF.Ceiling(height * MathF.Max(size.Scale, 0.001f)))),
+            _ => throw new ArgumentOutOfRangeException(nameof(size), size.Kind, "Unsupported render target size policy."),
+        };
+    }
+
+    private static Format ToDxgiFormat(RenderFormat format)
+    {
+        return format switch
+        {
+            RenderFormat.R16Float => Format.R16_Float,
+            RenderFormat.Rgba16Float => Format.R16G16B16A16_Float,
+            RenderFormat.Bgra8Unorm => Format.B8G8R8A8_UNorm,
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported render target format."),
+        };
+    }
+
+    private static bool IsLegacyGraphTarget(string name)
+    {
+        return string.Equals(name, "grid-height", StringComparison.Ordinal)
+            || string.Equals(name, "scene", StringComparison.Ordinal)
+            || string.Equals(name, "scene-metadata", StringComparison.Ordinal)
+            || string.Equals(name, "scene-control", StringComparison.Ordinal);
     }
 
     private void RenderSceneAndPresent(D3D12PassContext context, FrameResources frameResources)
