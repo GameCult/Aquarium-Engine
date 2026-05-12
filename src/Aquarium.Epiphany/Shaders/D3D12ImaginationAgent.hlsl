@@ -17,10 +17,10 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     SdfObject sdfObject = sdfObjects[sdfIndex];
 
     SdfSurface surface;
-    surface.albedo = lerp(float3(0.36, 0.16, 0.70), float3(0.96, 0.48, 0.92), sdfObject.state.x);
+    surface.baseColor = lerp(float3(0.36, 0.16, 0.70), float3(0.96, 0.48, 0.92), sdfObject.state.x);
+    surface.metallic = 0.0;
     surface.roughness = 0.34;
-    surface.f0 = float3(0.06, 0.035, 0.12);
-    surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex)) + surface.albedo * (0.08 + sdfObject.state.y * 0.08);
+    surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex)) + surface.baseColor * (0.08 + sdfObject.state.y * 0.08);
     return surface;
 }
 

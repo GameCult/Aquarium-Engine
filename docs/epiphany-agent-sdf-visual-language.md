@@ -222,9 +222,9 @@ into flickering NaNs with a nice color palette.
 - Each organ gets a distinct SDF family, not only a color swap.
 - Each SDF object shader exposes `sdfDistance` for the hot raymarch loop and
   `sdfSurface` for the refined hit. `sdfSurface` returns PBR material values:
-  albedo, roughness, F0, and emission. The shared Aquarium shading function
-  shades those values; role anatomy and region choice stay inside the Epiphany
-  object shader.
+  base color, metallic, roughness, and emission. The shared Aquarium shading
+  function derives dielectric/metal diffuse and specular response from those
+  values; role anatomy and region choice stay inside the Epiphany object shader.
 - Material regions may exist inside an object shader when they help choose PBR
   values for readable parts: core, shell, tool edge, lens, ribbon, risk seam,
   memory seed, bubble, and so on. They are not part of the shared hot surface

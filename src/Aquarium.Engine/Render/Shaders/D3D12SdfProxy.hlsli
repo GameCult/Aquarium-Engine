@@ -67,9 +67,9 @@ bool traceSdf(float3 origin, float3 direction, int sdfIndex, out float travel, o
     travel = max(-b - h, 0.0);
     normal = 0.0;
     stepCount = 0.0;
-    surface.albedo = 0.0;
+    surface.baseColor = 0.0;
+    surface.metallic = 0.0;
     surface.roughness = 0.0;
-    surface.f0 = 0.0;
     surface.emission = 0.0;
     float previousTravel = travel;
     float previousDistance = sdfDistance(origin + direction * travel, sdfIndex);

@@ -14,9 +14,9 @@ float sdfDistance(float3 p, int sdfIndex)
 SdfSurface sdfSurface(float3 p, int sdfIndex)
 {
     SdfSurface surface;
-    surface.albedo = 0.0;
+    surface.baseColor = 0.0;
+    surface.metallic = 0.0;
     surface.roughness = 0.0;
-    surface.f0 = 0.0;
     surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
     return surface;
 }

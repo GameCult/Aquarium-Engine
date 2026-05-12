@@ -119,10 +119,10 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float3 calyxAlbedo = float3(0.34, 0.66, 0.12);
 
     SdfSurface surface;
-    surface.albedo = petalAlbedo * isPetal + throatAlbedo * isThroat + stamenAlbedo * isStamen + calyxAlbedo * isCalyx;
+    surface.baseColor = petalAlbedo * isPetal + throatAlbedo * isThroat + stamenAlbedo * isStamen + calyxAlbedo * isCalyx;
+    surface.metallic = 0.0;
     surface.roughness = isCalyx > 0.5 ? 0.46 : 0.22;
-    surface.f0 = lerp(float3(1.0, 0.38, 0.72), float3(0.04, 0.06, 0.03), isCalyx);
-    surface.emission = surface.albedo * (isCalyx > 0.5 ? 0.05 : 0.56);
+    surface.emission = surface.baseColor * (isCalyx > 0.5 ? 0.05 : 0.56);
     return surface;
 }
 
