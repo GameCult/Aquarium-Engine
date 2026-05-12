@@ -73,6 +73,7 @@ internal sealed class AquariumSynthHost : IDisposable
         if (runtime.DesiredKey != desiredKey)
         {
             runtime.DesiredKey = desiredKey;
+            runtime.FailedKey = "";
             runtime.ScriptChangedAt = timeSeconds;
             runtime.SoundCache.Clear();
             if (runtime.State != AquariumSynthPatchCompileState.Compiling)
@@ -83,6 +84,7 @@ internal sealed class AquariumSynthHost : IDisposable
 
         if (runtime.State == AquariumSynthPatchCompileState.Compiling ||
             runtime.ReadyKey == desiredKey ||
+            runtime.FailedKey == desiredKey ||
             runtime.DesiredKey != desiredKey ||
             timeSeconds - runtime.ScriptChangedAt < CompileDebounceSeconds)
         {
@@ -91,6 +93,7 @@ internal sealed class AquariumSynthHost : IDisposable
 
         if (faust is null)
         {
+            runtime.FailedKey = desiredKey;
             SetStatus(runtime, AquariumSynthPatchCompileState.Failed, faustLoadError ?? "bundled Faust toolchain not found", patch.FaustCompileRevision);
             return;
         }
@@ -120,6 +123,7 @@ internal sealed class AquariumSynthHost : IDisposable
                     runtime.Compiled?.Dispose();
                     runtime.Compiled = compiled;
                     runtime.ReadyKey = compileKey;
+                    runtime.FailedKey = "";
                     runtime.SoundCache.Clear();
                     runtime.CompileTask = null;
                     runtime.SetStatus(AquariumSynthPatchCompileState.Ready, $"ready in {compiled.CompileMilliseconds:0} ms", revision, timeSeconds);
@@ -134,6 +138,7 @@ internal sealed class AquariumSynthHost : IDisposable
                     runtime.Compiled?.Dispose();
                     runtime.Compiled = null;
                     runtime.ReadyKey = "";
+                    runtime.FailedKey = compileKey;
                     runtime.SoundCache.Clear();
                     runtime.CompileTask = null;
                     runtime.SetStatus(AquariumSynthPatchCompileState.Failed, ex.Message, revision, timeSeconds);
@@ -292,6 +297,7 @@ internal sealed class AquariumSynthHost : IDisposable
         public readonly Dictionary<string, CachedSound> SoundCache = new(StringComparer.Ordinal);
         public string DesiredKey { get; set; } = "";
         public string ReadyKey { get; set; } = "";
+        public string FailedKey { get; set; } = "";
         public float ScriptChangedAt { get; set; }
         public CompiledFaustPatch? Compiled { get; set; }
         public Task? CompileTask { get; set; }
