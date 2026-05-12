@@ -4,8 +4,9 @@ project:
   upstream: https://github.com/GameCult/Aquarium-Engine
   purpose: >
     Native C# engine core for the Epiphany Aquarium client. The engine owns the
-    Win32 host, D3D12 renderer, input loop, live runtime boundary,
-    CultCache-backed state, and diegetic UI/runtime integration.
+    Win32 host, D3D12 renderer, input loop, client reload boundary, and future
+    render graph abstractions. The Epiphany client owns frontend intent and
+    configures those engine abstractions.
 
 current_model:
   host:
@@ -31,13 +32,13 @@ current_model:
     post_shader: src/Aquarium.Engine/Render/Shaders/D3D12Post.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
     debug_ui: src/Aquarium.Engine/Render/Ui/DebugUi.cs
-    runtime_loader: src/Aquarium.Engine/Live/LiveRuntimeLoader.cs
+    runtime_loader: src/Aquarium.Engine/Runtime/ClientRuntimeLoader.cs
     dev_reload: scripts/dev-reload.ps1
     dev_watch: scripts/dev-watch.ps1
-  live_runtime:
+  epiphany_client:
     contracts: src/Aquarium.Engine.Contracts
-    implementation: src/Aquarium.Engine.Live
-    state_store: src/Aquarium.Engine.Live/State/AquariumCultStateStore.cs
+    implementation: src/Aquarium.Epiphany
+    state_store: src/Aquarium.Epiphany/State/AquariumCultStateStore.cs
     state_document: epiphany.aquarium.live_state
     graphics_settings_document: epiphany.aquarium.graphics_settings
   dependencies:
@@ -45,6 +46,7 @@ current_model:
     cult_lib: E:\Projects\CultLib
   docs:
     doctrine: docs/aquarium-engine-doctrine.md
+    engine_client_boundary: docs/engine-client-boundary.md
     renderer: docs/hlsl-renderer.md
     agent_sdf_visual_language: docs/epiphany-agent-sdf-visual-language.md
     runtime_surface: docs/cult-runtime-surface.md

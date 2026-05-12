@@ -1,10 +1,11 @@
 using System.Numerics;
+using Aquarium.Engine;
 using GameCult.Caching;
 using GameCult.Caching.MessagePack;
 using GameCult.Networking;
 using MessagePack;
 
-namespace Aquarium.Engine.State;
+namespace Aquarium.Epiphany.State;
 
 public sealed class AquariumCultStateStore : IDisposable
 {

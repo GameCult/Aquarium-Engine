@@ -21,7 +21,7 @@ keeping C# and Rider as the everyday working environment.
 
 The renderer owns the visible Aquarium frame:
 
-1. Camera and Grid constants come from the live runtime.
+1. Camera and Grid constants come from the client runtime.
 2. A Grid-space height pass renders the gravity/terrain height target.
 3. A fullscreen D3D12 HLSL pass traces Self, planets, cursor, and the Grid event
    lane.

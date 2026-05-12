@@ -14,7 +14,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $reloadScript = Join-Path $PSScriptRoot "dev-reload.ps1"
-$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj"
+$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj"
 $watchLogPath = Join-Path $repoRoot "artifacts\dev-reload\watch.log"
 $liveSlotRoot = Join-Path $repoRoot "artifacts\dev-reload\live-slots"
 $liveReloadPointerPath = Join-Path $repoRoot "artifacts\dev-reload\live-current.txt"
@@ -70,13 +70,13 @@ function Get-SourceFiles {
 
 function Get-LiveFiles {
     Get-SourceFiles | Where-Object {
-        $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Engine.Live\*")
+        $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Epiphany\*")
     }
 }
 
 function Get-RestartFiles {
     Get-SourceFiles | Where-Object {
-        $_.FullName -notlike (Join-Path $repoRoot "src\Aquarium.Engine.Live\*")
+        $_.FullName -notlike (Join-Path $repoRoot "src\Aquarium.Epiphany\*")
     }
 }
 
@@ -283,12 +283,12 @@ function Invoke-LiveReload {
     Write-WatchLog "Live reload requested: $reason"
     dotnet build $liveProjectPath -c Debug -o $liveSlot
     if ($LASTEXITCODE -ne 0) {
-        throw "live runtime build failed with exit code $LASTEXITCODE."
+        throw "client runtime build failed with exit code $LASTEXITCODE."
     }
 
-    $liveAssemblyPath = Join-Path $liveSlot "Aquarium.Engine.Live.dll"
+    $liveAssemblyPath = Join-Path $liveSlot "Aquarium.Epiphany.dll"
     if (-not (Test-Path $liveAssemblyPath)) {
-        throw "Expected live runtime assembly was not produced: $liveAssemblyPath"
+        throw "Expected client runtime assembly was not produced: $liveAssemblyPath"
     }
 
     Set-Content -Path $liveReloadPointerPath -Value $liveAssemblyPath -Encoding UTF8
@@ -313,7 +313,7 @@ function Wait-LiveReloadAcknowledged {
     $stderrLog = if ($state.stderrLog) { [string]$state.stderrLog } else { $null }
     $timeoutSeconds = [Math]::Max(1, $LiveReloadAckTimeoutSeconds)
     $deadline = (Get-Date).AddSeconds($timeoutSeconds)
-    $appliedLine = "Live runtime reload applied: $liveAssemblyPath"
+    $appliedLine = "Client runtime reload applied: $liveAssemblyPath"
 
     while ((Get-Date) -lt $deadline) {
         if (Test-Path $stdoutLog) {
@@ -326,8 +326,8 @@ function Wait-LiveReloadAcknowledged {
 
         if ($stderrLog -and (Test-Path $stderrLog)) {
             $stderrTail = (Get-Content -Path $stderrLog -Tail 120 -ErrorAction SilentlyContinue) -join "`n"
-            if ($stderrTail -match "Live runtime reload failed") {
-                throw "host reported live runtime reload failure. See $stderrLog"
+            if ($stderrTail -match "Client runtime reload failed") {
+                throw "host reported client runtime reload failure. See $stderrLog"
             }
         }
 

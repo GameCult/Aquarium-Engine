@@ -11,7 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Engine", "src\Aqua
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CultMath", "..\CultMath\src\CultMath\CultMath.csproj", "{0089E341-25F2-43FC-8FD9-CBD1AE646D91}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Engine.Live", "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj", "{33654E0D-B31A-4062-B6AC-C1CE4C1A1F65}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Epiphany", "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj", "{33654E0D-B31A-4062-B6AC-C1CE4C1A1F65}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameCult.Caching.MessagePack", "..\CultLib\src\GameCult.Caching.MessagePack\GameCult.Caching.MessagePack.csproj", "{A8EDAE19-805B-4B09-9566-BE63937CA1B9}"
 EndProject

@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "src\Aquarium.Engine\Aquarium.Engine.csproj"
-$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj"
+$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj"
 $publishRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     Join-Path $repoRoot "artifacts\publish"
 }
@@ -41,7 +41,7 @@ $publishArguments = @(
 
 Write-Host "Publishing Aquarium Engine:"
 Write-Host "  Project: $projectPath"
-Write-Host "  Live:    $liveProjectPath"
+Write-Host "  Client:  $liveProjectPath"
 Write-Host "  Runtime: $Runtime"
 Write-Host "  Output:  $publishPath"
 dotnet @publishArguments
@@ -51,12 +51,12 @@ if ($LASTEXITCODE -ne 0) {
 
 dotnet publish $liveProjectPath -c $Configuration -r $Runtime --self-contained false -o $publishPath
 if ($LASTEXITCODE -ne 0) {
-    throw "live runtime publish failed with exit code $LASTEXITCODE."
+    throw "client runtime publish failed with exit code $LASTEXITCODE."
 }
 
 $requiredFiles = @(
     "Aquarium.Engine.exe",
-    "Aquarium.Engine.Live.dll",
+    "Aquarium.Epiphany.dll",
     "Aquarium.Engine.Contracts.dll",
     "Assets\Aquarium-Engine-Icon.ico",
     "Assets\Fonts\Montserrat[wght].ttf",

@@ -1,8 +1,9 @@
 using System.Numerics;
+using Aquarium.Engine;
 using Aquarium.Engine.Input;
-using Aquarium.Engine.State;
+using Aquarium.Epiphany.State;
 
-namespace Aquarium.Engine;
+namespace Aquarium.Epiphany;
 
 public sealed class AquariumRuntime : IAquariumRuntime
 {

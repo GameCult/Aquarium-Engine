@@ -2,25 +2,22 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Diagnostics;
 
-namespace Aquarium.Engine.Live;
+namespace Aquarium.Engine.Runtime;
 
-public sealed class LiveRuntimeLoader : IDisposable
+public sealed class ClientRuntimeLoader : IDisposable
 {
-    private const string LiveAssemblyName = "Aquarium.Engine.Live.dll";
-    private const string FactoryTypeName = "Aquarium.Engine.AquariumRuntimeFactory";
-
-    private readonly string liveAssemblyPath;
-    private readonly string? liveReloadPointerPath;
+    private readonly string? clientAssemblyPath;
+    private readonly string? clientReloadPointerPath;
     private readonly Stopwatch reloadClock = Stopwatch.StartNew();
     private readonly AquariumRuntimeOptions options;
     private ReloadedRuntime? current;
     private TimeSpan lastReloadCheck;
     private string? currentAssemblyPath;
 
-    public LiveRuntimeLoader(AquariumRuntimeOptions options, string? liveAssemblyPath = null, string? liveReloadPointerPath = null)
+    public ClientRuntimeLoader(AquariumRuntimeOptions options, string? clientAssemblyPath = null, string? clientReloadPointerPath = null)
     {
-        this.liveAssemblyPath = liveAssemblyPath ?? Path.Combine(AppContext.BaseDirectory, LiveAssemblyName);
-        this.liveReloadPointerPath = liveReloadPointerPath;
+        this.clientAssemblyPath = clientAssemblyPath;
+        this.clientReloadPointerPath = clientReloadPointerPath;
         this.options = options;
     }
 
@@ -30,7 +27,7 @@ public sealed class LiveRuntimeLoader : IDisposable
         {
             if (current == null)
             {
-                Reload(liveAssemblyPath, options);
+                Reload(RequireClientAssemblyPath(), options);
             }
 
             return current!.Runtime;
@@ -39,23 +36,32 @@ public sealed class LiveRuntimeLoader : IDisposable
 
     public IAquariumRuntime Load()
     {
-        Reload(liveAssemblyPath, options);
+        Reload(RequireClientAssemblyPath(), options);
         return Runtime;
     }
 
     public void Reload(string assemblyPath, AquariumRuntimeOptions options)
     {
         var previous = current;
-        var loadContext = new LiveAssemblyLoadContext(assemblyPath);
+        var loadContext = new ClientAssemblyLoadContext(assemblyPath);
         IAquariumRuntime? nextRuntime = null;
 
         try
         {
             var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
-            var factoryType = assembly.GetType(FactoryTypeName, throwOnError: true)
-                ?? throw new InvalidOperationException($"Live runtime factory was not found: {FactoryTypeName}");
+            var factoryTypes = assembly.GetTypes()
+                .Where(type => typeof(IAquariumRuntimeFactory).IsAssignableFrom(type)
+                    && type is { IsAbstract: false, IsInterface: false })
+                .ToArray();
+            if (factoryTypes.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Client runtime assembly must contain exactly one concrete {nameof(IAquariumRuntimeFactory)} implementation; found {factoryTypes.Length}.");
+            }
+
+            var factoryType = factoryTypes[0];
             var factory = (IAquariumRuntimeFactory?)Activator.CreateInstance(factoryType)
-                ?? throw new InvalidOperationException($"Live runtime factory could not be created: {FactoryTypeName}");
+                ?? throw new InvalidOperationException($"Client runtime factory could not be created: {factoryType.FullName}");
 
             nextRuntime = factory.Create(options);
             nextRuntime.Start();
@@ -81,7 +87,7 @@ public sealed class LiveRuntimeLoader : IDisposable
 
     private void TryReloadFromPointer()
     {
-        if (string.IsNullOrWhiteSpace(liveReloadPointerPath) || reloadClock.Elapsed - lastReloadCheck < TimeSpan.FromMilliseconds(500))
+        if (string.IsNullOrWhiteSpace(clientReloadPointerPath) || reloadClock.Elapsed - lastReloadCheck < TimeSpan.FromMilliseconds(500))
         {
             return;
         }
@@ -90,7 +96,7 @@ public sealed class LiveRuntimeLoader : IDisposable
         string candidatePath;
         try
         {
-            candidatePath = File.ReadAllText(liveReloadPointerPath).Trim();
+            candidatePath = File.ReadAllText(clientReloadPointerPath).Trim();
         }
         catch
         {
@@ -108,12 +114,22 @@ public sealed class LiveRuntimeLoader : IDisposable
         {
             current?.Runtime.FlushState();
             Reload(candidatePath, options);
-            Console.WriteLine($"Live runtime reload applied: {candidatePath}");
+            Console.WriteLine($"Client runtime reload applied: {candidatePath}");
         }
         catch (Exception error)
         {
-            Console.Error.WriteLine($"Live runtime reload failed; keeping previous runtime. {error.Message}");
+            Console.Error.WriteLine($"Client runtime reload failed; keeping previous runtime. {error.Message}");
         }
+    }
+
+    private string RequireClientAssemblyPath()
+    {
+        if (!string.IsNullOrWhiteSpace(clientAssemblyPath))
+        {
+            return clientAssemblyPath;
+        }
+
+        throw new InvalidOperationException("A client runtime assembly path is required. Pass --client-assembly or set AQUARIUM_CLIENT_ASSEMBLY.");
     }
 
     public void Dispose()
@@ -124,7 +140,7 @@ public sealed class LiveRuntimeLoader : IDisposable
         runtime?.Unload();
     }
 
-    private sealed class ReloadedRuntime(LiveAssemblyLoadContext loadContext, IAquariumRuntime runtime)
+    private sealed class ReloadedRuntime(ClientAssemblyLoadContext loadContext, IAquariumRuntime runtime)
     {
         public IAquariumRuntime Runtime { get; } = runtime;
 
@@ -134,7 +150,7 @@ public sealed class LiveRuntimeLoader : IDisposable
         }
     }
 
-    private sealed class LiveAssemblyLoadContext(string assemblyPath) : AssemblyLoadContext(isCollectible: true)
+    private sealed class ClientAssemblyLoadContext(string assemblyPath) : AssemblyLoadContext(isCollectible: true)
     {
         private readonly AssemblyDependencyResolver resolver = new(assemblyPath);
 

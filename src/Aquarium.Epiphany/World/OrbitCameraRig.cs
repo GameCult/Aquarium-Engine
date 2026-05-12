@@ -1,7 +1,7 @@
 using System.Numerics;
 using Aquarium.Engine.Input;
 
-namespace Aquarium.Engine;
+namespace Aquarium.Epiphany;
 
 public sealed class OrbitCameraRig
 {

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Aquarium.Engine.Input;
-using Aquarium.Engine.Live;
 using Aquarium.Engine.Platform;
 using Aquarium.Engine.Render;
+using Aquarium.Engine.Runtime;
 using System.Numerics;
 
 namespace Aquarium.Engine;
@@ -12,13 +12,13 @@ public static class AquariumHost
     public static int Run(string[] args)
     {
         var runtimeOptions = new AquariumRuntimeOptions(ParseHeadless(args), ParseCachePath(args), ParseRenderDebugMode(args));
-        using var runtimeLoader = new LiveRuntimeLoader(runtimeOptions, ParseLiveAssemblyPath(args), ParseLiveReloadPointerPath(args));
+        using var runtimeLoader = new ClientRuntimeLoader(runtimeOptions, ParseClientAssemblyPath(args), ParseClientReloadPointerPath(args));
         var runtime = runtimeLoader.Load();
         var input = new InputState();
         var width = runtime.Options.Headless ? 640 : 1280;
         var height = runtime.Options.Headless ? 360 : 720;
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Aquarium-Engine-Icon.ico");
-        using var window = Win32Window.Create("Epiphany Aquarium Engine", width, height, input, iconPath, visible: !runtime.Options.Headless);
+        using var window = Win32Window.Create("Aquarium Engine", width, height, input, iconPath, visible: !runtime.Options.Headless);
         window.PaintSplash("Aquarium", "Preparing runtime state");
         using var renderer = CreateRenderer(
             window.Handle,
@@ -128,32 +128,36 @@ public static class AquariumHost
         return Environment.GetEnvironmentVariable("AQUARIUM_SHADER_SOURCE");
     }
 
-    private static string? ParseLiveAssemblyPath(IReadOnlyCollection<string> args)
+    private static string? ParseClientAssemblyPath(IReadOnlyCollection<string> args)
     {
         var values = args.ToArray();
         for (var index = 0; index < values.Length - 1; index++)
         {
-            if (string.Equals(values[index], "--live-assembly", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(values[index], "--client-assembly", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(values[index], "--live-assembly", StringComparison.OrdinalIgnoreCase))
             {
                 return values[index + 1];
             }
         }
 
-        return Environment.GetEnvironmentVariable("AQUARIUM_LIVE_ASSEMBLY");
+        return Environment.GetEnvironmentVariable("AQUARIUM_CLIENT_ASSEMBLY")
+            ?? Environment.GetEnvironmentVariable("AQUARIUM_LIVE_ASSEMBLY");
     }
 
-    private static string? ParseLiveReloadPointerPath(IReadOnlyCollection<string> args)
+    private static string? ParseClientReloadPointerPath(IReadOnlyCollection<string> args)
     {
         var values = args.ToArray();
         for (var index = 0; index < values.Length - 1; index++)
         {
-            if (string.Equals(values[index], "--live-reload-pointer", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(values[index], "--client-reload-pointer", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(values[index], "--live-reload-pointer", StringComparison.OrdinalIgnoreCase))
             {
                 return values[index + 1];
             }
         }
 
-        return Environment.GetEnvironmentVariable("AQUARIUM_LIVE_RELOAD_POINTER");
+        return Environment.GetEnvironmentVariable("AQUARIUM_CLIENT_RELOAD_POINTER")
+            ?? Environment.GetEnvironmentVariable("AQUARIUM_LIVE_RELOAD_POINTER");
     }
 
     private static int? ParseRenderDebugMode(IReadOnlyCollection<string> args)

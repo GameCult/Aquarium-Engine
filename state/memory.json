@@ -14,7 +14,9 @@
   "technical_memory": {
     "native_engine": [
       "Aquarium Engine lives at E:\\Projects\\Aquarium-Engine. Main is the live development branch.",
-      "The host owns Win32 windowing, D3D12 rendering, input translation, and the live-runtime assembly boundary.",
+      "Aquarium.Engine is the native engine layer: Win32 hosting, D3D12 rendering, input translation, reload transport, resource abstractions, and future render graph execution. It must not know Epiphany frontend roles, policy, or semantic client layout.",
+      "Aquarium.Epiphany is the Epiphany client layer behind Aquarium.Engine.Contracts. It owns client runtime state, CultCache documents, CultNet interpretation, camera intent, and future render graph configuration against engine abstractions.",
+      "The host owns Win32 windowing, D3D12 rendering, input translation, and the client-runtime assembly boundary.",
       "D3D12 descriptor ownership stays explicit: static descriptors for long-lived views, per-frame transient descriptors reset only after fence wait, and whole-arena rebuilds on resize until real descriptor churn demands free lists.",
       "D3D12 previous-frame camera/Grid/time/cursor state is renderer-level temporal state, not per-swapchain-frame-resource state.",
       "Grid height is brush-rendered into one scalar R16_Float target. Height is one value; do not spend extra channels without a concrete pass contract.",
@@ -69,7 +71,7 @@
     ],
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",
-      "Global graphics presentation settings live in epiphany.aquarium.graphics_settings. The debug UI edits the renderer copy; the host syncs changed renderer settings back to the live runtime; the runtime flushes dirty settings through CultCache.",
+      "Global graphics presentation settings live in epiphany.aquarium.graphics_settings. The debug UI edits the renderer copy; the host syncs changed renderer settings back to the client runtime; the runtime flushes dirty settings through CultCache.",
       "A truncated or unreadable single-file CultCache backing store is not a schema migration failure. Aquarium should quarantine the corrupt snapshot and boot fresh typed state.",
       "dev-reload builds disposable apphost slots so a running window does not lock normal build output. Headless smoke runs use a separate CultCache from the visible dev window.",
       "Live runtime reload is not successful just because dev-watch wrote live-current.txt. The watcher must see the host acknowledge the exact live DLL path in stdout.",

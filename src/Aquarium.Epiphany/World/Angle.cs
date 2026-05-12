@@ -1,4 +1,4 @@
-namespace Aquarium.Engine;
+namespace Aquarium.Epiphany;
 
 public static class Angle
 {

@@ -13,7 +13,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "src\Aquarium.Engine\Aquarium.Engine.csproj"
-$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Engine.Live\Aquarium.Engine.Live.csproj"
+$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj"
 $devRoot = Join-Path $repoRoot "artifacts\dev-reload"
 $slotRoot = Join-Path $devRoot "slots"
 $visibleStatePath = Join-Path $devRoot "state.clixml"
@@ -184,7 +184,7 @@ function Start-AquariumProcess {
     }
 
     if (-not (Test-Path $LiveAssemblyPath)) {
-        throw "Expected live runtime assembly does not exist: $LiveAssemblyPath"
+        throw "Expected client runtime assembly does not exist: $LiveAssemblyPath"
     }
 
     Set-Content -Path $liveReloadPointerPath -Value $LiveAssemblyPath -Encoding UTF8
@@ -192,8 +192,8 @@ function Start-AquariumProcess {
     $arguments = @(
         "--cache", $cultCachePath,
         "--shader-source", $shaderSourcePath,
-        "--live-assembly", $LiveAssemblyPath,
-        "--live-reload-pointer", $liveReloadPointerPath
+        "--client-assembly", $LiveAssemblyPath,
+        "--client-reload-pointer", $liveReloadPointerPath
     )
     if ($RunHeadless) {
         $arguments += "--headless"
@@ -234,7 +234,7 @@ function Reopen-VisibleProcess {
     }
 
     $slotPath = [string]$state.slot
-    $liveAssemblyPath = Join-Path $slotPath "Aquarium.Engine.Live.dll"
+    $liveAssemblyPath = Join-Path $slotPath "Aquarium.Epiphany.dll"
     if ($state.PSObject.Properties.Name -contains "liveAssembly" -and $state.liveAssembly) {
         $liveAssemblyPath = [string]$state.liveAssembly
     }
@@ -283,7 +283,7 @@ dotnet build $liveProjectPath `
     -c Debug `
     -o $slotPath
 if ($LASTEXITCODE -ne 0) {
-    throw "live runtime build failed with exit code $LASTEXITCODE."
+    throw "client runtime build failed with exit code $LASTEXITCODE."
 }
 
 if ($BuildOnly) {
@@ -301,13 +301,13 @@ if ($BuildOnly) {
 Stop-PreviousOwnedProcess
 
 $exePath = Join-Path $slotPath "Aquarium.Engine.exe"
-$liveAssemblyPath = Join-Path $slotPath "Aquarium.Engine.Live.dll"
+$liveAssemblyPath = Join-Path $slotPath "Aquarium.Epiphany.dll"
 if (-not (Test-Path $exePath)) {
     throw "Expected apphost was not produced: $exePath"
 }
 
 if (-not (Test-Path $liveAssemblyPath)) {
-    throw "Expected live runtime assembly was not produced: $liveAssemblyPath"
+    throw "Expected client runtime assembly was not produced: $liveAssemblyPath"
 }
 
 $process = Start-AquariumProcess -SlotPath $slotPath -LiveAssemblyPath $liveAssemblyPath -RunHeadless:$Headless

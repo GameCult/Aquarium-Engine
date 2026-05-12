@@ -1,7 +1,8 @@
 using GameCult.Caching;
 using MessagePack;
+using Aquarium.Engine;
 
-namespace Aquarium.Engine.State;
+namespace Aquarium.Epiphany.State;
 
 [CultDocument("epiphany.aquarium.graphics_settings", "epiphany.aquarium.graphics_settings.v0")]
 [MessagePackObject]

@@ -25,9 +25,9 @@ Aquarium world in HLSL, and draws crisp overlay text through DirectWrite. The
 camera target is the Grid center. Grid radius follows zoom distance. Body anchors
 remain world-space.
 
-The live runtime is split behind `Aquarium.Engine.Contracts`, so gameplay code
-can reload while the host, window, renderer, and D3D device stay alive. Runtime
-state is banked through CultCache MessagePack documents instead of loose JSON.
+The Epiphany client is split behind `Aquarium.Engine.Contracts`, so client code
+can reload while the engine host, window, renderer, and D3D device stay alive.
+Runtime state is banked through CultCache MessagePack documents instead of loose JSON.
 
 ## Run
 
@@ -37,7 +37,7 @@ Aquarium currently expects the sibling `CultMath` and `CultLib` repos at
 
 ```powershell
 dotnet build Aquarium.Engine.slnx
-dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj
+dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --client-assembly src\Aquarium.Epiphany\bin\Debug\net10.0\Aquarium.Epiphany.dll
 ```
 
 For Rider, open `Aquarium.Engine.sln`. The `.slnx` stays as the compact
@@ -95,15 +95,15 @@ shaders in the running process, then swaps the D3D shader objects only after
 compilation succeeds. A bad shader edit leaves the previous working shaders
 bound and writes the compiler failure to stderr.
 
-Live gameplay/runtime code is split into `Aquarium.Engine.Live` behind
-`Aquarium.Engine.Contracts`. The host loads that live DLL through a collectible
-assembly load context, while `dev-watch.ps1` builds live-only changes into
+Epiphany client/runtime code is split into `Aquarium.Epiphany` behind
+`Aquarium.Engine.Contracts`. The host loads that client DLL through a collectible
+assembly load context, while `dev-watch.ps1` builds client-only changes into
 `artifacts\dev-reload\live-slots` and updates `live-current.txt`. The running
 host sees the pointer change, loads and starts the new runtime first, then
-disposes the old one only after the replacement is valid. A bad live DLL leaves
+disposes the old one only after the replacement is valid. A bad client DLL leaves
 the previous runtime alive and reports the reload failure to stderr. The watcher
-waits for the host log to acknowledge the exact live DLL path before calling a
-live reload successful; pointer updates without host acknowledgement are treated
+waits for the host log to acknowledge the exact client DLL path before calling a
+client reload successful; pointer updates without host acknowledgement are treated
 as reload failures. Successful reloads rehydrate through CultCache without
 restarting the window or D3D device.
 Host, renderer, contract, project, script, and `src\Aquarium.Engine\Assets`
@@ -125,7 +125,7 @@ Stop the script-owned Aquarium process:
 Headless smoke:
 
 ```powershell
-dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --headless
+dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --headless --client-assembly src\Aquarium.Epiphany\bin\Debug\net10.0\Aquarium.Epiphany.dll
 ```
 
 Headless reload smoke without touching the normal build output:
@@ -147,7 +147,7 @@ Shipping publish:
 ```
 
 This writes a self-contained Windows build to
-`artifacts\publish\win-x64`, verifies the executable, live runtime DLL,
+`artifacts\publish\win-x64`, verifies the executable, Epiphany client DLL,
 contracts DLL, icon, bundled fonts, and shader source, then optionally creates
 `artifacts\publish\EpiphanyAquariumEngine-win-x64.zip`.
 
@@ -166,6 +166,7 @@ go out with the trash; the repo is not a scrapbook.
 ## Docs
 
 - `docs/aquarium-engine-doctrine.md`: engine doctrine and invariants.
+- `docs/engine-client-boundary.md`: Engine/Epiphany ownership split.
 - `docs/vortice-spine.md`: native host/renderer spine.
 - `docs/hlsl-renderer.md`: current shader path.
 - `docs/input.md`: camera and input contract.

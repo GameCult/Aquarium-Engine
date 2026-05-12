@@ -1,7 +1,8 @@
 using GameCult.Caching;
 using MessagePack;
+using Aquarium.Epiphany;
 
-namespace Aquarium.Engine.State;
+namespace Aquarium.Epiphany.State;
 
 [CultDocument("epiphany.aquarium.live_state", "epiphany.aquarium.live_state.v0")]
 [MessagePackObject]

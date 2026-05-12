@@ -48,11 +48,11 @@ It stores global renderer presentation controls: render debug mode, scene
 exposure, bloom intensity, and bloom veil intensity. `GraphicsSettings` lives in
 the contracts assembly so the native host and renderer can consume the same
 typed values without depending on CultCache internals. The Direct2D debug panel
-edits the renderer copy, the host syncs changed values back to the live runtime,
+edits the renderer copy, the host syncs changed values back to the client runtime,
 and the runtime persists dirty graphics settings through the same CultCache file
 used for live state.
 
-Live reload flushes the current runtime before loading the next live assembly,
+Live reload flushes the current runtime before loading the next client assembly,
 so changed graphics settings survive both process restart and assembly reload.
 
 ## CultNet Surface
