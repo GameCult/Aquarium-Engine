@@ -118,6 +118,9 @@ internal sealed class DebugUi
             case AquariumUiText text:
                 controls.Add(new TextControl(text.Label, text.Read, text.Write, text.Tooltip, () => text.Visible));
                 break;
+            case AquariumUiTextBox textBox:
+                controls.Add(new TextBoxControl(textBox.Label, textBox.Read, textBox.Write, textBox.Lines, textBox.AcceptsReturn, textBox.Submit, textBox.Tooltip, () => textBox.Visible));
+                break;
             case AquariumUiReadout readout:
                 controls.Add(new ReadoutControl(readout.Label, readout.Read, readout.Tooltip, () => readout.Visible));
                 break;
@@ -208,7 +211,7 @@ internal sealed class DebugUi
             control.Click(mousePosition);
             activeControlId = control.Id;
             control.IsActive = true;
-            if (control is TextControl)
+            if (control is ITextInputControl)
             {
                 focusedTextId = control.Id;
             }
@@ -241,7 +244,7 @@ internal sealed class DebugUi
             return;
         }
 
-        if (controls.FirstOrDefault(control => control.Id == textId) is TextControl textControl)
+        if (controls.FirstOrDefault(control => control.IsVisible && control.Id == textId) is ITextInputControl textControl)
         {
             textControl.ApplyTextInput(input);
         }
@@ -319,6 +322,7 @@ internal sealed class DebugUi
 
         foreach (var control in controls.Where(control => control.IsVisible))
         {
+            control.IsFocused = control.Id == focusedTextId;
             control.Draw(
                 target,
                 smallFormat,
@@ -534,6 +538,12 @@ internal sealed class DebugUi
             return this;
         }
 
+        public DebugUiPanel TextBox(string label, Func<string> read, Action<string> write, int lines = 3, bool acceptsReturn = true, Action? submit = null, string? tooltip = null, Func<bool>? isVisible = null)
+        {
+            controls.Add(new TextBoxControl(label, read, write, Math.Max(1, lines), acceptsReturn, submit, tooltip, isVisible));
+            return this;
+        }
+
         public DebugUiPanel Readout(string label, Func<string> read, string? tooltip = null, Func<bool>? isVisible = null)
         {
             controls.Add(new ReadoutControl(label, read, tooltip, isVisible));
@@ -542,6 +552,11 @@ internal sealed class DebugUi
     }
 
     public readonly record struct DebugUiOption(int Value, string Label);
+
+    private interface ITextInputControl
+    {
+        void ApplyTextInput(InputState input);
+    }
 
     internal abstract class DebugUiControl(string label, string? tooltip = null, Func<bool>? isVisible = null)
     {
@@ -560,6 +575,8 @@ internal sealed class DebugUi
         public bool IsHovered { get; set; }
 
         public bool IsActive { get; set; }
+
+        public bool IsFocused { get; set; }
 
         public virtual bool IsInteractive => true;
 
@@ -846,7 +863,7 @@ internal sealed class DebugUi
     }
 
     private sealed class TextControl(string label, Func<string> read, Action<string> write, string? tooltip, Func<bool>? isVisible)
-        : DebugUiControl(label, tooltip, isVisible)
+        : DebugUiControl(label, tooltip, isVisible), ITextInputControl
     {
         public override float LayoutHeight => RowHeight * 2.0f;
 
@@ -907,6 +924,106 @@ internal sealed class DebugUi
             }
 
             target.DrawText(display, format, RectFromEdges(Bounds.Left + 8.0f, Bounds.Top + RowHeight - 4.0f, Bounds.Right - 8.0f, Bounds.Bottom), primaryBrush, DrawTextOptions.Clip);
+        }
+    }
+
+    private sealed class TextBoxControl(string label, Func<string> read, Action<string> write, int lines, bool acceptsReturn, Action? submit, string? tooltip, Func<bool>? isVisible)
+        : DebugUiControl(label, tooltip, isVisible), ITextInputControl
+    {
+        private const float LabelHeight = 20.0f;
+        private const float TextLineHeight = 18.0f;
+        private const float VerticalPadding = 9.0f;
+
+        public override float LayoutHeight => LabelHeight + VerticalPadding * 2.0f + Math.Max(1, lines) * TextLineHeight;
+
+        public void ApplyTextInput(InputState input)
+        {
+            var value = read();
+            foreach (var ch in input.TextInput)
+            {
+                switch (ch)
+                {
+                    case '\b':
+                        if (value.Length > 0)
+                        {
+                            value = value[..^1];
+                        }
+                        break;
+                    case '\r':
+                    case '\n':
+                        if (acceptsReturn)
+                        {
+                            value += "\n";
+                        }
+                        else
+                        {
+                            submit?.Invoke();
+                            value = read();
+                        }
+                        break;
+                    default:
+                        if (!char.IsControl(ch))
+                        {
+                            value += ch;
+                        }
+                        break;
+                }
+            }
+
+            if (value != read())
+            {
+                write(value);
+            }
+        }
+
+        public override void Draw(
+            ID2D1RenderTarget target,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
+            ID2D1SolidColorBrush outlineBrush,
+            ID2D1SolidColorBrush primaryBrush,
+            ID2D1SolidColorBrush quietBrush,
+            ID2D1SolidColorBrush accentBrush,
+            ID2D1SolidColorBrush accentHoverBrush,
+            ID2D1SolidColorBrush accentActiveBrush,
+            ID2D1SolidColorBrush dimAccentBrush,
+            ID2D1SolidColorBrush trackHoverBrush,
+            ID2D1SolidColorBrush trackActiveBrush)
+        {
+            var labelBounds = RectFromEdges(Bounds.Left + 8.0f, Bounds.Top, Bounds.Right - 8.0f, Bounds.Top + LabelHeight);
+            var box = RectFromEdges(Bounds.Left, Bounds.Top + LabelHeight, Bounds.Right, Bounds.Bottom);
+            target.DrawText(Label.ToUpperInvariant(), format, labelBounds, accentBrush, DrawTextOptions.Clip);
+            var focused = IsFocused || IsActive;
+            target.FillRectangle(box, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
+            target.DrawRectangle(box, focused ? accentBrush : outlineBrush, focused ? 1.5f : 1.0f);
+
+            target.DrawText(
+                DisplayText(),
+                format,
+                RectFromEdges(box.Left + 8.0f, box.Top + 6.0f, box.Right - 8.0f, box.Bottom - 6.0f),
+                primaryBrush,
+                DrawTextOptions.Clip);
+
+            if (focused)
+            {
+                var caretX = box.Right - 12.0f;
+                var caretBottom = box.Bottom - 8.0f;
+                target.DrawLine(new Vector2(caretX, caretBottom - TextLineHeight + 2.0f), new Vector2(caretX, caretBottom), accentBrush, 1.25f);
+            }
+        }
+
+        private string DisplayText()
+        {
+            var value = read().Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+            var split = value.Split('\n');
+            if (split.Length <= lines)
+            {
+                return value;
+            }
+
+            return string.Join('\n', split.Skip(split.Length - lines));
         }
     }
 

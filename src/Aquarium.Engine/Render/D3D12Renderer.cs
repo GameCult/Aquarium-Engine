@@ -318,13 +318,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 .Slider("Bloom Intensity", () => settings.BloomIntensity, value => settings = (settings with { BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity) }).Normalized(), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.", () => activeDebugTab == 0)
                 .Slider("Bloom Veil", () => settings.BloomVeilIntensity, value => settings = (settings with { BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity) }).Normalized(), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.", () => activeDebugTab == 0)
                 .Section("Terminal", () => activeDebugTab == 1)
-                .Readout("Output", TerminalDisplay, "Recent command output.", () => activeDebugTab == 1)
-                .Text("Command", () => terminalInput, value => terminalInput = value, "Debug command input.", () => activeDebugTab == 1)
-                .Button("Run Command", ExecuteTerminalInput, "Runs the current debug command.", () => activeDebugTab == 1)
+                .TextBox("Session", TerminalDisplay, UpdateTerminalInputFromDisplay, lines: 8, acceptsReturn: false, submit: ExecuteTerminalInput, tooltip: "Terminal log with live command prompt.", isVisible: () => activeDebugTab == 1)
                 .Section("Synth Playground", () => activeDebugTab == 2)
                 .Options("Preset", () => synthPlaygroundPreset, SelectSynthPreset, SynthPresetOptions, "Loads a built-in synth patch.", () => activeDebugTab == 2)
                 .Readout("Compile", () => $"{synthPlaygroundStatus.State}: {synthPlaygroundStatus.Message}", "Faust compile status.", () => activeDebugTab == 2)
-                .Text("Patch", () => synthPlaygroundScript, value => synthPlaygroundScript = value, "Patch DSL source. Enter inserts ';'.", () => activeDebugTab == 2)
+                .TextBox("Patch", () => synthPlaygroundScript, value => synthPlaygroundScript = value, lines: 7, acceptsReturn: true, tooltip: "Patch DSL source.", isVisible: () => activeDebugTab == 2)
                 .Slider("Gain", () => synthPlaygroundGain, value => synthPlaygroundGain = Math.Clamp(value, 0.0f, 1.0f), 0.0f, 1.0f, "0.###", "Playground patch gain.", () => activeDebugTab == 2)
                 .Button("Compile", () => synthPlaygroundCompileRevision++, "Forces async Faust compile.", () => activeDebugTab == 2)
                 .Button("Play", () => { synthPlaygroundCompileRevision++; synthPlaygroundPlayRevision++; }, "Compiles and schedules the playground patch.", () => activeDebugTab == 2);
@@ -353,7 +351,25 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private string TerminalDisplay()
     {
-        return string.Join(" | ", terminalLines.TakeLast(4));
+        return string.Join('\n', terminalLines.TakeLast(10).Append($"> {terminalInput}"));
+    }
+
+    private void UpdateTerminalInputFromDisplay(string value)
+    {
+        var promptIndex = value.LastIndexOf("\n> ", StringComparison.Ordinal);
+        if (promptIndex >= 0)
+        {
+            terminalInput = value[(promptIndex + 3)..].Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
+            return;
+        }
+
+        if (value.StartsWith("> ", StringComparison.Ordinal))
+        {
+            terminalInput = value[2..].Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
+            return;
+        }
+
+        terminalInput = value.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
     }
 
     private void ExecuteTerminalInput()

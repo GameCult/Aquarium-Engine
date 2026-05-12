@@ -82,6 +82,12 @@ public sealed class AquariumUiPanelBuilder(List<AquariumUiControl> controls)
         return this;
     }
 
+    public AquariumUiPanelBuilder TextBox(string label, Func<string> read, Action<string> write, int lines = 3, bool acceptsReturn = true, Action? submit = null, string? tooltip = null, Func<bool>? isVisible = null)
+    {
+        controls.Add(new AquariumUiTextBox(label, read, write, Math.Max(1, lines), acceptsReturn, submit, tooltip, isVisible));
+        return this;
+    }
+
     public AquariumUiPanelBuilder Readout(string label, Func<string> read, string? tooltip = null, Func<bool>? isVisible = null)
     {
         controls.Add(new AquariumUiReadout(label, read, tooltip, isVisible));
@@ -117,6 +123,9 @@ public sealed record AquariumUiOptions(string Label, Func<int> Read, Action<int>
     : AquariumUiControl(Label, Tooltip, IsVisible);
 
 public sealed record AquariumUiText(string Label, Func<string> Read, Action<string> Write, string? Tooltip = null, Func<bool>? IsVisible = null)
+    : AquariumUiControl(Label, Tooltip, IsVisible);
+
+public sealed record AquariumUiTextBox(string Label, Func<string> Read, Action<string> Write, int Lines = 3, bool AcceptsReturn = true, Action? Submit = null, string? Tooltip = null, Func<bool>? IsVisible = null)
     : AquariumUiControl(Label, Tooltip, IsVisible);
 
 public sealed record AquariumUiReadout(string Label, Func<string> Read, string? Tooltip = null, Func<bool>? IsVisible = null)
