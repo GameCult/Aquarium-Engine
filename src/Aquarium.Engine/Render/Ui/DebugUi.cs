@@ -1069,7 +1069,7 @@ internal sealed class DebugUi
             if (value != NormalizedValue)
             {
                 write(value);
-                lastValue = value;
+                SyncCommittedValue(value);
             }
         }
 
@@ -1181,6 +1181,13 @@ internal sealed class DebugUi
             lastValue = value;
             caretIndex = value.Length;
             selectionAnchor = caretIndex;
+        }
+
+        private void SyncCommittedValue(string value)
+        {
+            lastValue = value;
+            caretIndex = Math.Clamp(caretIndex, 0, value.Length);
+            selectionAnchor = Math.Clamp(selectionAnchor, 0, value.Length);
         }
 
         private void MoveCaret(int index, bool selecting)
