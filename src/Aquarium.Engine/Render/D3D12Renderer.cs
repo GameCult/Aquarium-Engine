@@ -306,21 +306,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private DebugUi CreateDebugUi(AquariumUiDocument clientUi)
     {
-        var ui = new DebugUi("Aquarium Debug")
+        var ui = new DebugUi("Debug", 18.0f, 82.0f, 360.0f, debugTabTitles, () => activeDebugTab, SelectDebugTab)
             .Panel(panel =>
             {
-                panel
-                .Section("Tabs")
-                .Button("Aquarium", () => SelectDebugTab(0), "Shows engine renderer controls.")
-                .Button("Terminal", () => SelectDebugTab(1), "Shows interactive debug command terminal.")
-                .Button("Synth", () => SelectDebugTab(2), "Shows the synth patch playground.");
-                for (var index = 0; index < clientUi.Panels.Count; index++)
-                {
-                    var tabIndex = index + 3;
-                    var title = clientUi.Panels[index].Title;
-                    panel.Button(title, () => SelectDebugTab(tabIndex), $"Shows {title} debug controls.");
-                }
-
                 panel
                 .Section("View")
                 .Options("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), RenderDebugOptions, "Selects the active renderer debug view.", () => activeDebugTab == 0)

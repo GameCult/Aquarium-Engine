@@ -24,8 +24,13 @@ internal sealed class DebugUi
     private const float CloseButtonSize = 20.0f;
     private const float TooltipWidth = 268.0f;
     private const float TooltipHeight = 34.0f;
+    private const float TabRowHeight = 30.0f;
+    private const float TabButtonGap = 6.0f;
 
     private readonly List<DebugUiControl> controls = [];
+    private readonly IReadOnlyList<string> tabs;
+    private readonly Func<int> readActiveTab;
+    private readonly Action<int> writeActiveTab;
     private readonly float panelLeft;
     private readonly float panelTop;
     private readonly float panelWidth;
@@ -38,16 +43,24 @@ internal sealed class DebugUi
     private Vector2 mousePosition;
 
     public DebugUi(string title)
-        : this(title, DefaultPanelLeft, DefaultPanelTop, DefaultPanelWidth)
+        : this(title, DefaultPanelLeft, DefaultPanelTop, DefaultPanelWidth, [], () => 0, _ => { })
     {
     }
 
     public DebugUi(string title, float left, float top, float width)
+        : this(title, left, top, width, [], () => 0, _ => { })
+    {
+    }
+
+    public DebugUi(string title, float left, float top, float width, IReadOnlyList<string> tabs, Func<int> readActiveTab, Action<int> writeActiveTab)
     {
         Title = title;
         panelLeft = left;
         panelTop = top;
         panelWidth = width;
+        this.tabs = tabs;
+        this.readActiveTab = readActiveTab;
+        this.writeActiveTab = writeActiveTab;
     }
 
     public string Title { get; }
@@ -167,6 +180,16 @@ internal sealed class DebugUi
             return;
         }
 
+        var tabIndex = HitTestTab(mousePosition);
+        if (tabIndex >= 0)
+        {
+            writeActiveTab(tabIndex);
+            focusedTextId = null;
+            activeSliderId = null;
+            activeControlId = null;
+            return;
+        }
+
         DebugUiControl? clickedControl = null;
         focusedTextId = null;
         for (var index = controls.Count - 1; index >= 0; index--)
@@ -258,6 +281,14 @@ internal sealed class DebugUi
             new Vector2(panelBounds.Right, panelBounds.Top + HeaderHeight),
             outlineBrush,
             1.0f);
+        if (tabs.Count > 0)
+        {
+            target.DrawLine(
+                new Vector2(panelBounds.Left, panelBounds.Top + HeaderHeight + TabRowHeight),
+                new Vector2(panelBounds.Right, panelBounds.Top + HeaderHeight + TabRowHeight),
+                outlineBrush,
+                1.0f);
+        }
 
         target.DrawText(
             Title,
@@ -284,6 +315,8 @@ internal sealed class DebugUi
             closeBrush,
             closeButtonActive ? 2.0f : 1.25f);
 
+        DrawTabs(target, smallFormat, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush);
+
         foreach (var control in controls.Where(control => control.IsVisible))
         {
             control.Draw(
@@ -308,7 +341,7 @@ internal sealed class DebugUi
 
     private void Layout()
     {
-        var y = panelTop + HeaderHeight + 10.0f;
+        var y = panelTop + HeaderHeight + (tabs.Count > 0 ? TabRowHeight : 0.0f) + 10.0f;
         foreach (var control in controls.Where(control => control.IsVisible))
         {
             var height = control.LayoutHeight;
@@ -326,6 +359,70 @@ internal sealed class DebugUi
             panelBounds.Top + 11.0f,
             panelBounds.Right - 10.0f,
             panelBounds.Top + 11.0f + CloseButtonSize);
+    }
+
+    private Rect TabBounds(int index)
+    {
+        if (tabs.Count == 0)
+        {
+            return RectFromEdges(0, 0, 0, 0);
+        }
+
+        var available = panelWidth - 20.0f - Math.Max(0, tabs.Count - 1) * TabButtonGap;
+        var width = Math.Max(1.0f, available / tabs.Count);
+        var left = panelLeft + 10.0f + index * (width + TabButtonGap);
+        var top = panelTop + HeaderHeight + 4.0f;
+        return RectFromEdges(left, top, left + width, top + TabRowHeight - 8.0f);
+    }
+
+    private int HitTestTab(Vector2 point)
+    {
+        for (var index = 0; index < tabs.Count; index++)
+        {
+            if (Contains(TabBounds(index), point))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private void DrawTabs(
+        ID2D1RenderTarget target,
+        IDWriteTextFormat format,
+        ID2D1SolidColorBrush rowBrush,
+        ID2D1SolidColorBrush hoverRowBrush,
+        ID2D1SolidColorBrush activeRowBrush,
+        ID2D1SolidColorBrush outlineBrush,
+        ID2D1SolidColorBrush primaryBrush,
+        ID2D1SolidColorBrush quietBrush,
+        ID2D1SolidColorBrush accentBrush)
+    {
+        var activeTab = Math.Clamp(readActiveTab(), 0, Math.Max(0, tabs.Count - 1));
+        for (var index = 0; index < tabs.Count; index++)
+        {
+            var bounds = TabBounds(index);
+            var active = index == activeTab;
+            var hovered = Contains(bounds, mousePosition);
+            target.FillRectangle(bounds, active ? activeRowBrush : hovered ? hoverRowBrush : rowBrush);
+            target.DrawRectangle(bounds, active ? accentBrush : outlineBrush, active ? 1.5f : 1.0f);
+            if (active)
+            {
+                target.DrawLine(
+                    new Vector2(bounds.Left + 5.0f, bounds.Bottom - 2.0f),
+                    new Vector2(bounds.Right - 5.0f, bounds.Bottom - 2.0f),
+                    accentBrush,
+                    2.0f);
+            }
+
+            target.DrawText(
+                tabs[index],
+                format,
+                RectFromEdges(bounds.Left + 7.0f, bounds.Top, bounds.Right - 7.0f, bounds.Bottom),
+                active ? primaryBrush : quietBrush,
+                DrawTextOptions.Clip);
+        }
     }
 
     private void DrawTooltip(
