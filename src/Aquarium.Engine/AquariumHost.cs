@@ -53,7 +53,7 @@ public static class AquariumHost
             ApplyRendererDebugInput(renderer, input);
             SyncRendererSettingsToRuntime(renderer, runtimeLoader.Runtime);
             runtimeLoader.Update(deltaSeconds, input);
-            synthHost.Update(runtimeLoader.Runtime.Synth, deltaSeconds);
+            synthHost.Update(AquariumSynthDocument.Combine(runtimeLoader.Runtime.Synth, renderer.DebugSynth), deltaSeconds);
             if (!ReferenceEquals(settingsRuntime, runtimeLoader.Runtime))
             {
                 settingsRuntime = runtimeLoader.Runtime;

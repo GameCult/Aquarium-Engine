@@ -12,6 +12,29 @@ public sealed class AquariumSynthDocument
 
     public IReadOnlyList<AquariumSynthPatch> Patches => patches;
 
+    public static AquariumSynthDocument Combine(params AquariumSynthDocument[] documents)
+    {
+        var combined = new AquariumSynthDocument
+        {
+            Enabled = documents.Any(document => document.Enabled),
+            MasterGain = documents.Length == 0 ? 1.0f : documents.Max(document => document.MasterGain)
+        };
+        foreach (var document in documents)
+        {
+            if (!document.Enabled)
+            {
+                continue;
+            }
+
+            foreach (var patch in document.Patches)
+            {
+                combined.patches.Add(patch);
+            }
+        }
+
+        return combined;
+    }
+
     public AquariumSynthDocument Patch(
         string id,
         string script,
@@ -51,8 +74,11 @@ public enum AquariumSynthPatchCompileState
     Failed
 }
 
-public readonly record struct AquariumSynthTrigger(float IntervalSeconds, float PhaseSeconds = 0.0f)
+public readonly record struct AquariumSynthTrigger(float IntervalSeconds, float PhaseSeconds = 0.0f, int FireRevision = 0)
 {
     public static AquariumSynthTrigger Repeat(float intervalSeconds, float phaseSeconds = 0.0f) =>
         new(MathF.Max(0.001f, intervalSeconds), phaseSeconds);
+
+    public static AquariumSynthTrigger Manual(int fireRevision) =>
+        new(float.PositiveInfinity, 0.0f, fireRevision);
 }

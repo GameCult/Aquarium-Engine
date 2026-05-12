@@ -33,8 +33,22 @@ internal sealed class AquariumSynthHost : IDisposable
             runtime.StatusSink = patch.StatusSink;
             UpdatePatch(runtime, patch);
             PublishStatus(runtime, patch);
+            var pendingFireReady = false;
+            lock (runtime.Sync)
+            {
+                pendingFireReady = runtime.PendingFire && runtime.Compiled is not null && runtime.ReadyKey == runtime.DesiredKey;
+                if (pendingFireReady)
+                {
+                    runtime.PendingFire = false;
+                }
+            }
 
-            if (ShouldTrigger(patch.Trigger, timeSeconds - deltaSeconds, timeSeconds))
+            if (pendingFireReady)
+            {
+                Play(runtime, patch, synth.MasterGain);
+            }
+
+            if (ShouldTrigger(runtime, patch.Trigger, timeSeconds - deltaSeconds, timeSeconds))
             {
                 Play(runtime, patch, synth.MasterGain);
             }
@@ -137,6 +151,7 @@ internal sealed class AquariumSynthHost : IDisposable
         {
             if (runtime.Compiled is null || runtime.ReadyKey != runtime.DesiredKey)
             {
+                runtime.PendingFire = true;
                 return;
             }
 
@@ -195,8 +210,19 @@ internal sealed class AquariumSynthHost : IDisposable
         }
     }
 
-    private static bool ShouldTrigger(AquariumSynthTrigger trigger, float previousTime, float currentTime)
+    private static bool ShouldTrigger(PatchRuntime runtime, AquariumSynthTrigger trigger, float previousTime, float currentTime)
     {
+        if (trigger.FireRevision > 0 && trigger.FireRevision != runtime.LastFireRevision)
+        {
+            runtime.LastFireRevision = trigger.FireRevision;
+            return true;
+        }
+
+        if (!float.IsFinite(trigger.IntervalSeconds))
+        {
+            return false;
+        }
+
         var interval = MathF.Max(trigger.IntervalSeconds, 0.001f);
         var previousBeat = MathF.Floor((previousTime - trigger.PhaseSeconds) / interval);
         var currentBeat = MathF.Floor((currentTime - trigger.PhaseSeconds) / interval);
@@ -269,6 +295,8 @@ internal sealed class AquariumSynthHost : IDisposable
         public float ScriptChangedAt { get; set; }
         public CompiledFaustPatch? Compiled { get; set; }
         public Task? CompileTask { get; set; }
+        public int LastFireRevision { get; set; }
+        public bool PendingFire { get; set; }
         public Action<AquariumSynthPatchStatus>? StatusSink { get; set; }
         public AquariumSynthPatchCompileState State => Status.State;
         public AquariumSynthPatchStatus Status { get; private set; } = new(id, AquariumSynthPatchCompileState.Idle, "idle", 0, 0.0);

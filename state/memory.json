@@ -68,7 +68,8 @@
     "text_and_ui": [
       "Overlay text uses DirectWrite/Direct2D after scene rendering. It is crisp final-pixel UI for debug surfaces, terminals, inspectors, and splash/status text.",
       "Aquarium UI controls follow the CultLib code-first binding style without Unity prefab assumptions: panels, sections, sliders, toggles, buttons, and option rows bound by explicit read/write delegates.",
-      "Aquarium.Engine.Contracts exposes AquariumUiDocument as the client-facing overlay composition surface. Clients declare panels and controls; Aquarium.Engine owns DirectWrite/Direct2D rendering, input dispatch, hover/active feedback, and panel presentation. Engine debug UI remains engine-owned and separate from client UI.",
+      "Aquarium.Engine.Contracts exposes AquariumUiDocument as the client-facing debug composition surface. Client panels are tabs inside the single Aquarium debug panel, not separate floating windows, and clients can register terminal commands through AquariumUiDocument.Command.",
+      "The unified F2 debug panel owns engine controls, client tabs, a command terminal, and the synth playground. Do not reintroduce separate Aquarium/Epiphany debug panels fighting for the same hotkey.",
       "Vortice.Mathematics.Rect uses x, y, width, height. UI code should use explicit RectFromEdges helpers when reasoning in edges.",
       "Debug UI feedback needs honest element-specific states: base, hover, and active. Sliders respond on track/fill and handle separately, keep geometry stable, and brighten by lerping accent colors toward white.",
       "Scene/diegetic labels should use renderer-owned MSDF/SDF billboards when they live in world space. Overlay text should not be shoved into HDR for convenience."

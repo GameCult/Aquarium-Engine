@@ -74,7 +74,7 @@ internal sealed class DebugUi
         return this;
     }
 
-    private void AddContractControl(AquariumUiControl control)
+    public void AddContractControl(AquariumUiControl control)
     {
         switch (control)
         {

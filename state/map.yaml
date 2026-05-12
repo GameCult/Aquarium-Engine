@@ -79,8 +79,8 @@ renderer_state:
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
     - SDF light buffer feeds Self emission and direct object lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
-    - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
-    - AquariumSynthDocument exposes client-declared patch scripts, trigger cadence, gain, Faust compile revision, and compile status callbacks; Aquarium.Engine compiles patches asynchronously through bundled libfaust/LLVM and sends compiled DSP SFX buffers into a WASAPI shared-mode mixer.
+    - DirectWrite/Direct2D unified debug panel with tabs for Aquarium renderer controls, client-declared debug panels, terminal commands, and the synth playground.
+    - AquariumSynthDocument exposes client-declared patch scripts, trigger cadence, gain, Faust compile revision, manual fire revisions, and compile status callbacks; Aquarium.Engine compiles patches asynchronously through bundled libfaust/LLVM and sends compiled DSP SFX buffers into a WASAPI shared-mode mixer.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.

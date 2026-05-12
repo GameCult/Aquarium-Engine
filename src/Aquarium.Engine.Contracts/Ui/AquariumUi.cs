@@ -3,10 +3,13 @@ namespace Aquarium.Engine.Ui;
 public sealed class AquariumUiDocument
 {
     private readonly List<AquariumUiPanel> panels = [];
+    private readonly List<AquariumConsoleCommand> commands = [];
 
     public static AquariumUiDocument Empty { get; } = new();
 
     public IReadOnlyList<AquariumUiPanel> Panels => panels;
+
+    public IReadOnlyList<AquariumConsoleCommand> Commands => commands;
 
     public AquariumUiDocument Panel(string title, Action<AquariumUiPanelBuilder> compose)
     {
@@ -18,6 +21,12 @@ public sealed class AquariumUiDocument
         var controls = new List<AquariumUiControl>();
         compose(new AquariumUiPanelBuilder(controls));
         panels.Add(new AquariumUiPanel(title, left, top, width, controls));
+        return this;
+    }
+
+    public AquariumUiDocument Command(string name, Func<IReadOnlyList<string>, string> execute, string description = "")
+    {
+        commands.Add(new AquariumConsoleCommand(name, execute, description));
         return this;
     }
 }
@@ -81,6 +90,8 @@ public sealed class AquariumUiPanelBuilder(List<AquariumUiControl> controls)
 }
 
 public readonly record struct AquariumUiOption(int Value, string Label);
+
+public sealed record AquariumConsoleCommand(string Name, Func<IReadOnlyList<string>, string> Execute, string Description = "");
 
 public abstract record AquariumUiControl(string Label, string? Tooltip, Func<bool>? IsVisible)
 {

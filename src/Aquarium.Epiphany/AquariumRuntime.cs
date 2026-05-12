@@ -23,11 +23,6 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private float secondsSinceStateSave;
     private bool graphicsSettingsDirty;
     private bool timePaused;
-    private string patchScript = "v w=sin f=440 g=.18 a=.002 s=.05 d=.35 pu=.28;v w=tri f=880 g=.04 s=.03 d=.28";
-    private int patchRate = 4;
-    private int faustCompileRevision;
-    private AquariumSynthPatchStatus synthPatchStatus = new("epiphany-editor", AquariumSynthPatchCompileState.Idle, "idle", 0, 0.0);
-
     public AquariumRuntime(AquariumRuntimeOptions options)
     {
         Options = options;
@@ -53,12 +48,26 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 .Section("Runtime")
                 .Toggle("Pause Time", () => timePaused, value => timePaused = value, "Stops Epiphany simulation time while leaving the renderer alive.")
                 .Slider("Time", () => timeSeconds, value => timeSeconds = MathF.Max(0.0f, value), 0.0f, 720.0f, "0.0", "Scrubs Epiphany simulation time.")
-                .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache.")
-                .Section("Synth")
-                .Readout("Faust", () => $"{synthPatchStatus.State}: {synthPatchStatus.Message}", "Patch compilation status from Aquarium's bundled Faust toolchain.")
-                .Text("Patch", () => patchScript, value => patchScript = value, "Aquarium patch DSL. Enter inserts ';'.")
-                .Slider("Rate", () => patchRate, value => patchRate = Math.Clamp(value, 1, 12), 1, 12, "Triggers per 16 seconds.")
-                .Button("Compile Faust", () => faustCompileRevision++, "Forces an async Faust compile through Aquarium's bundled toolchain."));
+                .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache."))
+            .Command("pause", args =>
+            {
+                timePaused = args.Count == 0 ? !timePaused : bool.TryParse(args[0], out var value) && value;
+                return $"pause {timePaused}";
+            }, "Toggles or sets Epiphany simulation pause.")
+            .Command("time", args =>
+            {
+                if (args.Count > 0 && float.TryParse(args[0], out var value))
+                {
+                    timeSeconds = MathF.Max(0.0f, value);
+                }
+
+                return $"time {timeSeconds:0.###}";
+            }, "Reads or sets Epiphany simulation time.")
+            .Command("flush", _ =>
+            {
+                FlushState();
+                return "state flushed";
+            }, "Flushes Epiphany state to CultCache.");
     }
 
     public AquariumRuntimeOptions Options { get; }
@@ -67,18 +76,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
 
     public AquariumUiDocument Ui { get; }
 
-    public AquariumSynthDocument Synth => new AquariumSynthDocument
-    {
-        MasterGain = 0.42f,
-        Enabled = true
-    }.Patch(
-        "epiphany-editor",
-        patchScript,
-        AquariumSynthTrigger.Repeat(16.0f / Math.Max(patchRate, 1)),
-        1.0f,
-        faustCompileRevision,
-        "epiphany_editor",
-        status => synthPatchStatus = status);
+    public AquariumSynthDocument Synth { get; } = AquariumSynthDocument.Empty;
 
     public AquariumFrame Frame => new(ViewFrame, cameraRig.Position, timeSeconds);
 

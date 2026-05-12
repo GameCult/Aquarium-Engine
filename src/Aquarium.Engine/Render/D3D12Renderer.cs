@@ -1,3 +1,4 @@
+using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render.Features;
 using Aquarium.Engine.Render.Graph;
@@ -63,6 +64,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(9, "SdfObject Identity"),
         new(10, "SdfObject Steps"),
     ];
+    private static readonly DebugUi.DebugUiOption[] SynthPresetOptions = AquariumSynth.Dsl.BuiltInScripts.PrimitiveGolfScripts()
+        .Select((preset, index) => new DebugUi.DebugUiOption(index, $"{preset.Family}/{preset.Name}"))
+        .ToArray();
+    private static readonly (string Family, string Name, string Script)[] SynthPresets = AquariumSynth.Dsl.BuiltInScripts.PrimitiveGolfScripts().ToArray();
 
     private readonly IDXGIFactory4 factory;
     private readonly ID3D12Device device;
@@ -89,9 +94,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? resolvePipelineState;
     private readonly ID3D12Fence fence;
     private readonly AutoResetEvent fenceEvent = new(false);
-    private readonly DebugUi debugUi;
-    private IReadOnlyList<DebugUi> clientUiPanels = [];
+    private DebugUi debugUi;
     private AquariumUiDocument? currentClientUi;
+    private int activeDebugTab;
+    private string[] debugTabTitles = ["Aquarium", "Terminal", "Synth"];
+    private string terminalInput = "help";
+    private readonly List<string> terminalLines = ["Aquarium terminal ready. Type help."];
+    private IReadOnlyList<AquariumConsoleCommand> clientCommands = [];
+    private string synthPlaygroundScript = AquariumSynth.Dsl.BuiltInScripts.ClassicSfxrPrimitiveGolfScripts[0].Script;
+    private int synthPlaygroundPreset;
+    private int synthPlaygroundCompileRevision;
+    private int synthPlaygroundPlayRevision;
+    private float synthPlaygroundGain = 0.45f;
+    private AquariumSynthPatchStatus synthPlaygroundStatus = new("aquarium-playground", AquariumSynthPatchCompileState.Idle, "idle", 0, 0.0);
     private ID3D11Resource[] overlayWrappedBackBuffers = [];
     private DirectWriteOverlay[] overlays = [];
     private D3D12RenderTarget heightFieldRenderTarget;
@@ -195,7 +210,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         CreateRenderTargetViews();
         CreateBackBufferOverlays();
-        debugUi = CreateDebugUi();
+        debugUi = CreateDebugUi(AquariumUiDocument.Empty);
         heightFieldRenderTarget = CreateHeightFieldRenderTarget();
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
@@ -247,19 +262,31 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public bool HasPresentedReadyFrame => hasPresentedReadyFrame;
 
+    public AquariumSynthDocument DebugSynth => new AquariumSynthDocument
+    {
+        MasterGain = 1.0f,
+        Enabled = true
+    }.Patch(
+        "aquarium-playground",
+        synthPlaygroundScript,
+        AquariumSynthTrigger.Manual(synthPlaygroundPlayRevision),
+        synthPlaygroundGain,
+        synthPlaygroundCompileRevision,
+        "aquarium_playground",
+        status => synthPlaygroundStatus = status);
+
     public void UpdateUi(InputState input, AquariumUiDocument clientUi)
     {
-        debugUi.Update(input);
         if (!ReferenceEquals(currentClientUi, clientUi))
         {
             currentClientUi = clientUi;
-            clientUiPanels = clientUi.Panels.Select(DebugUi.FromContract).ToArray();
+            clientCommands = clientUi.Commands;
+            debugTabTitles = ["Aquarium", "Terminal", "Synth", .. clientUi.Panels.Select(panel => panel.Title)];
+            activeDebugTab = Math.Clamp(activeDebugTab, 0, debugTabTitles.Length - 1);
+            debugUi = CreateDebugUi(clientUi);
         }
 
-        foreach (var panel in clientUiPanels)
-        {
-            panel.Update(input);
-        }
+        debugUi.Update(input);
     }
 
     public void CycleRenderDebugMode()
@@ -277,17 +304,125 @@ public sealed class D3D12Renderer : IAquariumRenderer
         settings = graphicsSettings.Normalized();
     }
 
-    private DebugUi CreateDebugUi()
+    private DebugUi CreateDebugUi(AquariumUiDocument clientUi)
     {
-        return new DebugUi("Aquarium Debug")
-            .Panel(panel => panel
+        var ui = new DebugUi("Aquarium Debug")
+            .Panel(panel =>
+            {
+                panel
+                .Section("Tabs")
+                .Button("Aquarium", () => SelectDebugTab(0), "Shows engine renderer controls.")
+                .Button("Terminal", () => SelectDebugTab(1), "Shows interactive debug command terminal.")
+                .Button("Synth", () => SelectDebugTab(2), "Shows the synth patch playground.");
+                for (var index = 0; index < clientUi.Panels.Count; index++)
+                {
+                    var tabIndex = index + 3;
+                    var title = clientUi.Panels[index].Title;
+                    panel.Button(title, () => SelectDebugTab(tabIndex), $"Shows {title} debug controls.");
+                }
+
+                panel
                 .Section("View")
-                .Options("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), RenderDebugOptions, "Selects the active renderer debug view.")
-                .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.")
-                .Section("HDR")
-                .Slider("Exposure", () => settings.SceneExposure, value => settings = (settings with { SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure) }).Normalized(), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.")
-                .Slider("Bloom Intensity", () => settings.BloomIntensity, value => settings = (settings with { BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity) }).Normalized(), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.")
-                .Slider("Bloom Veil", () => settings.BloomVeilIntensity, value => settings = (settings with { BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity) }).Normalized(), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy."));
+                .Options("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), RenderDebugOptions, "Selects the active renderer debug view.", () => activeDebugTab == 0)
+                .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.", () => activeDebugTab == 0)
+                .Section("HDR", () => activeDebugTab == 0)
+                .Slider("Exposure", () => settings.SceneExposure, value => settings = (settings with { SceneExposure = Math.Clamp(value, GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure) }).Normalized(), GraphicsSettings.MinSceneExposure, GraphicsSettings.MaxSceneExposure, "0.###", "Manual scene exposure before display transform.", () => activeDebugTab == 0)
+                .Slider("Bloom Intensity", () => settings.BloomIntensity, value => settings = (settings with { BloomIntensity = Math.Clamp(value, GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity) }).Normalized(), GraphicsSettings.MinBloomIntensity, GraphicsSettings.MaxBloomIntensity, "0.###", "Strength of pre-tonemap bloom energy.", () => activeDebugTab == 0)
+                .Slider("Bloom Veil", () => settings.BloomVeilIntensity, value => settings = (settings with { BloomVeilIntensity = Math.Clamp(value, GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity) }).Normalized(), GraphicsSettings.MinBloomVeilIntensity, GraphicsSettings.MaxBloomVeilIntensity, "0.###", "Low-frequency veil from bright HDR energy.", () => activeDebugTab == 0)
+                .Section("Terminal", () => activeDebugTab == 1)
+                .Readout("Output", TerminalDisplay, "Recent command output.", () => activeDebugTab == 1)
+                .Text("Command", () => terminalInput, value => terminalInput = value, "Debug command input.", () => activeDebugTab == 1)
+                .Button("Run Command", ExecuteTerminalInput, "Runs the current debug command.", () => activeDebugTab == 1)
+                .Section("Synth Playground", () => activeDebugTab == 2)
+                .Options("Preset", () => synthPlaygroundPreset, SelectSynthPreset, SynthPresetOptions, "Loads a built-in synth patch.", () => activeDebugTab == 2)
+                .Readout("Compile", () => $"{synthPlaygroundStatus.State}: {synthPlaygroundStatus.Message}", "Faust compile status.", () => activeDebugTab == 2)
+                .Text("Patch", () => synthPlaygroundScript, value => synthPlaygroundScript = value, "Patch DSL source. Enter inserts ';'.", () => activeDebugTab == 2)
+                .Slider("Gain", () => synthPlaygroundGain, value => synthPlaygroundGain = Math.Clamp(value, 0.0f, 1.0f), 0.0f, 1.0f, "0.###", "Playground patch gain.", () => activeDebugTab == 2)
+                .Button("Compile", () => synthPlaygroundCompileRevision++, "Forces async Faust compile.", () => activeDebugTab == 2)
+                .Button("Play", () => { synthPlaygroundCompileRevision++; synthPlaygroundPlayRevision++; }, "Compiles and schedules the playground patch.", () => activeDebugTab == 2);
+            });
+        for (var panelIndex = 0; panelIndex < clientUi.Panels.Count; panelIndex++)
+        {
+            var tabIndex = panelIndex + 3;
+            foreach (var control in clientUi.Panels[panelIndex].Controls)
+            {
+                ui.AddContractControl(control with { IsVisible = ComposeVisibility(control.IsVisible, () => activeDebugTab == tabIndex) });
+            }
+        }
+
+        return ui;
+    }
+
+    private void SelectDebugTab(int index)
+    {
+        activeDebugTab = Math.Clamp(index, 0, Math.Max(0, debugTabTitles.Length - 1));
+    }
+
+    private static Func<bool> ComposeVisibility(Func<bool>? source, Func<bool> tabVisible)
+    {
+        return () => tabVisible() && (source?.Invoke() ?? true);
+    }
+
+    private string TerminalDisplay()
+    {
+        return string.Join(" | ", terminalLines.TakeLast(4));
+    }
+
+    private void ExecuteTerminalInput()
+    {
+        var input = terminalInput.Trim();
+        if (input.Length == 0)
+        {
+            return;
+        }
+
+        terminalLines.Add($"> {input}");
+        terminalInput = "";
+        var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var command = parts[0];
+        var args = parts.Skip(1).ToArray();
+        if (string.Equals(command, "help", StringComparison.OrdinalIgnoreCase))
+        {
+            var names = new[] { "help", "clear", "render" }
+                .Concat(clientCommands.Select(item => item.Name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase);
+            terminalLines.Add(string.Join(", ", names));
+            return;
+        }
+
+        if (string.Equals(command, "clear", StringComparison.OrdinalIgnoreCase))
+        {
+            terminalLines.Clear();
+            return;
+        }
+
+        if (string.Equals(command, "render", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args.Length > 0 && int.TryParse(args[0], out var mode))
+            {
+                RenderDebugMode = Math.Clamp(mode, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode);
+            }
+
+            terminalLines.Add($"render debug {RenderDebugMode}");
+            return;
+        }
+
+        var registered = clientCommands.FirstOrDefault(item => string.Equals(item.Name, command, StringComparison.OrdinalIgnoreCase));
+        if (registered is not null)
+        {
+            terminalLines.Add(registered.Execute(args));
+            return;
+        }
+
+        terminalLines.Add($"unknown command: {command}");
+    }
+
+    private void SelectSynthPreset(int index)
+    {
+        synthPlaygroundPreset = Math.Clamp(index, 0, Math.Max(0, SynthPresets.Length - 1));
+        synthPlaygroundScript = SynthPresets[synthPlaygroundPreset].Script;
+        synthPlaygroundCompileRevision++;
     }
 
     public void Render(AquariumFrame frame, int width, int height)
@@ -574,7 +709,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         var wrappedBackBuffer = overlayWrappedBackBuffers[frameIndex];
         overlayOn12Device.AcquireWrappedResources([wrappedBackBuffer]);
-        overlays[frameIndex].Render(frame, RenderDebugMode, debugUi, clientUiPanels);
+        overlays[frameIndex].Render(frame, RenderDebugMode, debugUi, []);
         overlayOn12Device.ReleaseWrappedResources([wrappedBackBuffer]);
         overlayContext.Flush();
         frameResources.BackBuffer.MarkState(ResourceStates.Present);
