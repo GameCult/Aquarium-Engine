@@ -252,6 +252,7 @@ internal sealed class DebugUi
 
     public void Draw(
         ID2D1RenderTarget target,
+        IDWriteFactory6 directWriteFactory,
         IDWriteTextFormat titleFormat,
         IDWriteTextFormat smallFormat,
         IDWriteTextFormat monospaceFormat,
@@ -326,6 +327,7 @@ internal sealed class DebugUi
             control.IsFocused = control.Id == focusedTextId;
             control.Draw(
                 target,
+                directWriteFactory,
                 control.UseMonospace ? monospaceFormat : smallFormat,
                 rowBrush,
                 hoverRowBrush,
@@ -354,7 +356,7 @@ internal sealed class DebugUi
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
 
-        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, y + 30.0f);
+        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, y + 12.0f);
     }
 
     private Rect CloseButtonBounds()
@@ -602,6 +604,7 @@ internal sealed class DebugUi
 
         public abstract void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -650,6 +653,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -679,6 +683,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -705,6 +710,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -792,6 +798,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -904,6 +911,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -988,6 +996,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -1013,12 +1022,7 @@ internal sealed class DebugUi
             target.FillRectangle(box, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
             target.DrawRectangle(box, focused ? accentBrush : outlineBrush, focused ? 1.5f : 1.0f);
 
-            target.DrawText(
-                DisplayText(),
-                format,
-                TextBounds(box),
-                primaryBrush,
-                DrawTextOptions.Clip);
+            DrawBoxText(target, directWriteFactory, format, primaryBrush, box);
 
         }
 
@@ -1045,6 +1049,19 @@ internal sealed class DebugUi
             return RectFromEdges(box.Left + 8.0f, top, box.Right - 8.0f, bottom);
         }
 
+        private void DrawBoxText(
+            ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
+            IDWriteTextFormat format,
+            ID2D1Brush brush,
+            Rect box)
+        {
+            var text = DisplayText();
+            var bounds = TextBounds(box);
+            using var layout = directWriteFactory.CreateTextLayout(text, format, bounds.Width, bounds.Height);
+            target.DrawTextLayout(new Vector2(bounds.Left, bounds.Top), layout, brush, DrawTextOptions.Clip);
+        }
+
         private bool HasLabel => !string.IsNullOrWhiteSpace(Label);
 
         private float LabelLineHeight => HasLabel ? LabelHeight : 0.0f;
@@ -1063,6 +1080,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,
@@ -1127,6 +1145,7 @@ internal sealed class DebugUi
 
         public override void Draw(
             ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
             IDWriteTextFormat format,
             ID2D1SolidColorBrush rowBrush,
             ID2D1SolidColorBrush hoverRowBrush,

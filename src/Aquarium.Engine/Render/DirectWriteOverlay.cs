@@ -115,6 +115,7 @@ internal sealed class DirectWriteOverlay : IDisposable
             DrawTextOptions.Clip);
         debugUi?.Draw(
             renderTarget,
+            directWriteFactory,
             titleFormat,
             smallFormat,
             monospaceFormat,
@@ -137,6 +138,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         {
             panel.Draw(
                 renderTarget,
+                directWriteFactory,
                 titleFormat,
                 smallFormat,
                 monospaceFormat,
