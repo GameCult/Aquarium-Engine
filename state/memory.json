@@ -69,18 +69,14 @@
       "Overlay text uses DirectWrite/Direct2D after scene rendering. It is crisp final-pixel UI for debug surfaces, terminals, inspectors, and splash/status text.",
       "Aquarium UI controls follow the CultLib code-first binding style without Unity prefab assumptions: panels, sections, sliders, toggles, buttons, option rows, and text boxes bound by explicit read/write delegates.",
       "Aquarium.Engine.Contracts exposes AquariumUiDocument as the client-facing debug composition surface. Client panels are tabs inside the single Aquarium debug panel, clients can register terminal commands through AquariumUiDocument.Command, and longer editable strings should use AquariumUiTextBox instead of pretending to be row values. Text boxes own caret/selection editing state, may opt into bundled Ubuntu Sans Mono and bottom alignment, and focused text boxes capture input so renderer debug hotkeys and client camera controls stay quiet while editing.",
-      "The unified F2 debug panel is titled Debug and owns engine controls, client tabs, a bottom-aligned multiline command terminal, and the synth playground. Tab navigation is panel chrome: a highlighted row of buttons below the title, not a content section made of ordinary controls. Do not reintroduce separate Aquarium/Epiphany debug panels fighting for the same hotkey.",
+      "The unified F2 debug panel is titled Debug and owns engine controls, client tabs, and a bottom-aligned multiline command terminal. Tab navigation is panel chrome: a highlighted row of buttons below the title, not a content section made of ordinary controls. Do not reintroduce separate Aquarium/Epiphany debug panels fighting for the same hotkey.",
       "Vortice.Mathematics.Rect uses x, y, width, height. UI code should use explicit RectFromEdges helpers when reasoning in edges.",
       "Debug UI feedback needs honest element-specific states: base, hover, and active. Sliders respond on track/fill and handle separately, keep geometry stable, and brighten by lerping accent colors toward white.",
       "Scene/diegetic labels should use renderer-owned MSDF/SDF billboards when they live in world space. Overlay text should not be shoved into HDR for convenience."
     ],
     "audio": [
-      "Aquarium.Engine.Contracts exposes AquariumSynthDocument as the client-facing synth composition surface. Clients declare patch scripts, trigger cadence, gain, and Faust compile revision; Aquarium.Engine owns patch preview playback, Faust DSP export, and eventual optimized DSP hosting.",
-      "AquariumSynth.Dsl is the patch language dependency. Keep the DSL parser and Faust emitter in the synth library; Aquarium should host and schedule patches through contracts rather than baking client sound policy into the engine.",
-      "Aquarium bundles Faust as a runtime toolchain under Tools/Faust for published builds and falls back to AQUARIUM_FAUST_HOME or C:/Program Files/Faust in dev. Do not require users to install Faust separately.",
-      "Aquarium synth patches compile asynchronously through libfaust's LLVM C ABI, not generated C#. The editor should surface Queued, Compiling, Ready, and Failed states; the render/audio frame must never block on DSP compilation.",
-      "Aquarium audio output uses a small WASAPI shared-mode render thread. Synth SFX buffers come from compiled Faust DSP instances, enter an engine-owned float mixer queue, and are converted/resampled to the device mix format in the audio thread.",
-      "The current WASAPI path is a first real device backend: it supports one-shot SFX buffer playback and overlapping voices. Future diegetic audio should extend this mixer into streaming voices, routing, metering, and live parameter lanes rather than reintroducing one-off platform playback calls."
+      "Aquarium exposes an optional audio/synth hosting boundary through contracts; clients declare intent, Aquarium schedules playback and owns device/toolchain integration.",
+      "AquariumSynthCSharp owns synth internals and tests. Aquarium should keep only engine smoke coverage at this boundary so visual/renderer work can continue while synth construction changes underneath."
     ],
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",

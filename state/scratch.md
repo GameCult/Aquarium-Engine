@@ -2,27 +2,28 @@
 
 ## Current Slice
 
-Aquarium is being refocused on the Epiphany client mission. Runtime volumetrics,
-cloud/fog research, and the old D3D11 renderer are shelved; Git history can hold
-the fossils. Do not reintroduce them as live docs, state, shader sources, or
-debug UI until the product mission actually asks for them.
+Aquarium's active focus is clean engine architecture and shiny Epiphany agent
+visuals.
 
-Live renderer shape:
+Keep the engine/client boundary strict:
 
-- D3D12 owns the visible frame.
-- Grid height is a deferred scalar target painted by brushes.
-- Grid linework is direct-traced as a separate event lane.
-- Self, planets, and cursor are SDF/analytic solids.
-- HDR bloom/presentation and DirectWrite overlay UI remain active.
-- GraphicsSettings persists only render debug, exposure, bloom intensity, and
-  bloom veil.
+- Aquarium.Engine owns Win32, D3D12, input, reload, renderer abstractions,
+  debug UI plumbing, and device/toolchain integration.
+- Aquarium.Epiphany owns client policy, semantic state interpretation, role
+  layout, and render-plan configuration through Aquarium.Engine.Contracts.
+- AquariumSynthCSharp owns synth internals and tests. Aquarium should remember
+  only the hosting boundary.
 
-The medium/froxel render-target and history lanes have been cut from
-D3D12Renderer, D3D12Scene, and D3D12Post. Current cleanup debt is now ordinary:
-keep future renderer work tied to explicit live passes instead of rebuilding the
-removed medium stack under a better haircut.
+The renderer work that matters next:
+
+- Continue replacing legacy fixed D3D12 pass execution with the declared render
+  graph.
+- Keep body/SDF proxy passes bounded, per-object, and client-authored.
+- Build role visuals from coherent low-cost form models before ornament.
+- Preserve debug UI as shared chrome and input capture, not parallel panels.
 
 ## Verification
 
 - `dotnet build Aquarium.Engine.sln --no-restore`
+- `.\scripts\verify-boundaries.ps1`
 - `.\scripts\dev-reload.ps1 -Headless -RetainSlots 4`
