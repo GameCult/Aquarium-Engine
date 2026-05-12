@@ -18,6 +18,34 @@ internal sealed class AquariumSynthHost : IDisposable
     private string? faustLoadError;
     private float timeSeconds;
 
+    internal static bool TryRenderScriptWithNativeFaust(string name, string script, float gain, out float[] samples, out string? error)
+    {
+        samples = [];
+        if (!FaustNative.TryLoad(out var native, out var loadError))
+        {
+            error = loadError;
+            return false;
+        }
+
+        using (native)
+        {
+            try
+            {
+                var patch = PatchScript.Parse(script);
+                var export = FaustEmitter.Emit(patch, new FaustExportOptions(SafeFaustName(name)));
+                using var compiled = native!.Compile(SafeFaustName(name), export.Source, EstimateDuration(patch));
+                samples = compiled.Render(gain);
+                error = null;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+    }
+
     public void Update(AquariumSynthDocument synth, float deltaSeconds)
     {
         timeSeconds += Math.Max(deltaSeconds, 0.0f);

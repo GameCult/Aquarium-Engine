@@ -6,4 +6,7 @@
     <Project Path="src/Aquarium.Sample.Minimal/Aquarium.Sample.Minimal.csproj" />
     <Project Path="../AquariumSynthCSharp/src/AquariumSynth.Dsl/AquariumSynth.Dsl.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Aquarium.Engine.Tests/Aquarium.Engine.Tests.csproj" />
+  </Folder>
 </Solution>

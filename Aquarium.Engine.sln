@@ -29,6 +29,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameCult.Networking", "..\C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Sample.Minimal", "src\Aquarium.Sample.Minimal\Aquarium.Sample.Minimal.csproj", "{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Engine.Tests", "tests\Aquarium.Engine.Tests\Aquarium.Engine.Tests.csproj", "{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -183,6 +187,18 @@ Global
 		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x64.Build.0 = Release|Any CPU
 		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x86.ActiveCfg = Release|Any CPU
 		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x86.Build.0 = Release|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Debug|x64.Build.0 = Debug|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Debug|x86.Build.0 = Debug|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Release|x64.ActiveCfg = Release|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Release|x64.Build.0 = Release|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Release|x86.ActiveCfg = Release|Any CPU
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -192,5 +208,6 @@ Global
 		{51FE01D8-9EEF-46B2-8D8C-3307AC2221C1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{33654E0D-B31A-4062-B6AC-C1CE4C1A1F65} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
