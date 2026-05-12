@@ -14,10 +14,10 @@ current_model:
     cli_solution: Aquarium.Engine.slnx
     window: src/Aquarium.Engine/Platform/Win32Window.cs
     renderer: src/Aquarium.Engine/Render/D3D12Renderer.cs
-    grid_shader: src/Aquarium.Engine/Render/Shaders/D3D12Grid.hlsl
+    height_field_shader: src/Aquarium.Engine/Render/Shaders/D3D12HeightField.hlsl
     scene_shader: src/Aquarium.Engine/Render/Shaders/D3D12Scene.hlsl
-    body_common_include: src/Aquarium.Engine/Render/Shaders/D3D12BodyCommon.hlsli
-    body_proxy_include: src/Aquarium.Engine/Render/Shaders/D3D12BodyProxy.hlsli
+    sdf_common_include: src/Aquarium.Engine/Render/Shaders/D3D12SdfCommon.hlsli
+    sdf_proxy_include: src/Aquarium.Engine/Render/Shaders/D3D12SdfProxy.hlsli
     sdf_math_include: src/Aquarium.Engine/Render/Shaders/D3D12SdfMath.hlsli
     post_shader: src/Aquarium.Engine/Render/Shaders/D3D12Post.hlsl
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
@@ -66,14 +66,14 @@ renderer_state:
   current:
     - D3D12 default renderer behind IAquariumRenderer with explicit device/queue/swapchain, command allocators, fences, descriptor arenas, upload ring constants, tracked render targets, command events, resize rebuild, HDR/bloom/present, temporal diagnostics, and DirectWrite overlay bridge.
     - Deferred scalar Grid height target rendered from additive brush passes.
-    - Epiphany now owns its Grid brush list, body visual table, body light table, body shader manifest, and cursor projection policy through Aquarium.Engine.Contracts; the engine consumes those as rendering data.
-    - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
-    - Fullscreen scene pass owns background and Grid only; each client-declared body shader owns a separate proxy pipeline, with shared proxy plumbing factored into engine HLSL includes. Body proxy marching evaluates only bodyDistance; bodySurface runs once at the refined hit and returns only PBR material values.
+    - Epiphany owns its client surface brush list, SDF object table, SDF light table, shader manifest, and cursor projection policy through Aquarium.Engine.Contracts; the engine consumes those as generic rendering data.
+    - Direct-traced height-field surface is a terminating reflective surface over the scalar height field, sampling Studio2 PMREM mip 0.
+    - Fullscreen scene pass owns background and height-field surface only; each client-declared SDF shader owns a separate proxy pipeline, with shared proxy plumbing factored into generic engine HLSL includes. Proxy marching evaluates only sdfDistance; sdfSurface runs once at the refined hit and returns only PBR material values.
     - Reusable SDF primitives live in engine D3D12SdfMath.hlsli; current Epiphany role character organs live under src/Aquarium.Epiphany/Shaders.
     - Epiphany's cursor is a luminous five-petal hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
-    - SDF/analytic bodies for Epiphany roles upload current centers, previous centers, and state scalars through the public `AquariumBodyVisual` contract.
+    - SDF/analytic Epiphany role visuals upload current centers, previous centers, and state scalars through the public `AquariumSdfObject` contract.
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
-    - Body light buffer feeds Self emission and direct body lighting; future other Selves should join this light lane, not a generic field-instance table.
+    - SDF light buffer feeds Self emission and direct object lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
@@ -87,11 +87,11 @@ renderer_state:
     - Replace fixed fallback role motion with real CultNet-derived AgentVisualState.
     - Build each agent role body from one coherent low-cost SDF form model before adding ornamental or state-reactive detail.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.
-    - Follow docs/epiphany-extraction-render-api-plan.md to move Epiphany-specific render policy out of Aquarium.Engine and expose client-declared render targets, cameras, shaders, passes, resources, and features.
+    - Continue replacing legacy fixed D3D12 pass execution with client-declared render targets, cameras, shaders, passes, resources, and features.
 
 next_actions:
   - Keep main as the live development branch.
-  - Add boundary checks that keep Aquarium.Engine free of Aquarium.Epiphany references and shrink role/client names out of engine source as the graph API lands.
+  - Keep scripts/verify-boundaries.ps1 green: Aquarium.Engine and Aquarium.Engine.Contracts must not contain Epiphany/client policy nouns such as grid, agent, body, or epiphany.
   - Verify publish output after every packaging-affecting change.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.

@@ -2,15 +2,15 @@ cbuffer AquariumFrame : register(b0)
 {
     float2 resolution;
     float timeSeconds;
-    float gridRadius;
+    float viewRadius;
     float3 cameraPosition;
     float farDistance;
-    float2 gridCenter;
+    float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
-    float previousGridRadius;
-    float2 previousGridCenter;
+    float previousViewRadius;
+    float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
     float renderDebugMode;
@@ -20,18 +20,18 @@ cbuffer AquariumFrame : register(b0)
     float4 cursorWorlds;
 };
 
-Texture2D<float4> gridHeightTexture : register(t0);
+Texture2D<float4> heightFieldTexture : register(t0);
 TextureCube<float4> studioPmremTexture : register(t22);
-SamplerState gridSampler : register(s0);
+SamplerState linearSampler : register(s0);
 
-static const float FIELD_ID_GRID = 4.0;
+static const float FIELD_ID_HEIGHT_FIELD = 4.0;
 static const float PI = 3.14159265359;
-static const float GRID_HEIGHT_TEXEL_COUNT = 128.0;
-static const float GRID_FLAT_REFLECTION_MAX_LOD = 3.0;
+static const float HEIGHT_FIELD_TEXEL_COUNT = 128.0;
+static const float SURFACE_FLAT_REFLECTION_MAX_LOD = 3.0;
 static const float BACKGROUND_PMREM_LOD = 3.0;
 static const float BACKGROUND_PMREM_CONE = 0.16;
-static const float GRID_FLAT_SLOPE_START = 0.018;
-static const float GRID_FLAT_SLOPE_END = 0.16;
+static const float SURFACE_FLAT_SLOPE_START = 0.018;
+static const float SURFACE_FLAT_SLOPE_END = 0.16;
 
 struct VertexOut
 {
@@ -84,48 +84,48 @@ float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 c
     return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
 }
 
-float2 gridLocal(float2 p)
+float2 viewLocal(float2 p)
 {
-    return (p - gridCenter) / max(gridRadius, 0.001);
+    return (p - viewCenter) / max(viewRadius, 0.001);
 }
 
-float2 gridUv(float2 p)
+float2 viewUv(float2 p)
 {
-    return gridLocal(p) * 0.5 + 0.5;
+    return viewLocal(p) * 0.5 + 0.5;
 }
 
 float terrainHeight(float2 p)
 {
-    return gridHeightTexture.SampleLevel(gridSampler, saturate(gridUv(p)), 0.0).r;
+    return heightFieldTexture.SampleLevel(linearSampler, saturate(viewUv(p)), 0.0).r;
 }
 
 float2 terrainGradient(float2 p)
 {
-    float2 uv = saturate(gridUv(p));
-    float2 texel = 1.0 / GRID_HEIGHT_TEXEL_COUNT;
-    float texelWorld = max((gridRadius * 2.0) / GRID_HEIGHT_TEXEL_COUNT, 0.001);
+    float2 uv = saturate(viewUv(p));
+    float2 texel = 1.0 / HEIGHT_FIELD_TEXEL_COUNT;
+    float texelWorld = max((viewRadius * 2.0) / HEIGHT_FIELD_TEXEL_COUNT, 0.001);
 
-    float hLeft = gridHeightTexture.SampleLevel(gridSampler, uv - float2(texel.x, 0.0), 0.0).r;
-    float hRight = gridHeightTexture.SampleLevel(gridSampler, uv + float2(texel.x, 0.0), 0.0).r;
-    float hDown = gridHeightTexture.SampleLevel(gridSampler, uv - float2(0.0, texel.y), 0.0).r;
-    float hUp = gridHeightTexture.SampleLevel(gridSampler, uv + float2(0.0, texel.y), 0.0).r;
+    float hLeft = heightFieldTexture.SampleLevel(linearSampler, uv - float2(texel.x, 0.0), 0.0).r;
+    float hRight = heightFieldTexture.SampleLevel(linearSampler, uv + float2(texel.x, 0.0), 0.0).r;
+    float hDown = heightFieldTexture.SampleLevel(linearSampler, uv - float2(0.0, texel.y), 0.0).r;
+    float hUp = heightFieldTexture.SampleLevel(linearSampler, uv + float2(0.0, texel.y), 0.0).r;
 
     return float2(hRight - hLeft, hUp - hDown) / (texelWorld * 2.0);
 }
 
-bool traceGridSurfaceDirect(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float3 hitPosition, out float travel)
+bool traceHeightFieldSurfaceDirect(float3 origin, float3 direction, float intervalStart, float intervalEnd, out float3 hitPosition, out float travel)
 {
     travel = max(intervalStart, 0.0);
     float previousTravel = travel;
     hitPosition = origin + direction * travel;
     float previousGap = hitPosition.z - terrainHeight(hitPosition.xy);
-    float radius = max(gridRadius, 0.001);
+    float radius = max(viewRadius, 0.001);
 
     [loop]
     for (int stepIndex = 0; stepIndex < 96; stepIndex++)
     {
         hitPosition = origin + direction * travel;
-        float2 local = (hitPosition.xy - gridCenter) / radius;
+        float2 local = (hitPosition.xy - viewCenter) / radius;
         if (length(local) > 1.08 && hitPosition.z < 4.0)
         {
             return false;
@@ -144,7 +144,7 @@ bool traceGridSurfaceDirect(float3 origin, float3 direction, float intervalStart
         float2 slope = terrainGradient(hitPosition.xy);
         float terrainRate = abs(direction.z - dot(slope, direction.xy));
         float terrainStep = gap > 0.0 ? gap / max(terrainRate, 0.22) : 0.026;
-        terrainStep = min(terrainStep * 0.62, max(gridRadius * 0.08, 0.026));
+        terrainStep = min(terrainStep * 0.62, max(viewRadius * 0.08, 0.026));
         previousTravel = travel;
         previousGap = gap;
         travel += max(terrainStep, 0.026);
@@ -171,7 +171,7 @@ void directionBasis(float3 direction, out float3 tangent, out float3 bitangent)
 
 float3 studioPmremSample(float3 worldDirection, float lod)
 {
-    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(worldDirection), lod).rgb;
+    return studioPmremTexture.SampleLevel(linearSampler, studioPmremDirection(worldDirection), lod).rgb;
 }
 
 float3 studioPmremConeSample(float3 worldDirection, float lod, float cone)
@@ -191,13 +191,13 @@ float3 studioPmremConeSample(float3 worldDirection, float lod, float cone)
     return sum * 0.125;
 }
 
-float3 gridMirrorRadiance(float3 p, float3 direction, out float3 normal)
+float3 surfaceMirrorRadiance(float3 p, float3 direction, out float3 normal)
 {
     float2 gradient = terrainGradient(p.xy);
     normal = normalize(float3(-gradient.x, -gradient.y, 1.0));
     float3 reflectionDirection = reflect(direction, normal);
-    float flatness = 1.0 - smoothstep(GRID_FLAT_SLOPE_START, GRID_FLAT_SLOPE_END, length(gradient));
-    float lod = flatness * GRID_FLAT_REFLECTION_MAX_LOD;
+    float flatness = 1.0 - smoothstep(SURFACE_FLAT_SLOPE_START, SURFACE_FLAT_SLOPE_END, length(gradient));
+    float lod = flatness * SURFACE_FLAT_REFLECTION_MAX_LOD;
     return studioPmremConeSample(reflectionDirection, lod, flatness * 0.055);
 }
 
@@ -216,16 +216,16 @@ RayMarchResult traverseRay(float3 origin, float3 direction)
     result.coverage = 0.0;
     result.stepCount = 0.0;
 
-    float3 gridPosition;
-    float gridTravel;
-    bool gridHit = traceGridSurfaceDirect(origin, direction, 0.0, farDistance, gridPosition, gridTravel);
-    if (gridHit)
+    float3 surfacePosition;
+    float surfaceTravel;
+    bool surfaceHit = traceHeightFieldSurfaceDirect(origin, direction, 0.0, farDistance, surfacePosition, surfaceTravel);
+    if (surfaceHit)
     {
-        float3 gridNormal;
-        result.color = gridMirrorRadiance(gridPosition, direction, gridNormal);
-        result.travel = gridTravel;
-        result.fieldId = FIELD_ID_GRID;
-        result.normal = gridNormal;
+        float3 surfaceNormal;
+        result.color = surfaceMirrorRadiance(surfacePosition, direction, surfaceNormal);
+        result.travel = surfaceTravel;
+        result.fieldId = FIELD_ID_HEIGHT_FIELD;
+        result.normal = surfaceNormal;
         result.coverage = 1.0;
     }
 
@@ -236,7 +236,7 @@ SceneOut D3D12ScenePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
     float2 pixel = screenUv * resolution;
-    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, viewCenter);
 
     RayMarchResult result = traverseRay(cameraPosition, rayDirection);
 

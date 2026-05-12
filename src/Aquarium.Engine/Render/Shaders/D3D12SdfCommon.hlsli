@@ -2,15 +2,15 @@ cbuffer AquariumFrame : register(b0)
 {
     float2 resolution;
     float timeSeconds;
-    float gridRadius;
+    float viewRadius;
     float3 cameraPosition;
     float farDistance;
-    float2 gridCenter;
+    float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
-    float previousGridRadius;
-    float2 previousGridCenter;
+    float previousViewRadius;
+    float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
     float renderDebugMode;
@@ -22,43 +22,43 @@ cbuffer AquariumFrame : register(b0)
 
 TextureCube<float4> studioPmremTexture : register(t22);
 TextureCube<float4> studioIrradianceTexture : register(t23);
-SamplerState gridSampler : register(s0);
+SamplerState linearSampler : register(s0);
 
-struct BodyLight
+struct SdfLight
 {
     float4 centerRadius;
     float4 radianceFieldId;
 };
 
-StructuredBuffer<BodyLight> bodyLights : register(t12);
+StructuredBuffer<SdfLight> sdfLights : register(t12);
 
-struct AgentVisual
+struct SdfObject
 {
     float4 centerRadius;
     float4 previousCenterPad;
     float4 state;
 };
 
-StructuredBuffer<AgentVisual> agentVisuals : register(t24);
+StructuredBuffer<SdfObject> sdfObjects : register(t24);
 
-static const int ROLE_AGENT_COUNT = 7;
-static const int AGENT_VISUAL_COUNT = ROLE_AGENT_COUNT + 2;
+static const int ROLE_SDF_OBJECT_COUNT = 7;
+static const int SDF_OBJECT_VISUAL_COUNT = ROLE_SDF_OBJECT_COUNT + 2;
 static const int SELF_OBJECT_INDEX = 0;
-static const int CURSOR_OBJECT_INDEX = AGENT_VISUAL_COUNT - 1;
+static const int CURSOR_OBJECT_INDEX = SDF_OBJECT_VISUAL_COUNT - 1;
 static const float FIELD_ID_SELF = 2.0;
-static const float FIELD_ID_GRID = 4.0;
+static const float FIELD_ID_HEIGHT_FIELD = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
-static const float FIELD_ID_AGENT_BASE = 10.0;
+static const float FIELD_ID_SDF_OBJECT_BASE = 10.0;
 static const float PI = 3.14159265359;
-static const int BODY_LIGHT_COUNT = 8;
+static const int SDF_LIGHT_COUNT = 8;
 static const float STUDIO_PMREM_MAX_LOD = 9.0;
 static const float STUDIO_PMREM_SPECULAR_INTENSITY = 0.34;
 static const float STUDIO_IRRADIANCE_INTENSITY = 0.74;
 
-struct AgentProxyVertexOut
+struct SdfObjectProxyVertexOut
 {
     float4 position : SV_Position;
-    nointerpolation float agentIndex : TEXCOORD0;
+    nointerpolation float sdfIndex : TEXCOORD0;
 };
 
 struct SceneOut
@@ -69,7 +69,7 @@ struct SceneOut
     float depth : SV_Depth;
 };
 
-struct BodySurface
+struct SdfSurface
 {
     float3 albedo;
     float roughness;
@@ -132,15 +132,15 @@ float3 studioPmremDirection(float3 worldDirection)
 
 float3 studioPmremSample(float3 worldDirection, float lod)
 {
-    return studioPmremTexture.SampleLevel(gridSampler, studioPmremDirection(worldDirection), lod).rgb;
+    return studioPmremTexture.SampleLevel(linearSampler, studioPmremDirection(worldDirection), lod).rgb;
 }
 
 float3 primitiveEmissionRadiance(float fieldId)
 {
     [loop]
-    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
+    for (int i = 0; i < SDF_LIGHT_COUNT; i++)
     {
-        BodyLight light = bodyLights[i];
+        SdfLight light = sdfLights[i];
         if (abs(light.radianceFieldId.w - fieldId) < 0.25)
         {
             return light.radianceFieldId.rgb;
@@ -150,7 +150,7 @@ float3 primitiveEmissionRadiance(float fieldId)
     return 0.0;
 }
 
-float bodyFieldId(int objectIndex)
+float sdfFieldId(int objectIndex)
 {
     if (objectIndex == SELF_OBJECT_INDEX)
     {
@@ -162,16 +162,16 @@ float bodyFieldId(int objectIndex)
         return FIELD_ID_CURSOR;
     }
 
-    return FIELD_ID_AGENT_BASE + (float)objectIndex;
+    return FIELD_ID_SDF_OBJECT_BASE + (float)objectIndex;
 }
 
-float3 bodyLightIrradianceAt(float3 p, float3 normal)
+float3 sdfLightIrradianceAt(float3 p, float3 normal)
 {
     float3 irradiance = 0.0;
     [loop]
-    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
+    for (int i = 0; i < SDF_LIGHT_COUNT; i++)
     {
-        BodyLight light = bodyLights[i];
+        SdfLight light = sdfLights[i];
         float3 radiance = light.radianceFieldId.rgb;
         if (dot(radiance, radiance) <= 0.000001)
         {
@@ -190,7 +190,7 @@ float3 bodyLightIrradianceAt(float3 p, float3 normal)
     return irradiance;
 }
 
-float3 bodyLightSpecularRadiance(float3 p, float3 normal, float roughness, float3 f0, float intensity)
+float3 sdfLightSpecularRadiance(float3 p, float3 normal, float roughness, float3 f0, float intensity)
 {
     static const float MinimumRoughness = 0.045;
 
@@ -205,9 +205,9 @@ float3 bodyLightSpecularRadiance(float3 p, float3 normal, float roughness, float
     float3 result = 0.0;
 
     [loop]
-    for (int i = 0; i < BODY_LIGHT_COUNT; i++)
+    for (int i = 0; i < SDF_LIGHT_COUNT; i++)
     {
-        BodyLight light = bodyLights[i];
+        SdfLight light = sdfLights[i];
         float3 radiance = light.radianceFieldId.rgb;
         if (dot(radiance, radiance) <= 0.000001)
         {
@@ -256,20 +256,20 @@ float3 studioIrradianceDiffuseRadiance(float3 p, float3 normal, float3 albedo, f
     float ndv = saturate(dot(normal, viewDirection));
     float3 fresnel = fresnelSchlickRoughness(ndv, f0, roughness);
     float3 diffuseShare = 1.0 - fresnel;
-    float3 irradiance = studioIrradianceTexture.SampleLevel(gridSampler, studioPmremDirection(normal), 0.0).rgb;
+    float3 irradiance = studioIrradianceTexture.SampleLevel(linearSampler, studioPmremDirection(normal), 0.0).rgb;
     return diffuseShare * albedo * irradiance * (STUDIO_IRRADIANCE_INTENSITY / PI);
 }
 
-float3 shadeBodyPbr(float3 p, float3 normal, BodySurface surface)
+float3 shadeSdfPbr(float3 p, float3 normal, SdfSurface surface)
 {
     return surface.emission
-        + surface.albedo * bodyLightIrradianceAt(p, normal) / PI
+        + surface.albedo * sdfLightIrradianceAt(p, normal) / PI
         + studioIrradianceDiffuseRadiance(p, normal, surface.albedo, surface.roughness, surface.f0)
-        + bodyLightSpecularRadiance(p, normal, surface.roughness, surface.f0, 7.0)
+        + sdfLightSpecularRadiance(p, normal, surface.roughness, surface.f0, 7.0)
         + studioPmremSpecularRadiance(p, normal, surface.roughness, surface.f0);
 }
 
-AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
+SdfObjectProxyVertexOut D3D12SdfObjectProxyVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
     float2 corners[6] =
     {
@@ -281,22 +281,22 @@ AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instance
         float2(-1.0, 1.0),
     };
 
-    AgentVisual agent = agentVisuals[BODY_INDEX];
+    SdfObject sdfObject = sdfObjects[SDF_INDEX];
     float3 forward;
     float3 right;
     float3 up;
-    cameraBasis(cameraPosition, gridCenter, forward, right, up);
-    float3 delta = agent.centerRadius.xyz - cameraPosition;
+    cameraBasis(cameraPosition, viewCenter, forward, right, up);
+    float3 delta = sdfObject.centerRadius.xyz - cameraPosition;
     float z = max(dot(delta, forward), 0.0001);
     float2 projected = float2(dot(delta, right), dot(delta, up)) / z * 1.6;
     float clipAspect = resolution.x / max(resolution.y, 1.0);
-    float boundRadius = agent.centerRadius.w * 1.58;
+    float boundRadius = sdfObject.centerRadius.w * 1.58;
     float projectedRadius = boundRadius / z * 1.6 + 0.035;
     float2 clipCenter = float2(projected.x / clipAspect, projected.y);
     float2 clipRadius = float2(projectedRadius / clipAspect, projectedRadius);
 
-    AgentProxyVertexOut output;
+    SdfObjectProxyVertexOut output;
     output.position = float4(clipCenter + corners[vertexId] * clipRadius, 0.0, 1.0);
-    output.agentIndex = (float)BODY_INDEX;
+    output.sdfIndex = (float)SDF_INDEX;
     return output;
 }

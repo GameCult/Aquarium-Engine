@@ -2,15 +2,15 @@ cbuffer AquariumFrame : register(b0)
 {
     float2 resolution;
     float timeSeconds;
-    float gridRadius;
+    float viewRadius;
     float3 cameraPosition;
     float farDistance;
-    float2 gridCenter;
+    float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
-    float previousGridRadius;
-    float2 previousGridCenter;
+    float previousViewRadius;
+    float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
     float renderDebugMode;
@@ -31,14 +31,14 @@ Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
 SamplerState sourceSampler : register(s0);
 
-struct AgentVisual
+struct SdfObject
 {
     float4 centerRadius;
     float4 previousCenterPad;
     float4 state;
 };
 
-StructuredBuffer<AgentVisual> agentVisuals : register(t24);
+StructuredBuffer<SdfObject> sdfObjects : register(t24);
 
 struct VertexOut
 {
@@ -55,13 +55,13 @@ struct ResolveOut
 };
 
 static const float SUN_RADIUS = 1.12;
-static const int ROLE_AGENT_COUNT = 7;
-static const int AGENT_VISUAL_COUNT = ROLE_AGENT_COUNT + 2;
+static const int ROLE_SDF_OBJECT_COUNT = 7;
+static const int SDF_OBJECT_VISUAL_COUNT = ROLE_SDF_OBJECT_COUNT + 2;
 static const float FIELD_ID_SELF = 2.0;
-static const float FIELD_ID_GRID = 4.0;
+static const float FIELD_ID_HEIGHT_FIELD = 4.0;
 static const float FIELD_ID_CURSOR = 5.0;
-static const float FIELD_ID_AGENT_BASE = 10.0;
-static const float BODY_GRID_CLEARANCE_RADIUS_SCALE = 2.0;
+static const float FIELD_ID_SDF_OBJECT_BASE = 10.0;
+static const float HEIGHT_FIELD_CLEARANCE_RADIUS_SCALE = 2.0;
 static const float SELF_GRAVITY_RADIUS = 17.0;
 static const float MAX_HISTORY_AGE = 32.0;
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
@@ -149,7 +149,7 @@ float powerPulse(float distanceValue, float radius, float power)
     return shaped * shaped * (3.0 - 2.0 * shaped);
 }
 
-float gridBrushHeight(float2 world, float2 center, float radius, float power, float amplitude, float waveAmplitude, float waveFrequency, float waveSpeed, float waveSinePower, float sampleTime)
+float heightFieldBrushHeight(float2 world, float2 center, float radius, float power, float amplitude, float waveAmplitude, float waveFrequency, float waveSpeed, float waveSinePower, float sampleTime)
 {
     float distanceValue = length(world - center);
     if (distanceValue > radius)
@@ -165,30 +165,30 @@ float gridBrushHeight(float2 world, float2 center, float radius, float power, fl
     return amplitude * well + ripple * well * waveAmplitude;
 }
 
-float gridHeightAt(float2 world, float sampleTime)
+float heightFieldAt(float2 world, float sampleTime)
 {
     float height = sin((world.x * 0.08 + world.y * 0.06) + sampleTime * 0.27)
         * sin((world.x * -0.04 + world.y * 0.07) - sampleTime * 0.19) * 0.035;
-    height += gridBrushHeight(world, 0.0, SELF_GRAVITY_RADIUS, 2.85, -1.34, 0.18, 6.28318530718, 0.82, 1.25, sampleTime);
+    height += heightFieldBrushHeight(world, 0.0, SELF_GRAVITY_RADIUS, 2.85, -1.34, 0.18, 6.28318530718, 0.82, 1.25, sampleTime);
 
     [unroll]
-    for (int index = 0; index < ROLE_AGENT_COUNT; index++)
+    for (int index = 0; index < ROLE_SDF_OBJECT_COUNT; index++)
     {
         float radius = planetRadius(index);
-        height += gridBrushHeight(world, planetAnchorAt(index, sampleTime), 3.8 + radius * 2.5, 2.1, -0.42, 0.022, 2.4, 1.35, 0.0, sampleTime);
+        height += heightFieldBrushHeight(world, planetAnchorAt(index, sampleTime), 3.8 + radius * 2.5, 2.1, -0.42, 0.022, 2.4, 1.35, 0.0, sampleTime);
     }
 
     return height;
 }
 
-float3 bodyCenterAtGridHeight(float2 xy, float radius, float sampleTime)
+float3 sdfCenterAtHeightField(float2 xy, float radius, float sampleTime)
 {
-    return float3(xy, gridHeightAt(xy, sampleTime) + radius * BODY_GRID_CLEARANCE_RADIUS_SCALE);
+    return float3(xy, heightFieldAt(xy, sampleTime) + radius * HEIGHT_FIELD_CLEARANCE_RADIUS_SCALE);
 }
 
 float3 planetCenterAt(int index, float sampleTime)
 {
-    return bodyCenterAtGridHeight(planetAnchorAt(index, sampleTime), planetRadius(index), sampleTime);
+    return sdfCenterAtHeightField(planetAnchorAt(index, sampleTime), planetRadius(index), sampleTime);
 }
 
 void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
@@ -211,11 +211,11 @@ float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 c
 
 float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
 {
-    if (fieldId >= FIELD_ID_AGENT_BASE)
+    if (fieldId >= FIELD_ID_SDF_OBJECT_BASE)
     {
-        int agentIndex = clamp((int)round(fieldId - FIELD_ID_AGENT_BASE), 0, AGENT_VISUAL_COUNT - 1);
-        float3 currentCenter = agentVisuals[agentIndex].centerRadius.xyz;
-        float3 previousCenter = agentVisuals[agentIndex].previousCenterPad.xyz;
+        int sdfIndex = clamp((int)round(fieldId - FIELD_ID_SDF_OBJECT_BASE), 0, SDF_OBJECT_VISUAL_COUNT - 1);
+        float3 currentCenter = sdfObjects[sdfIndex].centerRadius.xyz;
+        float3 previousCenter = sdfObjects[sdfIndex].previousCenterPad.xyz;
         return previousCenter + (worldPosition - currentCenter);
     }
 
@@ -234,7 +234,7 @@ float2 projectWorldToPreviousHistoryUv(float3 worldPosition)
     float3 forward;
     float3 right;
     float3 up;
-    cameraBasis(previousCameraPosition, previousGridCenter, forward, right, up);
+    cameraBasis(previousCameraPosition, previousViewCenter, forward, right, up);
     float3 delta = worldPosition - previousCameraPosition;
     float z = max(dot(delta, forward), 0.0001);
     float2 ndc = float2(dot(delta, right), dot(delta, up)) / z * 1.6;
@@ -385,7 +385,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float3 historyColor = currentColor;
     if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
     {
-        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, gridCenter);
+        float3 currentRay = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, viewCenter);
         float3 worldPosition = cameraPosition + currentRay * currentTravel;
         float3 previousWorldPosition = temporalPreviousWorldPosition(worldPosition, currentFieldId);
         float2 previousUv = projectWorldToPreviousHistoryUv(previousWorldPosition);
@@ -468,7 +468,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 8.5 && renderDebugMode < 9.5)
     {
-        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? debugFieldIdColor(currentFieldId) : 0.0;
+        finalColor = currentFieldId >= FIELD_ID_SDF_OBJECT_BASE ? debugFieldIdColor(currentFieldId) : 0.0;
     }
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {

@@ -13,7 +13,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private readonly OrbitCameraRig cameraRig;
     private readonly AquariumCultStateStore stateStore;
 
-    private GridFrame gridFrame;
+    private ViewFrame ViewFrame;
     private GraphicsSettings graphicsSettings;
     private float timeSeconds;
     private float previousFrameTimeSeconds;
@@ -38,16 +38,16 @@ public sealed class AquariumRuntime : IAquariumRuntime
             pitchRadians: liveState.CameraPitchRadians,
             distance: liveState.CameraDistance);
         timeSeconds = liveState.TimeSeconds;
-        gridFrame = GridFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
+        ViewFrame = ViewFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
         previousFrameTimeSeconds = timeSeconds;
-        previousCursorWorld = gridFrame.Center;
+        previousCursorWorld = ViewFrame.Center;
     }
 
     public AquariumRuntimeOptions Options { get; }
 
     public AquariumRenderPlan RenderPlan { get; } = EpiphanyRenderPlan.Create();
 
-    public AquariumFrame Frame => new(gridFrame, cameraRig.Position, timeSeconds);
+    public AquariumFrame Frame => new(ViewFrame, cameraRig.Position, timeSeconds);
 
     public GraphicsSettings GraphicsSettings
     {
@@ -74,7 +74,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 input.Width,
                 input.Height,
                 frame.CameraPosition,
-                frame.Grid.Center),
+                frame.View.Center),
         };
         var scene = EpiphanySceneBuilder.Build(frameWithCursor, previousFrameTimeSeconds, previousCursorWorld);
         previousFrameTimeSeconds = frameWithCursor.TimeSeconds;
@@ -85,7 +85,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
     public void Start()
     {
         Console.WriteLine("Aquarium Engine booted.");
-        Console.WriteLine($"Grid center: {gridFrame.Center}, radius: {gridFrame.Radius:0.00}");
+        Console.WriteLine($"Grid center: {ViewFrame.Center}, radius: {ViewFrame.Radius:0.00}");
         Console.WriteLine($"Graphics settings: debug {graphicsSettings.RenderDebugMode}, exposure {graphicsSettings.SceneExposure:0.###}, bloom {graphicsSettings.BloomIntensity:0.###}, veil {graphicsSettings.BloomVeilIntensity:0.###}");
         Console.WriteLine($"CultCache: {stateStore.CachePath}");
         Console.WriteLine($"CultNet hello: {stateStore.Hello.RuntimeKind} / {stateStore.Hello.DisplayName}");
@@ -96,7 +96,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
     {
         timeSeconds += Math.Max(deltaSeconds, 0.0f);
         cameraRig.ApplyInput(input, deltaSeconds);
-        gridFrame = GridFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
+        ViewFrame = ViewFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
         secondsSinceStateSave += Math.Max(deltaSeconds, 0.0f);
         if (secondsSinceStateSave >= StateSaveIntervalSeconds)
         {

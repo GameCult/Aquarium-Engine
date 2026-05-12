@@ -1,32 +1,32 @@
-static const int BODY_INDEX = 4;
+static const int SDF_INDEX = 4;
 
-#include "D3D12BodyCommon.hlsli"
+#include "D3D12SdfCommon.hlsli"
 #include "D3D12SdfMath.hlsli"
 #include "D3D12AgentCharacters.hlsli"
 
-float bodyDistance(float3 p, int agentIndex)
+float sdfDistance(float3 p, int sdfIndex)
 {
-    AgentVisual agent = agentVisuals[agentIndex];
-    float radius = max(agent.centerRadius.w, 0.001);
-    float3 local = (p - agent.centerRadius.xyz) / radius;
-    return agentBodySdf(local, agent) * radius;
+    SdfObject sdfObject = sdfObjects[sdfIndex];
+    float radius = max(sdfObject.centerRadius.w, 0.001);
+    float3 local = (p - sdfObject.centerRadius.xyz) / radius;
+    return sdfObjectSdfSdf(local, sdfObject) * radius;
 }
 
-BodySurface bodySurface(float3 p, int agentIndex)
+SdfSurface sdfSurface(float3 p, int sdfIndex)
 {
-    AgentVisual agent = agentVisuals[agentIndex];
+    SdfObject sdfObject = sdfObjects[sdfIndex];
 
-    BodySurface surface;
-    surface.albedo = lerp(float3(0.18, 0.42, 0.34), float3(0.70, 0.86, 0.60), agent.state.y);
+    SdfSurface surface;
+    surface.albedo = lerp(float3(0.18, 0.42, 0.34), float3(0.70, 0.86, 0.60), sdfObject.state.y);
     surface.roughness = 0.56;
     surface.f0 = 0.04;
-    surface.emission = primitiveEmissionRadiance(bodyFieldId(agentIndex));
+    surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
     return surface;
 }
 
-float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentIndex, BodySurface surface)
+float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, SdfSurface surface)
 {
-    return shadeBodyPbr(p, normal, surface);
+    return shadeSdfPbr(p, normal, surface);
 }
 
-#include "D3D12BodyProxy.hlsli"
+#include "D3D12SdfProxy.hlsli"

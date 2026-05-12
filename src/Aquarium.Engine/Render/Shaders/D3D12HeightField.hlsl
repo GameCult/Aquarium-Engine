@@ -2,15 +2,15 @@ cbuffer AquariumFrame : register(b0)
 {
     float2 resolution;
     float timeSeconds;
-    float gridRadius;
+    float viewRadius;
     float3 cameraPosition;
     float farDistance;
-    float2 gridCenter;
+    float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
-    float previousGridRadius;
-    float2 previousGridCenter;
+    float previousViewRadius;
+    float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
     float renderDebugMode;
@@ -20,7 +20,7 @@ cbuffer AquariumFrame : register(b0)
     float4 cursorWorlds;
 };
 
-cbuffer GridHeightBrushes : register(b1)
+cbuffer HeightFieldBrushes : register(b1)
 {
     float4 brushCenterRadius[8];
     float4 brushShape[8];
@@ -43,19 +43,19 @@ struct BrushVertexOut
     nointerpolation float4 wave : TEXCOORD4;
 };
 
-float2 gridLocal(float2 p)
+float2 viewLocal(float2 p)
 {
-    return (p - gridCenter) / max(gridRadius, 0.001);
+    return (p - viewCenter) / max(viewRadius, 0.001);
 }
 
-float2 gridUv(float2 p)
+float2 viewUv(float2 p)
 {
-    return gridLocal(p) * 0.5 + 0.5;
+    return viewLocal(p) * 0.5 + 0.5;
 }
 
-float2 gridWorld(float2 uv)
+float2 viewWorld(float2 uv)
 {
-    return gridCenter + (uv * 2.0 - 1.0) * gridRadius;
+    return viewCenter + (uv * 2.0 - 1.0) * viewRadius;
 }
 
 float powerPulse(float distanceValue, float radius, float power)
@@ -74,15 +74,15 @@ VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
     return output;
 }
 
-float D3D12GridHeightBasePS(VertexOut input) : SV_Target
+float D3D12HeightFieldBasePS(VertexOut input) : SV_Target
 {
-    float2 world = gridWorld(saturate(input.uv));
+    float2 world = viewWorld(saturate(input.uv));
     float slow = sin((world.x * 0.08 + world.y * 0.06) + timeSeconds * 0.27)
         * sin((world.x * -0.04 + world.y * 0.07) - timeSeconds * 0.19) * 0.035;
     return slow;
 }
 
-BrushVertexOut D3D12GridHeightBrushVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
+BrushVertexOut D3D12HeightFieldBrushVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
     float2 corners[6] =
     {
@@ -96,7 +96,7 @@ BrushVertexOut D3D12GridHeightBrushVS(uint vertexId : SV_VertexID, uint instance
 
     float4 centerRadius = brushCenterRadius[instanceId];
     float2 world = centerRadius.xy + corners[vertexId] * centerRadius.z;
-    float2 uv = gridUv(world);
+    float2 uv = viewUv(world);
 
     BrushVertexOut output;
     output.position = float4(uv * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
@@ -108,9 +108,9 @@ BrushVertexOut D3D12GridHeightBrushVS(uint vertexId : SV_VertexID, uint instance
     return output;
 }
 
-float D3D12GridHeightBrushPS(BrushVertexOut input) : SV_Target
+float D3D12HeightFieldBrushPS(BrushVertexOut input) : SV_Target
 {
-    float2 world = gridWorld(saturate(input.uv));
+    float2 world = viewWorld(saturate(input.uv));
     float distanceValue = length(world - input.centerRadius.xy);
     float well = powerPulse(distanceValue, input.centerRadius.z, input.shape.x);
     float normalizedDistance = saturate(distanceValue / max(input.centerRadius.z, 0.001));

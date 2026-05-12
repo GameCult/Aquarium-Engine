@@ -61,8 +61,9 @@ $requiredFiles = @(
     "Assets\Aquarium-Engine-Icon.ico",
     "Assets\Fonts\Montserrat[wght].ttf",
     "Assets\Fonts\UbuntuSans[wdth,wght].ttf",
-    "Render\Shaders\D3D12Grid.hlsl",
-    "Render\Shaders\D3D12BodyCommon.hlsli",
+    "Render\Shaders\D3D12HeightField.hlsl",
+    "Render\Shaders\D3D12SdfCommon.hlsli",
+    "Render\Shaders\D3D12SdfProxy.hlsli",
     "Render\Shaders\D3D12SelfBody.hlsl",
     "Render\Shaders\D3D12CursorBody.hlsl"
 )

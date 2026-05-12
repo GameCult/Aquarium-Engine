@@ -236,7 +236,7 @@ public sealed class Win32Window : IDisposable
         }
     }
 
-    public void PaintSplash(string header = "Aquarium", string body = "Preparing Aquarium")
+    public void PaintSplash(string header = "Aquarium", string message = "Preparing Aquarium")
     {
         if (!GetClientRect(Handle, out var rect))
         {
@@ -265,7 +265,7 @@ public sealed class Win32Window : IDisposable
                 DrawIconEx(deviceContext, iconX, iconY, splashIcon, iconSize, iconSize, 0, IntPtr.Zero, 0x0003);
             }
 
-            PaintSplashText(deviceContext, ClientWidth, ClientHeight, header, body);
+            PaintSplashText(deviceContext, ClientWidth, ClientHeight, header, message);
             GdiFlush();
         }
         finally
@@ -382,7 +382,7 @@ public sealed class Win32Window : IDisposable
         }
     }
 
-    private static void PaintSplashText(IntPtr deviceContext, int width, int height, string header, string body)
+    private static void PaintSplashText(IntPtr deviceContext, int width, int height, string header, string message)
     {
         LoadPrivateSplashFont("Montserrat[wght].ttf");
         LoadPrivateSplashFont("UbuntuSans[wdth,wght].ttf");
@@ -390,7 +390,7 @@ public sealed class Win32Window : IDisposable
         var oldBackgroundMode = SetBkMode(deviceContext, TRANSPARENT);
         var oldTextColor = SetTextColor(deviceContext, ColorRef(224, 244, 255));
         var headerFont = CreateSplashFont(deviceContext, 26, FW_THIN, "Montserrat");
-        var bodyFont = CreateSplashFont(deviceContext, 12, FW_REGULAR, "Ubuntu Sans");
+        var messageFont = CreateSplashFont(deviceContext, 12, FW_REGULAR, "Ubuntu Sans");
 
         try
         {
@@ -403,7 +403,7 @@ public sealed class Win32Window : IDisposable
                 right = width,
                 bottom = anchorY + 24
             };
-            var bodyRect = new RECT
+            var messageRect = new RECT
             {
                 left = Math.Max(0, width / 2 - 360),
                 top = anchorY + 28,
@@ -413,14 +413,14 @@ public sealed class Win32Window : IDisposable
 
             var oldFont = SelectObject(deviceContext, headerFont);
             DrawText(deviceContext, headerText, headerText.Length, ref headerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            SelectObject(deviceContext, bodyFont);
+            SelectObject(deviceContext, messageFont);
             SetTextColor(deviceContext, ColorRef(142, 179, 190));
-            DrawText(deviceContext, body, body.Length, ref bodyRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DrawText(deviceContext, message, message.Length, ref messageRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(deviceContext, oldFont);
         }
         finally
         {
-            DeleteObject(bodyFont);
+            DeleteObject(messageFont);
             DeleteObject(headerFont);
             SetTextColor(deviceContext, oldTextColor);
             SetBkMode(deviceContext, oldBackgroundMode);

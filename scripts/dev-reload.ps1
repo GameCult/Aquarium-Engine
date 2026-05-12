@@ -190,7 +190,7 @@ function Start-AquariumProcess {
 
     $arguments = @(
         "--cache", $cultCachePath,
-        "--shader-source", (Join-Path $SlotPath "Render\Shaders\D3D12Grid.hlsl"),
+        "--shader-source", (Join-Path $SlotPath "Render\Shaders\D3D12HeightField.hlsl"),
         "--client-assembly", $LiveAssemblyPath,
         "--client-reload-pointer", $liveReloadPointerPath
     )

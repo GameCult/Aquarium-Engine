@@ -18,26 +18,26 @@ public sealed class AquariumRenderPlan
 
 public sealed class AquariumShaderManifest
 {
-    private readonly List<string> bodyShaderPaths = [];
+    private readonly List<string> sdfShaderPaths = [];
     private readonly List<string> includePaths = [];
 
     public string? ShaderRoot { get; private set; }
 
-    public string GridShader { get; private set; } = "D3D12Grid.hlsl";
+    public string HeightFieldShader { get; private set; } = "D3D12HeightField.hlsl";
 
     public string SceneShader { get; private set; } = "D3D12Scene.hlsl";
 
     public string PostShader { get; private set; } = "D3D12Post.hlsl";
 
-    public string BodyCommonInclude { get; private set; } = "D3D12BodyCommon.hlsli";
+    public string SdfCommonInclude { get; private set; } = "D3D12SdfCommon.hlsli";
 
-    public string BodyProxyInclude { get; private set; } = "D3D12BodyProxy.hlsli";
+    public string SdfProxyInclude { get; private set; } = "D3D12SdfProxy.hlsli";
 
     public string SdfMathInclude { get; private set; } = "D3D12SdfMath.hlsli";
 
-    public string? BodyLibraryInclude { get; private set; }
+    public string? SdfLibraryInclude { get; private set; }
 
-    public IReadOnlyList<string> BodyShaderPaths => bodyShaderPaths;
+    public IReadOnlyList<string> SdfShaderPaths => sdfShaderPaths;
 
     public IReadOnlyList<string> IncludePaths => includePaths;
 
@@ -47,9 +47,9 @@ public sealed class AquariumShaderManifest
         return this;
     }
 
-    public AquariumShaderManifest Grid(string path)
+    public AquariumShaderManifest HeightField(string path)
     {
-        GridShader = path;
+        HeightFieldShader = path;
         return this;
     }
 
@@ -65,15 +65,15 @@ public sealed class AquariumShaderManifest
         return this;
     }
 
-    public AquariumShaderManifest BodyCommon(string path)
+    public AquariumShaderManifest SdfCommon(string path)
     {
-        BodyCommonInclude = path;
+        SdfCommonInclude = path;
         return this;
     }
 
-    public AquariumShaderManifest BodyProxy(string path)
+    public AquariumShaderManifest SdfProxy(string path)
     {
-        BodyProxyInclude = path;
+        SdfProxyInclude = path;
         return this;
     }
 
@@ -83,9 +83,9 @@ public sealed class AquariumShaderManifest
         return this;
     }
 
-    public AquariumShaderManifest BodyLibrary(string? path)
+    public AquariumShaderManifest SdfLibrary(string? path)
     {
-        BodyLibraryInclude = path;
+        SdfLibraryInclude = path;
         return this;
     }
 
@@ -95,9 +95,9 @@ public sealed class AquariumShaderManifest
         return this;
     }
 
-    public AquariumShaderManifest BodyShader(string path)
+    public AquariumShaderManifest SdfShader(string path)
     {
-        bodyShaderPaths.Add(path);
+        sdfShaderPaths.Add(path);
         return this;
     }
 }
@@ -206,17 +206,17 @@ public enum AquariumPassKind
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public readonly record struct AquariumBodyLight(
+public readonly record struct AquariumSdfLight(
     Vector4 CenterRadius,
     Vector4 RadianceFieldId);
 
 [StructLayout(LayoutKind.Sequential)]
-public readonly record struct AquariumBodyVisual(
+public readonly record struct AquariumSdfObject(
     Vector4 CenterRadius,
     Vector4 PreviousCenterPad,
     Vector4 State);
 
-public readonly record struct AquariumGridHeightBrush(
+public readonly record struct AquariumHeightFieldBrush(
     Vector2 Center,
     float Radius,
     float Power,
@@ -230,9 +230,9 @@ public sealed class AquariumSceneState
 {
     public static AquariumSceneState Empty { get; } = new();
 
-    public IReadOnlyList<AquariumGridHeightBrush> GridHeightBrushes { get; init; } = [];
+    public IReadOnlyList<AquariumHeightFieldBrush> HeightFieldBrushes { get; init; } = [];
 
-    public IReadOnlyList<AquariumBodyVisual> BodyVisuals { get; init; } = [];
+    public IReadOnlyList<AquariumSdfObject> SdfObjects { get; init; } = [];
 
-    public IReadOnlyList<AquariumBodyLight> BodyLights { get; init; } = [];
+    public IReadOnlyList<AquariumSdfLight> SdfLights { get; init; } = [];
 }

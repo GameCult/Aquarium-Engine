@@ -126,9 +126,9 @@ public sealed class AquariumShaderBuilder(AquariumShaderManifest manifest)
         return this;
     }
 
-    public AquariumShaderBuilder Core(string grid, string scene, string post)
+    public AquariumShaderBuilder Core(string heightField, string scene, string post)
     {
-        manifest.Grid(grid).Scene(scene).Post(post);
+        manifest.HeightField(heightField).Scene(scene).Post(post);
         return this;
     }
 
@@ -138,15 +138,15 @@ public sealed class AquariumShaderBuilder(AquariumShaderManifest manifest)
         return this;
     }
 
-    public AquariumShaderBuilder BodyShader(string path)
+    public AquariumShaderBuilder SdfShader(string path)
     {
-        manifest.BodyShader(path);
+        manifest.SdfShader(path);
         return this;
     }
 
-    public AquariumShaderBuilder BodyLibrary(string path)
+    public AquariumShaderBuilder SdfLibrary(string path)
     {
-        manifest.BodyLibrary(path);
+        manifest.SdfLibrary(path);
         return this;
     }
 }

@@ -91,7 +91,7 @@ internal sealed class DirectWriteOverlay : IDisposable
             RectFromEdges(18, 14, Math.Min(width - 18, 340), 42),
             primaryTextBrush);
         renderTarget.DrawText(
-            $"grid r {frame.Grid.Radius:0.00}  cam z {frame.CameraPosition.Z:0.00}",
+            $"view r {frame.View.Radius:0.00}  cam z {frame.CameraPosition.Z:0.00}",
             smallFormat,
             RectFromEdges(18, 38, Math.Min(width - 18, 420), 62),
             quietTextBrush,

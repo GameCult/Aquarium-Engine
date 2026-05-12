@@ -15,12 +15,12 @@ public static class EpiphanySceneBuilder
 
     public static AquariumSceneState Build(AquariumFrame frame, float previousTimeSeconds, Vector2 previousCursorWorld)
     {
-        var brushes = BuildGridHeightBrushes(frame.TimeSeconds);
+        var brushes = BuildHeightFieldBrushes(frame.TimeSeconds);
         return new AquariumSceneState
         {
-            GridHeightBrushes = brushes,
-            BodyVisuals = BuildBodyVisuals(frame, previousTimeSeconds, previousCursorWorld, brushes),
-            BodyLights = BuildBodyLights(frame, brushes),
+            HeightFieldBrushes = brushes,
+            SdfObjects = BuildSdfObjects(frame, previousTimeSeconds, previousCursorWorld, brushes),
+            SdfLights = BuildSdfLights(frame, brushes),
         };
     }
 
@@ -50,10 +50,10 @@ public static class EpiphanySceneBuilder
         return new Vector2(world.X, world.Y);
     }
 
-    private static AquariumGridHeightBrush[] BuildGridHeightBrushes(float timeSeconds)
+    private static AquariumHeightFieldBrush[] BuildHeightFieldBrushes(float timeSeconds)
     {
-        var brushes = new AquariumGridHeightBrush[GridHeightBrushCount];
-        brushes[0] = new AquariumGridHeightBrush(
+        var brushes = new AquariumHeightFieldBrush[GridHeightBrushCount];
+        brushes[0] = new AquariumHeightFieldBrush(
             Vector2.Zero,
             SelfGravityRadius,
             2.85f,
@@ -67,7 +67,7 @@ public static class EpiphanySceneBuilder
         {
             var radius = AgentRadius(index);
             var center = AgentAnchor(index, timeSeconds);
-            brushes[index + 1] = new AquariumGridHeightBrush(
+            brushes[index + 1] = new AquariumHeightFieldBrush(
                 center,
                 3.8f + radius * 2.5f,
                 2.1f,
@@ -81,11 +81,11 @@ public static class EpiphanySceneBuilder
         return brushes;
     }
 
-    private static AquariumBodyVisual[] BuildBodyVisuals(AquariumFrame frame, float previousTimeSeconds, Vector2 previousCursorWorld, IReadOnlyList<AquariumGridHeightBrush> brushes)
+    private static AquariumSdfObject[] BuildSdfObjects(AquariumFrame frame, float previousTimeSeconds, Vector2 previousCursorWorld, IReadOnlyList<AquariumHeightFieldBrush> brushes)
     {
-        var bodyVisuals = new AquariumBodyVisual[EpiphanyRenderPlan.BodyVisualCount];
+        var SdfObjects = new AquariumSdfObject[EpiphanyRenderPlan.SdfVisualCount];
         var selfCenter = BodyCenterAtGridHeight(frame.TimeSeconds, Vector2.Zero, SunRadius, brushes);
-        bodyVisuals[EpiphanyRenderPlan.SelfVisualIndex] = new AquariumBodyVisual(
+        SdfObjects[EpiphanyRenderPlan.SelfVisualIndex] = new AquariumSdfObject(
             new Vector4(selfCenter, SunRadius),
             new Vector4(selfCenter, 0.0f),
             new Vector4(1.0f, 1.0f, 0.0f, 0.0f));
@@ -95,13 +95,13 @@ public static class EpiphanySceneBuilder
             var visualIndex = EpiphanyRenderPlan.RoleAgentBaseIndex + index;
             var radius = AgentRadius(index);
             var center = AgentCenterAtGridHeight(index, frame.TimeSeconds, brushes);
-            var previousBrushes = BuildGridHeightBrushes(previousTimeSeconds);
+            var previousBrushes = BuildHeightFieldBrushes(previousTimeSeconds);
             var previousCenter = AgentCenterAtGridHeight(index, previousTimeSeconds, previousBrushes);
             var activity = 0.45f + 0.45f * Hash21(index + 2.7f, 31.0f);
             var heartbeat = 0.5f + 0.5f * MathF.Sin(frame.TimeSeconds * (1.2f + index * 0.09f) + index * 1.37f);
             var pressure = 0.25f + 0.25f * MathF.Sin(frame.TimeSeconds * 0.31f + index * 0.71f);
 
-            bodyVisuals[visualIndex] = new AquariumBodyVisual(
+            SdfObjects[visualIndex] = new AquariumSdfObject(
                 new Vector4(center, radius),
                 new Vector4(previousCenter, 0.0f),
                 new Vector4(activity, heartbeat, pressure, 0.0f));
@@ -109,38 +109,38 @@ public static class EpiphanySceneBuilder
 
         var cursorCenter = new Vector3(frame.CursorWorld, CursorBodyRadius);
         var previousCursorCenter = new Vector3(previousCursorWorld, CursorBodyRadius);
-        bodyVisuals[EpiphanyRenderPlan.CursorVisualIndex] = new AquariumBodyVisual(
+        SdfObjects[EpiphanyRenderPlan.CursorVisualIndex] = new AquariumSdfObject(
             new Vector4(cursorCenter, CursorBodyBoundRadius),
             new Vector4(previousCursorCenter, -1.0f),
             new Vector4(1.0f, 0.5f, 0.0f, 0.0f));
 
-        return bodyVisuals;
+        return SdfObjects;
     }
 
-    private static AquariumBodyLight[] BuildBodyLights(AquariumFrame frame, IReadOnlyList<AquariumGridHeightBrush> brushes)
+    private static AquariumSdfLight[] BuildSdfLights(AquariumFrame frame, IReadOnlyList<AquariumHeightFieldBrush> brushes)
     {
         var selfCenter = BodyCenterAtGridHeight(frame.TimeSeconds, Vector2.Zero, SunRadius, brushes);
         return
         [
-            new AquariumBodyLight(
+            new AquariumSdfLight(
                 new Vector4(selfCenter, SunRadius),
                 new Vector4(10.0f, 8.7f, 4.2f, 2.0f))
         ];
     }
 
-    private static Vector3 BodyCenterAtGridHeight(float timeSeconds, Vector2 world, float radius, IReadOnlyList<AquariumGridHeightBrush> brushes)
+    private static Vector3 BodyCenterAtGridHeight(float timeSeconds, Vector2 world, float radius, IReadOnlyList<AquariumHeightFieldBrush> brushes)
     {
         return new Vector3(world.X, world.Y, EvaluateGridHeight(timeSeconds, world, brushes) + radius * BodyGridClearanceRadiusScale);
     }
 
-    private static Vector3 AgentCenterAtGridHeight(int index, float timeSeconds, IReadOnlyList<AquariumGridHeightBrush> brushes)
+    private static Vector3 AgentCenterAtGridHeight(int index, float timeSeconds, IReadOnlyList<AquariumHeightFieldBrush> brushes)
     {
         var radius = AgentRadius(index);
         var xy = AgentAnchor(index, timeSeconds);
         return new Vector3(xy.X, xy.Y, EvaluateGridHeight(timeSeconds, xy, brushes) + radius * BodyGridClearanceRadiusScale);
     }
 
-    private static float EvaluateGridHeight(float timeSeconds, Vector2 world, IReadOnlyList<AquariumGridHeightBrush> brushes)
+    private static float EvaluateGridHeight(float timeSeconds, Vector2 world, IReadOnlyList<AquariumHeightFieldBrush> brushes)
     {
         var slow = MathF.Sin((world.X * 0.08f + world.Y * 0.06f) + timeSeconds * 0.27f)
             * MathF.Sin((world.X * -0.04f + world.Y * 0.07f) - timeSeconds * 0.19f)
@@ -154,7 +154,7 @@ public static class EpiphanySceneBuilder
         return height;
     }
 
-    private static float GridBrushHeight(Vector2 world, AquariumGridHeightBrush brush, float timeSeconds)
+    private static float GridBrushHeight(Vector2 world, AquariumHeightFieldBrush brush, float timeSeconds)
     {
         var distanceValue = Vector2.Distance(world, brush.Center);
         if (distanceValue > brush.Radius)

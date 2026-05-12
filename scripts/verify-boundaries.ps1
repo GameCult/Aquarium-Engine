@@ -2,23 +2,18 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$engineRoot = Join-Path $repoRoot "src\Aquarium.Engine"
+$engineRoots = @(
+    (Join-Path $repoRoot "src\Aquarium.Engine"),
+    (Join-Path $repoRoot "src\Aquarium.Engine.Contracts")
+)
 
-$engineEpiphanyReferences = rg -n -S -- "Aquarium\.Epiphany" $engineRoot
+$forbiddenEngineTerms = "grid|agent|body|epiphany"
+$engineReferences = rg -n -i -- $forbiddenEngineTerms $engineRoots
 if ($LASTEXITCODE -eq 0) {
-    throw "Aquarium.Engine must not reference Aquarium.Epiphany:`n$engineEpiphanyReferences"
+    throw "Aquarium Engine and contracts must not contain Epiphany/client policy terms:`n$engineReferences"
 }
 elseif ($LASTEXITCODE -ne 1) {
-    throw "Boundary search for Aquarium.Epiphany references failed."
-}
-
-$epiphanyRoleTerms = "Self|Imagination|hibiscus|FaceAgent|HandsAgent|SoulAgent|LifeAgent|CursorBody|CultNet"
-$engineRoleReferences = rg -n -S -- $epiphanyRoleTerms $engineRoot
-if ($LASTEXITCODE -eq 0) {
-    throw "Aquarium.Engine still contains Epiphany/client policy names:`n$engineRoleReferences"
-}
-elseif ($LASTEXITCODE -ne 1) {
-    throw "Boundary search for Epiphany/client policy names failed."
+    throw "Boundary search for Aquarium Engine terms failed."
 }
 
 Write-Host "Aquarium boundary checks passed."

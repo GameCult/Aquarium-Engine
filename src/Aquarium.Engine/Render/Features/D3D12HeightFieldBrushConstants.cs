@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Aquarium.Engine.Render.Features;
 
 [StructLayout(LayoutKind.Sequential)]
-internal record struct D3D12GridHeightBrushConstants(
+internal record struct D3D12HeightFieldBrushConstants(
     Vector4 CenterRadius0,
     Vector4 CenterRadius1,
     Vector4 CenterRadius2,
@@ -32,9 +32,9 @@ internal record struct D3D12GridHeightBrushConstants(
 {
     public const int MaxBrushCount = 8;
 
-    public static D3D12GridHeightBrushConstants FromBrushes(IReadOnlyList<AquariumGridHeightBrush> brushes)
+    public static D3D12HeightFieldBrushConstants FromBrushes(IReadOnlyList<AquariumHeightFieldBrush> brushes)
     {
-        var constants = new D3D12GridHeightBrushConstants();
+        var constants = new D3D12HeightFieldBrushConstants();
         var brushCount = Math.Min(brushes.Count, MaxBrushCount);
         for (var index = 0; index < brushCount; index++)
         {
@@ -94,7 +94,7 @@ internal record struct D3D12GridHeightBrushConstants(
                 Wave7 = wave;
                 break;
             default:
-                throw new ArgumentOutOfRangeException(nameof(index), index, "Grid height brush index is outside the fixed brush table.");
+                throw new ArgumentOutOfRangeException(nameof(index), index, "Height Field brush index is outside the fixed brush table.");
         }
     }
 }

@@ -1,5 +1,5 @@
-#ifndef AQUARIUM_D3D12_AGENT_CHARACTERS_HLSLI
-#define AQUARIUM_D3D12_AGENT_CHARACTERS_HLSLI
+#ifndef AQUARIUM_D3D12_SDF_OBJECT_CHARACTERS_HLSLI
+#define AQUARIUM_D3D12_SDF_OBJECT_CHARACTERS_HLSLI
 
 float imaginationPetalSdf(float3 local, float angle, float activity, float heartbeat, float timeSeconds)
 {
@@ -13,9 +13,9 @@ float imaginationPetalSdf(float3 local, float angle, float activity, float heart
     return sdEllipsoid(q, petalRadius);
 }
 
-float agentBodySdf(float3 local, AgentVisual agent)
+float sdfObjectSdfSdf(float3 local, SdfObject sdfObject)
 {
-    float pulse = agent.state.y;
+    float pulse = sdfObject.state.y;
     float core = sdSuperellipsoid(local, float3(0.92, 0.78, 0.62 + pulse * 0.06), 1.26);
     float ribA = sdTorus(local.xzy, float2(0.70, 0.024));
     float ribB = sdTorus(local.yxz, float2(0.56, 0.020));
@@ -26,10 +26,10 @@ float agentBodySdf(float3 local, AgentVisual agent)
     return smoothUnion(core, shell, 0.045);
 }
 
-float agentImaginationSdf(float3 local, AgentVisual agent, float timeSeconds)
+float sdfObjectImaginationSdf(float3 local, SdfObject sdfObject, float timeSeconds)
 {
-    float activity = agent.state.x;
-    float heartbeat = agent.state.y;
+    float activity = sdfObject.state.x;
+    float heartbeat = sdfObject.state.y;
     float core = sdSuperellipsoid(local, float3(0.30 + activity * 0.04, 0.30 + activity * 0.04, 0.42), 1.18);
     float phase = timeSeconds * 0.42;
     float petal0 = imaginationPetalSdf(local, phase, activity, heartbeat, timeSeconds);
@@ -45,9 +45,9 @@ float agentImaginationSdf(float3 local, AgentVisual agent, float timeSeconds)
     return smoothUnion(bloom, detail, 0.05);
 }
 
-float agentFallbackSdf(float3 local, AgentVisual agent)
+float sdfObjectFallbackSdf(float3 local, SdfObject sdfObject)
 {
-    float pulse = agent.state.y;
+    float pulse = sdfObject.state.y;
     float core = sdSuperellipsoid(local, float3(0.70, 0.58 + pulse * 0.04, 0.62), 1.34);
     float belt = sdTorus(local.xzy, float2(0.56, 0.026));
     float crown = sdTorus((local - float3(0.0, 0.0, 0.16)).yzx, float2(0.40, 0.018));

@@ -16,7 +16,7 @@ public sealed class MinimalRuntime : IAquariumRuntime
     public AquariumRenderPlan RenderPlan { get; } = CreateRenderPlan();
 
     public AquariumFrame Frame => new(
-        new GridFrame(Vector2.Zero, 24.0f),
+        new ViewFrame(Vector2.Zero, 24.0f),
         new Vector3(0.0f, -10.0f, 7.0f),
         timeSeconds,
         Vector2.Zero,

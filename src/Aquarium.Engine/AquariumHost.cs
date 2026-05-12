@@ -26,7 +26,7 @@ public static class AquariumHost
             ParseShaderPath(args),
             runtime.RenderPlan,
             runtime.GraphicsSettings,
-            body => window.PaintSplash("Aquarium", body));
+            message => window.PaintSplash("Aquarium", message));
         var settingsRuntime = runtimeLoader.Runtime;
 
         var frameClock = Stopwatch.StartNew();

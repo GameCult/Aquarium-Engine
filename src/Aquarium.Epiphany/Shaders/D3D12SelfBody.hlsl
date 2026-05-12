@@ -1,19 +1,19 @@
-static const int BODY_INDEX = 0;
+static const int SDF_INDEX = 0;
 
-#include "D3D12BodyCommon.hlsli"
+#include "D3D12SdfCommon.hlsli"
 #include "D3D12SdfMath.hlsli"
 
-float bodyDistance(float3 p, int agentIndex)
+float sdfDistance(float3 p, int sdfIndex)
 {
-    AgentVisual agent = agentVisuals[agentIndex];
-    float radius = max(agent.centerRadius.w, 0.001);
-    float3 local = (p - agent.centerRadius.xyz) / radius;
+    SdfObject sdfObject = sdfObjects[sdfIndex];
+    float radius = max(sdfObject.centerRadius.w, 0.001);
+    float3 local = (p - sdfObject.centerRadius.xyz) / radius;
     return sdSphere(local, 1.0) * radius;
 }
 
-BodySurface bodySurface(float3 p, int agentIndex)
+SdfSurface sdfSurface(float3 p, int sdfIndex)
 {
-    BodySurface surface;
+    SdfSurface surface;
     surface.albedo = 0.0;
     surface.roughness = 0.0;
     surface.f0 = 0.0;
@@ -21,9 +21,9 @@ BodySurface bodySurface(float3 p, int agentIndex)
     return surface;
 }
 
-float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentIndex, BodySurface surface)
+float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, SdfSurface surface)
 {
     return primitiveEmissionRadiance(FIELD_ID_SELF);
 }
 
-#include "D3D12BodyProxy.hlsli"
+#include "D3D12SdfProxy.hlsli"

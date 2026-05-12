@@ -1,6 +1,6 @@
-static const int BODY_INDEX = 8;
+static const int SDF_INDEX = 8;
 
-#include "D3D12BodyCommon.hlsli"
+#include "D3D12SdfCommon.hlsli"
 #include "D3D12SdfMath.hlsli"
 
 static const float CURSOR_RADIUS = 0.56;
@@ -94,16 +94,16 @@ CursorHibiscusParts cursorHibiscusParts(float3 local, float timeSeconds)
     return parts;
 }
 
-float bodyDistance(float3 p, int agentIndex)
+float sdfDistance(float3 p, int sdfIndex)
 {
-    AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
+    SdfObject cursor = sdfObjects[CURSOR_OBJECT_INDEX];
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     return cursorHibiscusParts(local, timeSeconds).distanceValue * CURSOR_RADIUS;
 }
 
-BodySurface bodySurface(float3 p, int agentIndex)
+SdfSurface sdfSurface(float3 p, int sdfIndex)
 {
-    AgentVisual cursor = agentVisuals[CURSOR_OBJECT_INDEX];
+    SdfObject cursor = sdfObjects[CURSOR_OBJECT_INDEX];
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     CursorHibiscusParts parts = cursorHibiscusParts(local, timeSeconds);
     float blossomPart = min(parts.petals, min(parts.throat, parts.stamen));
@@ -118,7 +118,7 @@ BodySurface bodySurface(float3 p, int agentIndex)
     float3 stamenAlbedo = float3(1.0, 0.72, 0.18);
     float3 calyxAlbedo = float3(0.34, 0.66, 0.12);
 
-    BodySurface surface;
+    SdfSurface surface;
     surface.albedo = petalAlbedo * isPetal + throatAlbedo * isThroat + stamenAlbedo * isStamen + calyxAlbedo * isCalyx;
     surface.roughness = isCalyx > 0.5 ? 0.46 : 0.22;
     surface.f0 = lerp(float3(1.0, 0.38, 0.72), float3(0.04, 0.06, 0.03), isCalyx);
@@ -126,9 +126,9 @@ BodySurface bodySurface(float3 p, int agentIndex)
     return surface;
 }
 
-float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentIndex, BodySurface surface)
+float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, SdfSurface surface)
 {
-    return shadeBodyPbr(p, normal, surface);
+    return shadeSdfPbr(p, normal, surface);
 }
 
-#include "D3D12BodyProxy.hlsli"
+#include "D3D12SdfProxy.hlsli"
