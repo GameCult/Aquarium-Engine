@@ -988,39 +988,34 @@ internal sealed class DebugUi
             var selecting = input.IsKeyDown(KeyCode.Shift);
             if (input.IsKeyPressed(KeyCode.LeftArrow))
             {
-                MoveCaret(Math.Max(0, caretIndex - 1), selecting);
+                MoveCaret(caretIndex - 1, selecting, value);
             }
 
             if (input.IsKeyPressed(KeyCode.RightArrow))
             {
-                MoveCaret(Math.Min(value.Length, caretIndex + 1), selecting);
+                MoveCaret(caretIndex + 1, selecting, value);
             }
 
             if (input.IsKeyPressed(KeyCode.Home))
             {
-                MoveCaret(LineStart(value, caretIndex), selecting);
+                MoveCaret(HomeIndex(value, caretIndex), selecting, value);
             }
 
             if (input.IsKeyPressed(KeyCode.End))
             {
-                MoveCaret(LineEnd(value, caretIndex), selecting);
+                MoveCaret(LineEnd(value, caretIndex), selecting, value);
             }
 
             if (input.IsKeyPressed(KeyCode.Backspace))
             {
-                if (submit is not null && !acceptsReturn && IsEmptyPrompt(value))
-                {
-                    return;
-                }
-
                 if (HasSelection)
                 {
                     value = DeleteSelection(value);
                 }
-                else if (caretIndex > 0)
+                else if (caretIndex > EditableStartIndex(value))
                 {
                     value = value.Remove(caretIndex - 1, 1);
-                    MoveCaret(caretIndex - 1, selecting: false);
+                    MoveCaret(caretIndex - 1, selecting: false, value);
                 }
             }
 
@@ -1076,13 +1071,13 @@ internal sealed class DebugUi
         public void SelectToPoint(Vector2 point)
         {
             SyncEditingState();
-            MoveCaret(IndexFromPoint(point), selecting: true);
+            MoveCaret(IndexFromPoint(point), selecting: true, NormalizedValue);
         }
 
         public override void Click(Vector2 mouse)
         {
             SyncEditingState();
-            MoveCaret(IndexFromPoint(mouse), selecting: false);
+            MoveCaret(IndexFromPoint(mouse), selecting: false, NormalizedValue);
         }
 
         public override void Draw(
@@ -1179,23 +1174,27 @@ internal sealed class DebugUi
             }
 
             lastValue = value;
-            caretIndex = value.Length;
+            caretIndex = ClampEditableIndex(value.Length, value);
             selectionAnchor = caretIndex;
         }
 
         private void SyncCommittedValue(string value)
         {
             lastValue = value;
-            caretIndex = Math.Clamp(caretIndex, 0, value.Length);
-            selectionAnchor = Math.Clamp(selectionAnchor, 0, value.Length);
+            caretIndex = ClampEditableIndex(caretIndex, value);
+            selectionAnchor = ClampEditableIndex(selectionAnchor, value);
         }
 
-        private void MoveCaret(int index, bool selecting)
+        private void MoveCaret(int index, bool selecting, string value)
         {
-            caretIndex = Math.Clamp(index, 0, NormalizedValue.Length);
+            caretIndex = ClampEditableIndex(index, value);
             if (!selecting)
             {
                 selectionAnchor = caretIndex;
+            }
+            else
+            {
+                selectionAnchor = ClampEditableIndex(selectionAnchor, value);
             }
         }
 
@@ -1206,17 +1205,26 @@ internal sealed class DebugUi
                 value = DeleteSelection(value);
             }
 
-            value = value.Insert(caretIndex, text);
-            MoveCaret(caretIndex + text.Length, selecting: false);
+            var insertionIndex = ClampEditableIndex(caretIndex, value);
+            value = value.Insert(insertionIndex, text);
+            MoveCaret(insertionIndex + text.Length, selecting: false, value);
             return value;
         }
 
         private string DeleteSelection(string value)
         {
-            var start = SelectionStart;
-            var length = SelectionEnd - SelectionStart;
+            var editableStart = EditableStartIndex(value);
+            var start = Math.Max(SelectionStart, editableStart);
+            var end = Math.Max(start, Math.Min(SelectionEnd, value.Length));
+            var length = end - start;
+            if (length == 0)
+            {
+                MoveCaret(start, selecting: false, value);
+                return value;
+            }
+
             value = value.Remove(start, length);
-            MoveCaret(start, selecting: false);
+            MoveCaret(start, selecting: false, value);
             return value;
         }
 
@@ -1242,7 +1250,7 @@ internal sealed class DebugUi
                     }
                 }
 
-                return Math.Min(cache.GlobalStart + nearest, NormalizedValue.Length);
+                return ClampEditableIndex(cache.GlobalStart + nearest, NormalizedValue);
             }
 
             var column = Math.Max(0, (int)MathF.Round((point.X - bounds.Left) / FallbackCharacterWidth));
@@ -1252,7 +1260,7 @@ internal sealed class DebugUi
                 index += displayLines[lineIndex].Length + 1;
             }
 
-            return Math.Min(index + Math.Min(column, displayLines[line].Length), NormalizedValue.Length);
+            return ClampEditableIndex(index + Math.Min(column, displayLines[line].Length), NormalizedValue);
         }
 
         private void DrawSelection(
@@ -1359,6 +1367,11 @@ internal sealed class DebugUi
             return previousNewline < 0 ? 0 : previousNewline + 1;
         }
 
+        private int HomeIndex(string value, int index)
+        {
+            return LocksToPrompt ? EditableStartIndex(value) : LineStart(value, index);
+        }
+
         private static int LineEnd(string value, int index)
         {
             var nextNewline = value.IndexOf('\n', Math.Clamp(index, 0, value.Length));
@@ -1437,15 +1450,42 @@ internal sealed class DebugUi
 
         private int SelectionEnd => Math.Max(caretIndex, selectionAnchor);
 
+        private bool LocksToPrompt => submit is not null && !acceptsReturn;
+
+        private int ClampEditableIndex(int index, string value)
+        {
+            return Math.Clamp(index, EditableStartIndex(value), value.Length);
+        }
+
+        private int EditableStartIndex(string value)
+        {
+            if (!LocksToPrompt)
+            {
+                return 0;
+            }
+
+            var promptIndex = value.LastIndexOf("\n> ", StringComparison.Ordinal);
+            if (promptIndex >= 0)
+            {
+                return Math.Min(value.Length, promptIndex + 3);
+            }
+
+            if (value.StartsWith("> ", StringComparison.Ordinal))
+            {
+                return Math.Min(value.Length, 2);
+            }
+
+            if (value.EndsWith("\n>", StringComparison.Ordinal) || string.Equals(value, ">", StringComparison.Ordinal))
+            {
+                return value.Length;
+            }
+
+            return value.Length;
+        }
+
         private readonly record struct LineHitCache(int GlobalStart, float OriginX, float OriginY, float[] Edges);
 
         private readonly record struct TextHit(float X, float Top, float Height);
-
-        private static bool IsEmptyPrompt(string value)
-        {
-            var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-            return normalized.EndsWith("\n> ", StringComparison.Ordinal) || normalized == "> ";
-        }
     }
 
     private sealed class ReadoutControl(string label, Func<string> read, string? tooltip, Func<bool>? isVisible)

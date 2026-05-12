@@ -377,7 +377,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             return;
         }
 
-        terminalInput = value.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
+        terminalInput = string.Empty;
     }
 
     private void ExecuteTerminalInput()
