@@ -6,41 +6,104 @@ static const int SDF_INDEX = 2;
 struct ImaginationParts
 {
     float seed;
-    float petals;
+    float ribbons;
     float sparks;
     float shadow;
     float distanceValue;
 };
 
-float sdImaginationRibbonPetal(float3 local, float angle, float activity, float heartbeat, float timeSeconds)
+float2 harmonic5(float2 direction)
 {
-    float2 radial = float2(cos(angle), sin(angle));
-    float2 tangent = float2(-radial.y, radial.x);
-    float pulse = sin(timeSeconds * 0.92 + angle * 1.63 + heartbeat * 6.28318);
-    float openness = lerp(0.42, 0.62, activity);
-    float3 root = float3(radial * 0.08, -0.08);
-    float3 p = local - root;
-    float3 q = float3(dot(p.xy, radial), dot(p.xy, tangent), p.z);
-    float u = saturate(q.x / 0.76);
-    float centerZ = -0.05 + openness * u + 0.18 * u * (1.0 - u);
-    float centerY = 0.16 * sin((u - 0.15) * 3.14159) * sin(angle * 2.0 + timeSeconds * 0.36);
-    float width = lerp(0.045, 0.18 + activity * 0.04, smoothstep(0.06, 1.0, u));
-    float thickness = lerp(0.024, 0.050, smoothstep(0.0, 0.85, u));
-    float edgeTaper = smoothstep(0.0, 0.18, u) * (1.0 - smoothstep(0.86, 1.0, u));
-    width *= lerp(0.55, 1.0, edgeTaper);
-    thickness *= lerp(0.75, 1.0 + pulse * 0.10, edgeTaper);
-
-    float along = max(-q.x, q.x - 0.86);
-    float side = abs(q.y - centerY) - width;
-    float sheet = abs(q.z - centerZ) - thickness;
-    return max(max(along, side), sheet);
+    float c = direction.x;
+    float s = direction.y;
+    float c2 = c * c;
+    float c3 = c2 * c;
+    float c4 = c2 * c2;
+    float c5 = c4 * c;
+    float cos5 = 16.0 * c5 - 20.0 * c3 + 5.0 * c;
+    float sin5 = s * (16.0 * c4 - 12.0 * c2 + 1.0);
+    return float2(cos5, sin5);
 }
 
-float sdImaginationSpark(float3 local, float angle, float height, float phase)
+float2 harmonic7(float2 direction)
+{
+    float c = direction.x;
+    float s = direction.y;
+    float c2 = c * c;
+    float c3 = c2 * c;
+    float c4 = c2 * c2;
+    float c5 = c4 * c;
+    float c6 = c3 * c3;
+    float c7 = c6 * c;
+    float cos7 = 64.0 * c7 - 112.0 * c5 + 56.0 * c3 - 7.0 * c;
+    float sin7 = s * (64.0 * c6 - 80.0 * c4 + 24.0 * c2 - 1.0);
+    return float2(cos7, sin7);
+}
+
+float sdImaginationSeed(float3 local, float activity, float phase)
+{
+    float2 xy = local.xy;
+    float xyLength = length(xy);
+    float2 direction = xyLength > 0.0001 ? xy / xyLength : float2(1.0, 0.0);
+    float2 h5 = harmonic5(direction);
+    float2 h7 = harmonic7(direction);
+    float lobe5 = h5.x * cos(phase) - h5.y * sin(phase);
+    float lobe7 = h7.x * cos(phase * 1.31) - h7.y * sin(phase * 1.31);
+    float amplitude = lerp(0.08, 0.28, activity);
+    float lobe = lerp(lobe5, lobe7, smoothstep(0.48, 0.92, activity));
+    float verticalMask = 1.0 - smoothstep(0.44, 0.92, abs(local.z));
+    float radius = 0.30 + amplitude * lobe * verticalMask;
+    float seed = length(float3(local.xy, local.z * 0.86)) - radius;
+    return max(seed, abs(local.z) - 0.58);
+}
+
+float3 trefoilPoint(float t, float twist, float openness)
+{
+    float x = sin(t) + 2.0 * sin(2.0 * t);
+    float y = cos(t) - 2.0 * cos(2.0 * t);
+    float z = -sin(3.0 * t);
+    float2 rotated = float2(
+        x * cos(twist) - y * sin(twist),
+        x * sin(twist) + y * cos(twist));
+    return float3(rotated * (0.155 + openness * 0.015), z * (0.105 + openness * 0.020) + 0.16);
+}
+
+float sdTrefoilSegment(float3 local, float twist, float openness, float phase, float segmentIndex)
+{
+    float t0 = (segmentIndex / 6.0) * 6.2831853 + phase;
+    float t1 = ((segmentIndex + 1.0) / 6.0) * 6.2831853 + phase;
+    float u = (segmentIndex + 1.0) / 6.0;
+    float tubeRadius = lerp(0.046, 0.032, smoothstep(0.35, 1.0, u));
+    return sdCapsuleSegment(local, trefoilPoint(t0, twist, openness), trefoilPoint(t1, twist, openness), tubeRadius);
+}
+
+float sdTrefoilRibbonTube(float3 local, float twist, float activity, float heartbeat, float timeSeconds)
+{
+    float openness = lerp(0.55, 1.0, activity);
+    float phase = timeSeconds * 0.25 + heartbeat * 6.28318;
+    float distanceValue = sdTrefoilSegment(local, twist, openness, phase, 0.0);
+    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 1.0));
+    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 2.0));
+    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 3.0));
+    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 4.0));
+    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 5.0));
+    return distanceValue;
+}
+
+float sdRibbonRoot(float3 local, float angle)
 {
     float2 radial = float2(cos(angle), sin(angle));
-    float3 center = float3(radial * (0.44 + 0.05 * sin(phase)), height + 0.035 * cos(phase));
-    return sdSphere(local - center, 0.040);
+    float3 a = float3(radial * 0.10, -0.02);
+    float3 b = float3(radial * 0.26, 0.11);
+    return sdTaperedCapsuleSegment(local, a, b, 0.040, 0.022);
+}
+
+float sdImaginationSparks(float3 local, float phase, float activity)
+{
+    float spark0 = sdSphere(local - float3(cos(phase) * 0.47, sin(phase) * 0.47, 0.32), 0.036);
+    float spark1 = sdSphere(local - float3(cos(phase + 2.31) * 0.40, sin(phase + 2.31) * 0.40, 0.44), 0.028 + activity * 0.010);
+    float spark2 = sdSphere(local - float3(cos(phase + 4.42) * 0.52, sin(phase + 4.42) * 0.52, 0.22), 0.026);
+    return min(spark0, min(spark1, spark2));
 }
 
 ImaginationParts imaginationParts(float3 local, SdfObject sdfObject, float timeSeconds)
@@ -48,36 +111,33 @@ ImaginationParts imaginationParts(float3 local, SdfObject sdfObject, float timeS
     float activity = saturate(sdfObject.state.x);
     float heartbeat = saturate(sdfObject.state.y);
     float pressure = saturate(sdfObject.state.z);
-    float breath = 0.5 + 0.5 * sin(timeSeconds * 1.10 + heartbeat * 6.28318);
-    float seedRadius = 0.22 + activity * 0.035 + breath * 0.018;
-    float seed = sdSuperellipsoid(local, float3(seedRadius, seedRadius * 0.92, seedRadius * 1.16), 1.12);
+    float phase = timeSeconds * 0.31 + heartbeat * 1.7;
+    float seed = sdImaginationSeed(local, activity, phase);
 
-    float phase = timeSeconds * 0.18 + activity * 0.42;
-    float petal0 = sdImaginationRibbonPetal(local, phase + 0.22, activity, heartbeat, timeSeconds);
-    float petal1 = sdImaginationRibbonPetal(local, phase + 1.4766371, activity, heartbeat, timeSeconds);
-    float petal2 = sdImaginationRibbonPetal(local, phase + 2.7332741, activity, heartbeat, timeSeconds);
-    float petal3 = sdImaginationRibbonPetal(local, phase + 3.9899112, activity, heartbeat, timeSeconds);
-    float petal4 = sdImaginationRibbonPetal(local, phase + 5.2465482, activity, heartbeat, timeSeconds);
-    float petals = min(min(petal0, petal1), min(petal2, min(petal3, petal4)));
+    float ribbon0 = sdTrefoilRibbonTube(local, phase + 0.00, activity, heartbeat, timeSeconds);
+    float ribbon1 = sdTrefoilRibbonTube(local, phase + 2.09, activity, heartbeat, timeSeconds);
+    float ribbon2 = sdTrefoilRibbonTube(local, phase + 4.18, activity, heartbeat, timeSeconds);
+    float ribbons = min(ribbon0, min(ribbon1, ribbon2));
 
-    float sparkPhase = timeSeconds * 1.36 + heartbeat * 6.28318;
-    float spark0 = sdImaginationSpark(local, phase + 0.84, 0.55, sparkPhase);
-    float spark1 = sdImaginationSpark(local, phase + 2.66, 0.42, sparkPhase + 2.1);
-    float spark2 = sdImaginationSpark(local, phase + 4.58, 0.49, sparkPhase + 4.2);
-    float sparks = min(spark0, min(spark1, spark2));
+    float root0 = sdRibbonRoot(local, phase + 0.00);
+    float root1 = sdRibbonRoot(local, phase + 2.09);
+    float root2 = sdRibbonRoot(local, phase + 4.18);
+    float roots = min(root0, min(root1, root2));
+    ribbons = smoothUnion(ribbons, roots, 0.045);
 
-    float shadowRing = sdTorus((local - float3(0.0, 0.0, -0.12 - pressure * 0.05)).xzy, float2(0.34 + pressure * 0.08, 0.024));
-    float shadowClip = local.z + 0.10;
-    float shadow = max(shadowRing, shadowClip);
+    float sparks = sdImaginationSparks(local, phase * 1.7, activity);
+    float shadowRing = sdTorus((local - float3(0.0, 0.0, -0.20 - pressure * 0.05)).xzy, float2(0.36 + pressure * 0.09, 0.026));
+    float shadow = max(shadowRing, local.z + 0.18);
 
-    float bloom = smoothUnion(seed, petals, 0.115);
-    bloom = smoothUnion(bloom, sparks, 0.030);
+    float flower = smoothUnion(seed, ribbons, 0.075);
+    flower = smoothUnion(flower, sparks, 0.026);
+
     ImaginationParts parts;
     parts.seed = seed;
-    parts.petals = petals;
+    parts.ribbons = ribbons;
     parts.sparks = sparks;
     parts.shadow = shadow;
-    parts.distanceValue = smoothUnion(bloom, shadow, 0.040);
+    parts.distanceValue = smoothUnion(flower, shadow, 0.035);
     return parts;
 }
 
@@ -95,26 +155,26 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float radius = max(sdfObject.centerRadius.w, 0.001);
     float3 local = (p - sdfObject.centerRadius.xyz) / radius;
     ImaginationParts parts = imaginationParts(local, sdfObject, timeSeconds);
-    float nearestBloom = min(parts.seed, parts.petals);
-    float isSpark = parts.sparks <= min(nearestBloom, parts.shadow) ? 1.0 : 0.0;
-    float isShadow = (1.0 - isSpark) * (parts.shadow <= nearestBloom ? 1.0 : 0.0);
-    float isPetal = (1.0 - isSpark) * (1.0 - isShadow) * (parts.petals <= parts.seed ? 1.0 : 0.0);
-    float isSeed = (1.0 - isSpark) * (1.0 - isShadow) * (1.0 - isPetal);
-    float shimmer = 0.5 + 0.5 * sin((local.x * 3.1 + local.y * -2.4 + local.z * 1.7) + timeSeconds * 1.4);
-    float3 seedColor = lerp(float3(0.42, 0.24, 0.78), float3(0.92, 0.86, 1.0), shimmer);
-    float3 petalColor = lerp(float3(0.62, 0.20, 0.92), float3(1.0, 0.58, 0.96), sdfObject.state.x);
-    float3 sparkColor = float3(1.0, 0.78, 0.34);
-    float3 shadowColor = float3(0.10, 0.08, 0.22);
+    float bloomPart = min(parts.seed, parts.ribbons);
+    float isSpark = parts.sparks <= min(bloomPart, parts.shadow) ? 1.0 : 0.0;
+    float isShadow = (1.0 - isSpark) * (parts.shadow <= bloomPart ? 1.0 : 0.0);
+    float isRibbon = (1.0 - isSpark) * (1.0 - isShadow) * (parts.ribbons <= parts.seed ? 1.0 : 0.0);
+    float isSeed = (1.0 - isSpark) * (1.0 - isShadow) * (1.0 - isRibbon);
+    float shimmer = 0.5 + 0.5 * sin(local.x * 5.0 - local.y * 3.0 + local.z * 4.0 + timeSeconds * 1.2);
+    float3 seedColor = lerp(float3(0.34, 0.16, 0.78), float3(0.88, 0.78, 1.0), shimmer);
+    float3 ribbonColor = lerp(float3(0.54, 0.18, 0.96), float3(1.0, 0.56, 0.94), saturate(sdfObject.state.x));
+    float3 sparkColor = float3(1.0, 0.74, 0.26);
+    float3 shadowColor = float3(0.08, 0.07, 0.20);
 
     SdfSurface surface;
-    surface.baseColor = seedColor * isSeed + petalColor * isPetal + sparkColor * isSpark + shadowColor * isShadow;
+    surface.baseColor = seedColor * isSeed + ribbonColor * isRibbon + sparkColor * isSpark + shadowColor * isShadow;
     surface.metallic = 0.0;
-    surface.roughness = 0.30 * isSeed + 0.22 * isPetal + 0.18 * isSpark + 0.68 * isShadow;
+    surface.roughness = 0.32 * isSeed + 0.24 * isRibbon + 0.16 * isSpark + 0.72 * isShadow;
     surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex))
-        + seedColor * isSeed * 0.08
-        + petalColor * isPetal * (0.10 + sdfObject.state.y * 0.08)
-        + sparkColor * isSpark * 1.2
-        + shadowColor * isShadow * 0.02;
+        + seedColor * isSeed * 0.10
+        + ribbonColor * isRibbon * (0.12 + sdfObject.state.y * 0.10)
+        + sparkColor * isSpark * 1.35
+        + shadowColor * isShadow * 0.015;
     return surface;
 }
 
