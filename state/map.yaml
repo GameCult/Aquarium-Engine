@@ -23,6 +23,7 @@ current_model:
     overlay_text: src/Aquarium.Engine/Render/DirectWriteOverlay.cs
     debug_ui: src/Aquarium.Engine/Render/Ui/DebugUi.cs
     synth_host: src/Aquarium.Engine/Audio/AquariumSynthHost.cs
+    wasapi_audio_device: src/Aquarium.Engine/Audio/WasapiAudioDevice.cs
     faust_toolchain_sync: scripts/sync-faust-toolchain.ps1
     runtime_loader: src/Aquarium.Engine/Runtime/ClientRuntimeLoader.cs
     dev_reload: scripts/dev-reload.ps1
@@ -79,7 +80,7 @@ renderer_state:
     - SDF light buffer feeds Self emission and direct object lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D debug UI panel with code-first controls bound to renderer state.
-    - AquariumSynthDocument exposes client-declared patch scripts, trigger cadence, gain, Faust compile revision, and compile status callbacks; Aquarium.Engine compiles patches asynchronously through bundled libfaust/LLVM and renders SFX buffers from compiled DSP instances.
+    - AquariumSynthDocument exposes client-declared patch scripts, trigger cadence, gain, Faust compile revision, and compile status callbacks; Aquarium.Engine compiles patches asynchronously through bundled libfaust/LLVM and sends compiled DSP SFX buffers into a WASAPI shared-mode mixer.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
@@ -98,7 +99,7 @@ next_actions:
   - Keep scripts/verify-boundaries.ps1 green: Aquarium.Engine and Aquarium.Engine.Contracts must not contain Epiphany/client policy nouns such as grid, agent, body, or epiphany.
   - Verify publish output after every packaging-affecting change.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
-  - Replace temporary WinMM SFX playback with a real streaming audio mixer/device backend that consumes ready compiled Faust DSP instances.
+  - Extend the WASAPI mixer from one-shot compiled-DSP SFX buffers into streaming voices, routing, metering, and live parameter lanes.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.

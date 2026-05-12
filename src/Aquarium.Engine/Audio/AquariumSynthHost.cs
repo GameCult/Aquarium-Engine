@@ -10,13 +10,10 @@ namespace Aquarium.Engine.Audio;
 internal sealed class AquariumSynthHost : IDisposable
 {
     private const int SampleRate = 44100;
-    private const int ChannelCount = 1;
-    private const int BitsPerSample = 16;
-    private const int MaxPlayingSounds = 16;
     private const float CompileDebounceSeconds = 0.75f;
 
     private readonly Dictionary<string, PatchRuntime> patches = new(StringComparer.Ordinal);
-    private readonly List<PlayingSound> playing = [];
+    private readonly WasapiAudioDevice audioDevice = new();
     private FaustNative? faust;
     private string? faustLoadError;
     private float timeSeconds;
@@ -147,25 +144,17 @@ internal sealed class AquariumSynthHost : IDisposable
             var soundKey = gain.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
             if (!runtime.SoundCache.TryGetValue(soundKey, out sound))
             {
-                sound = new CachedSound(WriteWav(runtime.Compiled.Render(gain)));
+                sound = new CachedSound(runtime.Compiled.Render(gain));
                 runtime.SoundCache[soundKey] = sound;
             }
         }
 
-        if (sound.Bytes.Length == 0)
+        if (sound.Samples.Length == 0)
         {
             return;
         }
 
-        while (playing.Count >= MaxPlayingSounds)
-        {
-            playing[0].Dispose();
-            playing.RemoveAt(0);
-        }
-
-        var instance = new PlayingSound(sound.Bytes);
-        playing.Add(instance);
-        instance.Play();
+        audioDevice.Play(sound.Samples, SampleRate);
     }
 
     private void EnsureFaustLoaded()
@@ -235,32 +224,6 @@ internal sealed class AquariumSynthHost : IDisposable
         return Convert.ToHexString(bytes);
     }
 
-    private static byte[] WriteWav(ReadOnlySpan<float> samples)
-    {
-        var dataBytes = checked(samples.Length * sizeof(short));
-        using var stream = new MemoryStream(44 + dataBytes);
-        using var writer = new BinaryWriter(stream);
-        writer.Write("RIFF"u8);
-        writer.Write(36 + dataBytes);
-        writer.Write("WAVE"u8);
-        writer.Write("fmt "u8);
-        writer.Write(16);
-        writer.Write((short)1);
-        writer.Write((short)ChannelCount);
-        writer.Write(SampleRate);
-        writer.Write(SampleRate * ChannelCount * BitsPerSample / 8);
-        writer.Write((short)(ChannelCount * BitsPerSample / 8));
-        writer.Write((short)BitsPerSample);
-        writer.Write("data"u8);
-        writer.Write(dataBytes);
-        foreach (var sample in samples)
-        {
-            writer.Write((short)Math.Clamp(sample * short.MaxValue, short.MinValue, short.MaxValue));
-        }
-
-        return stream.ToArray();
-    }
-
     private static string SafeFaustName(string value)
     {
         var chars = value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
@@ -288,17 +251,12 @@ internal sealed class AquariumSynthHost : IDisposable
             _ = Task.WaitAll(compileTasks, TimeSpan.FromSeconds(10.0));
         }
 
-        foreach (var sound in playing)
-        {
-            sound.Dispose();
-        }
-
         foreach (var runtime in patches.Values)
         {
             runtime.Compiled?.Dispose();
         }
 
-        playing.Clear();
+        audioDevice.Dispose();
         faust?.Dispose();
     }
 
@@ -321,41 +279,7 @@ internal sealed class AquariumSynthHost : IDisposable
         }
     }
 
-    private sealed record CachedSound(byte[] Bytes);
-
-    private sealed class PlayingSound : IDisposable
-    {
-        private readonly GCHandle handle;
-
-        public PlayingSound(byte[] bytes)
-        {
-            handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
-        }
-
-        public void Play()
-        {
-            _ = PlaySound(handle.AddrOfPinnedObject(), IntPtr.Zero, PlaySoundFlags.Memory | PlaySoundFlags.Async | PlaySoundFlags.NoDefault);
-        }
-
-        public void Dispose()
-        {
-            if (handle.IsAllocated)
-            {
-                handle.Free();
-            }
-        }
-    }
-
-    [Flags]
-    private enum PlaySoundFlags : uint
-    {
-        Async = 0x0001,
-        Memory = 0x0004,
-        NoDefault = 0x0002,
-    }
-
-    [DllImport("winmm.dll", SetLastError = true)]
-    private static extern bool PlaySound(IntPtr pszSound, IntPtr hmod, PlaySoundFlags fdwSound);
+    private sealed record CachedSound(float[] Samples);
 
     private sealed class CompiledFaustPatch : IDisposable
     {
