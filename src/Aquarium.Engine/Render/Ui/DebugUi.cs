@@ -1028,25 +1028,12 @@ internal sealed class DebugUi
 
         private string DisplayText()
         {
-            var value = read().Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-            var split = value.Split('\n');
-            if (split.Length <= lines)
-            {
-                return alignBottom
-                    ? string.Join('\n', Enumerable.Repeat(string.Empty, Math.Max(0, lines - split.Length)).Concat(split))
-                    : value;
-            }
-
-            return string.Join('\n', split.Skip(split.Length - lines));
+            return string.Join('\n', DisplayLines());
         }
 
         private Rect TextBounds(Rect box)
         {
-            var bottom = box.Bottom - 6.0f;
-            var top = alignBottom
-                ? Math.Max(box.Top + 6.0f, bottom - Math.Max(1, lines) * TextLineHeight)
-                : box.Top + 6.0f;
-            return RectFromEdges(box.Left + 8.0f, top, box.Right - 8.0f, bottom);
+            return RectFromEdges(box.Left + 8.0f, box.Top + 6.0f, box.Right - 8.0f, box.Bottom - 6.0f);
         }
 
         private void DrawBoxText(
@@ -1056,10 +1043,23 @@ internal sealed class DebugUi
             ID2D1Brush brush,
             Rect box)
         {
-            var text = DisplayText();
             var bounds = TextBounds(box);
-            using var layout = directWriteFactory.CreateTextLayout(text, format, bounds.Width, bounds.Height);
-            target.DrawTextLayout(new Vector2(bounds.Left, bounds.Top), layout, brush, DrawTextOptions.Clip);
+            var displayLines = DisplayLines();
+            var top = alignBottom
+                ? Math.Max(bounds.Top, bounds.Bottom - displayLines.Length * TextLineHeight)
+                : bounds.Top;
+            for (var index = 0; index < displayLines.Length; index++)
+            {
+                using var layout = directWriteFactory.CreateTextLayout(displayLines[index], format, bounds.Width, TextLineHeight);
+                target.DrawTextLayout(new Vector2(bounds.Left, top + index * TextLineHeight), layout, brush, DrawTextOptions.Clip);
+            }
+        }
+
+        private string[] DisplayLines()
+        {
+            var value = read().Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+            var split = value.Split('\n');
+            return split.Length <= lines ? split : split.Skip(split.Length - lines).ToArray();
         }
 
         private bool HasLabel => !string.IsNullOrWhiteSpace(Label);
