@@ -17,13 +17,13 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.albedo = 0.0;
     surface.roughness = 0.0;
     surface.f0 = 0.0;
-    surface.emission = primitiveEmissionRadiance(FIELD_ID_SELF);
+    surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
     return surface;
 }
 
 float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, SdfSurface surface)
 {
-    return primitiveEmissionRadiance(FIELD_ID_SELF);
+    return primitiveEmissionRadiance(sdfFieldId(sdfIndex));
 }
 
 #include "D3D12SdfProxy.hlsli"

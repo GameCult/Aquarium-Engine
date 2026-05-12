@@ -54,15 +54,9 @@ struct ResolveOut
     float4 historyControl : SV_Target3;
 };
 
-static const float SUN_RADIUS = 1.12;
-static const int ROLE_SDF_OBJECT_COUNT = 7;
-static const int SDF_OBJECT_VISUAL_COUNT = ROLE_SDF_OBJECT_COUNT + 2;
-static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_HEIGHT_FIELD = 4.0;
-static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_SDF_OBJECT_BASE = 10.0;
-static const float HEIGHT_FIELD_CLEARANCE_RADIUS_SCALE = 2.0;
-static const float SELF_GRAVITY_RADIUS = 17.0;
+static const int AQUARIUM_SDF_OBJECT_CAPACITY = 64;
 static const float MAX_HISTORY_AGE = 32.0;
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
@@ -105,14 +99,9 @@ float3 debugFieldIdColor(float fieldId)
         return float3(1.0, 0.92, 0.25);
     }
 
-    if (abs(fieldId - FIELD_ID_CURSOR) < 0.25)
+    if (fieldId >= FIELD_ID_SDF_OBJECT_BASE)
     {
-        return float3(0.78, 0.24, 1.0);
-    }
-
-    if (fieldId >= 10.0)
-    {
-        float phase = frac((fieldId - 10.0) * 0.37);
+        float phase = frac((fieldId - FIELD_ID_SDF_OBJECT_BASE) * 0.37);
         return 0.35 + 0.65 * float3(
             0.5 + 0.5 * sin(phase * 6.28318 + 0.0),
             0.5 + 0.5 * sin(phase * 6.28318 + 2.1),
@@ -120,75 +109,6 @@ float3 debugFieldIdColor(float fieldId)
     }
 
     return float3(1.0, 0.0, 1.0);
-}
-
-float hash21(float2 p)
-{
-    p = frac(p * float2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return frac(p.x * p.y);
-}
-
-float planetRadius(int index)
-{
-    return lerp(0.34, 0.62, hash21(float2(index, 19.7)));
-}
-
-float2 planetAnchorAt(int index, float sampleTime)
-{
-    float f = (float)index;
-    float angle = f * 0.8975979 + sampleTime * (0.08 + 0.011 * f);
-    float radius = 4.1 + f * 0.77;
-    return float2(cos(angle), sin(angle)) * radius;
-}
-
-float powerPulse(float distanceValue, float radius, float power)
-{
-    float normalized = saturate(distanceValue / max(radius, 0.001));
-    float shaped = pow(1.0 - normalized, power);
-    return shaped * shaped * (3.0 - 2.0 * shaped);
-}
-
-float heightFieldBrushHeight(float2 world, float2 center, float radius, float power, float amplitude, float waveAmplitude, float waveFrequency, float waveSpeed, float waveSinePower, float sampleTime)
-{
-    float distanceValue = length(world - center);
-    if (distanceValue > radius)
-    {
-        return 0.0;
-    }
-
-    float well = powerPulse(distanceValue, radius, power);
-    float normalizedDistance = saturate(distanceValue / max(radius, 0.001));
-    float legacyPhase = distanceValue * waveFrequency - sampleTime * waveSpeed;
-    float radialPhase = pow(normalizedDistance, waveSinePower) * waveFrequency - sampleTime * waveSpeed;
-    float ripple = waveSinePower > 0.0 ? cos(radialPhase) : sin(legacyPhase);
-    return amplitude * well + ripple * well * waveAmplitude;
-}
-
-float heightFieldAt(float2 world, float sampleTime)
-{
-    float height = sin((world.x * 0.08 + world.y * 0.06) + sampleTime * 0.27)
-        * sin((world.x * -0.04 + world.y * 0.07) - sampleTime * 0.19) * 0.035;
-    height += heightFieldBrushHeight(world, 0.0, SELF_GRAVITY_RADIUS, 2.85, -1.34, 0.18, 6.28318530718, 0.82, 1.25, sampleTime);
-
-    [unroll]
-    for (int index = 0; index < ROLE_SDF_OBJECT_COUNT; index++)
-    {
-        float radius = planetRadius(index);
-        height += heightFieldBrushHeight(world, planetAnchorAt(index, sampleTime), 3.8 + radius * 2.5, 2.1, -0.42, 0.022, 2.4, 1.35, 0.0, sampleTime);
-    }
-
-    return height;
-}
-
-float3 sdfCenterAtHeightField(float2 xy, float radius, float sampleTime)
-{
-    return float3(xy, heightFieldAt(xy, sampleTime) + radius * HEIGHT_FIELD_CLEARANCE_RADIUS_SCALE);
-}
-
-float3 planetCenterAt(int index, float sampleTime)
-{
-    return sdfCenterAtHeightField(planetAnchorAt(index, sampleTime), planetRadius(index), sampleTime);
 }
 
 void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
@@ -213,16 +133,9 @@ float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
 {
     if (fieldId >= FIELD_ID_SDF_OBJECT_BASE)
     {
-        int sdfIndex = clamp((int)round(fieldId - FIELD_ID_SDF_OBJECT_BASE), 0, SDF_OBJECT_VISUAL_COUNT - 1);
+        int sdfIndex = clamp((int)round(fieldId - FIELD_ID_SDF_OBJECT_BASE), 0, AQUARIUM_SDF_OBJECT_CAPACITY - 1);
         float3 currentCenter = sdfObjects[sdfIndex].centerRadius.xyz;
         float3 previousCenter = sdfObjects[sdfIndex].previousCenterPad.xyz;
-        return previousCenter + (worldPosition - currentCenter);
-    }
-
-    if (abs(fieldId - FIELD_ID_CURSOR) < 0.25)
-    {
-        float3 currentCenter = float3(cursorWorlds.xy, 0.56);
-        float3 previousCenter = float3(cursorWorlds.zw, 0.56);
         return previousCenter + (worldPosition - currentCenter);
     }
 

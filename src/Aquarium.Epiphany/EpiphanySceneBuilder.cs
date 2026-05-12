@@ -154,8 +154,13 @@ public static class EpiphanySceneBuilder
         [
             new AquariumSdfLight(
                 new Vector4(selfCenter, SunRadius),
-                new Vector4(10.0f, 8.7f, 4.2f, 2.0f))
+                new Vector4(10.0f, 8.7f, 4.2f, SdfFieldId(EpiphanyRenderPlan.SelfVisualIndex)))
         ];
+    }
+
+    private static float SdfFieldId(int objectIndex)
+    {
+        return 10.0f + objectIndex;
     }
 
     private static Vector3 BodyCenterAtGridHeight(float timeSeconds, Vector2 world, float radius, IReadOnlyList<AquariumHeightFieldBrush> brushes)

@@ -220,9 +220,15 @@ into flickering NaNs with a nice color palette.
 ## SDF Rules
 
 - Each organ gets a distinct SDF family, not only a color swap.
-- Every SDF returns distance plus material region id.
-- Material regions should map to role-readable parts: core, shell, tool edge,
-  lens, ribbon, risk seam, memory seed, bubble, and so on.
+- Each SDF object shader exposes `sdfDistance` for the hot raymarch loop and
+  `sdfSurface` for the refined hit. `sdfSurface` returns PBR material values:
+  albedo, roughness, F0, and emission. The shared Aquarium shading function
+  shades those values; role anatomy and region choice stay inside the Epiphany
+  object shader.
+- Material regions may exist inside an object shader when they help choose PBR
+  values for readable parts: core, shell, tool edge, lens, ribbon, risk seam,
+  memory seed, bubble, and so on. They are not part of the shared hot surface
+  packet.
 - State changes should alter low-dimensional parameters first: radius, lobe
   count, twist, aperture, rib spacing, pulse phase, shell openness, wake length.
 - Keep DOM hit targets stable. The visual body can breathe, fold, and shimmer;
@@ -343,7 +349,7 @@ Math:
 - Smooth union between the core and small gate-node spheres.
 - Thin emissive routing filaments as torus-segment SDFs with sinusoidal radius
   modulation along the arc.
-- Material ids: warm ceramic core, gold-orange routing rails, bright current
+- Material regions: warm ceramic core, gold-orange routing rails, bright current
   target gate, dark review seam.
 
 Movement:
@@ -388,7 +394,7 @@ Math:
 - Bubble beads as small spheres on phase-offset orbits.
 - Speech ribbon as a swept lemniscate tube around the mouth, with tube radius
   modulated by heartbeat phase.
-- Material ids: translucent enamel bell, emissive inner mouth, glossy bubble
+- Material regions: translucent enamel bell, emissive inner mouth, glossy bubble
   beads, muted draft beads.
 
 Movement:
@@ -430,7 +436,7 @@ Math:
   tips.
 - Harmonic count `k = 4 + floor(activity * 3) + min(backlogCount, 3)`.
   `amplitude = lerp(0.08, 0.28, activity)`.
-- Material ids: opal seed, pearlescent petals, emissive idea sparks, cool
+- Material regions: opal seed, pearlescent petals, emissive idea sparks, cool
   backlog shadow.
 
 Movement:
@@ -477,7 +483,7 @@ Math:
 - Evidence sparks as small orbiting Kepler rosettes gated by artifact and
   evidence count.
 - Scanning ring as a thin torus with animated angular mask.
-- Material ids: black glass lens, blue metal aperture, cyan evidence sparks,
+- Material regions: black glass lens, blue metal aperture, cyan evidence sparks,
   pale scan ring.
 
 Movement:
@@ -526,7 +532,7 @@ Math:
   do not define their world positions.
 - Node beads at rib intersections.
 - Subtle displacement from low-frequency sine waves for breathing mass.
-- Material ids: matte green body, glossy rib enamel, bright checkpoint nodes,
+- Material regions: matte green body, glossy rib enamel, bright checkpoint nodes,
   dark blocked fissures.
 
 Movement:
@@ -572,7 +578,7 @@ Math:
 - Tool edge as a thin triangular-prism ridge with high-metalness material and a
   sine-notched cutting line.
 - Small impact sparks as short-lived bead SDFs near the leading edge.
-- Material ids: warm enamel grip, dark metal edge, hot action stripe,
+- Material regions: warm enamel grip, dark metal edge, hot action stripe,
   dull blocked cap.
 
 Movement:
@@ -630,7 +636,7 @@ Math:
 - Risk seam as a thin torus ring around the crystal. Ring thickness is
   `lerp(0.015, 0.09, risk)`.
 - Finding marks as tiny engraved line SDFs on facets.
-- Material ids: cool crystal facets, white inner core, red risk seam, blue
+- Material regions: cool crystal facets, white inner core, red risk seam, blue
   confidence edge, dark rejected mark.
 
 Movement:
@@ -675,7 +681,7 @@ Math:
 - Memory beads along a logarithmic spiral behind the
   seed.
 - Breathing field as radial sine displacement with low amplitude.
-- Material ids: teal shell, warm ember, pale memory beads, dark rupture scar.
+- Material regions: teal shell, warm ember, pale memory beads, dark rupture scar.
 
 Movement:
 
@@ -738,8 +744,10 @@ LOD contract:
 
 The initial renderer budget target is one to two milliseconds total for all
 visible agent bodies on a midrange GPU. The debug UI must expose step count,
-proxy-hit coverage, material id, LOD tier, and SDF cost tier before the shader
-grows beyond the first two role bodies.
+proxy-hit coverage, state scalars, LOD tier, and SDF cost tier before the shader
+grows beyond the first two role bodies. If a role needs material-region
+inspection, expose it through an explicit debug lane rather than adding a
+permanent region field to the shared PBR surface packet.
 
 Implement the renderer contract in this order:
 
@@ -752,8 +760,8 @@ Implement the renderer contract in this order:
 5. Add LOD 1 material-region SDF evaluation for one organ pair: Body and
    Imagination.
 6. Bind status, activity, heartbeat, and placement fields into shader constants.
-7. Add debug modes for role id, material id, state scalar, step count, proxy
-   hit, LOD tier, and SDF cost tier so the cut can be inspected without
+7. Add debug modes for role id, state scalar, step count, proxy hit, LOD tier,
+   and SDF cost tier so the cut can be inspected without
    believing the prettiness.
 
 Body and Imagination are the best first pair because they exercise opposite

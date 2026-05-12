@@ -96,14 +96,14 @@ CursorHibiscusParts cursorHibiscusParts(float3 local, float timeSeconds)
 
 float sdfDistance(float3 p, int sdfIndex)
 {
-    SdfObject cursor = sdfObjects[CURSOR_OBJECT_INDEX];
+    SdfObject cursor = sdfObjects[SDF_INDEX];
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     return cursorHibiscusParts(local, timeSeconds).distanceValue * CURSOR_RADIUS;
 }
 
 SdfSurface sdfSurface(float3 p, int sdfIndex)
 {
-    SdfObject cursor = sdfObjects[CURSOR_OBJECT_INDEX];
+    SdfObject cursor = sdfObjects[SDF_INDEX];
     float3 local = (p - cursor.centerRadius.xyz) / CURSOR_RADIUS;
     CursorHibiscusParts parts = cursorHibiscusParts(local, timeSeconds);
     float blossomPart = min(parts.petals, min(parts.throat, parts.stamen));

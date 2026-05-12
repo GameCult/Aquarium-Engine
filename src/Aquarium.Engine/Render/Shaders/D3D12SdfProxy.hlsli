@@ -111,7 +111,7 @@ SceneOut D3D12SdfProxyPS(SdfObjectProxyVertexOut input)
     float2 pixel = float2(input.position.x, resolution.y - input.position.y);
     float2 uv = float2(pixel.x / max(resolution.x, 1.0), 1.0 - pixel.y / max(resolution.y, 1.0));
     float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, viewCenter);
-    int sdfIndex = clamp((int)round(input.sdfIndex), 0, SDF_OBJECT_VISUAL_COUNT - 1);
+    int sdfIndex = clamp((int)round(input.sdfIndex), 0, AQUARIUM_SDF_OBJECT_CAPACITY - 1);
 
     float travel;
     float3 normal;

@@ -41,14 +41,9 @@ struct SdfObject
 
 StructuredBuffer<SdfObject> sdfObjects : register(t24);
 
-static const int ROLE_SDF_OBJECT_COUNT = 7;
-static const int SDF_OBJECT_VISUAL_COUNT = ROLE_SDF_OBJECT_COUNT + 2;
-static const int SELF_OBJECT_INDEX = 0;
-static const int CURSOR_OBJECT_INDEX = SDF_OBJECT_VISUAL_COUNT - 1;
-static const float FIELD_ID_SELF = 2.0;
 static const float FIELD_ID_HEIGHT_FIELD = 4.0;
-static const float FIELD_ID_CURSOR = 5.0;
 static const float FIELD_ID_SDF_OBJECT_BASE = 10.0;
+static const int AQUARIUM_SDF_OBJECT_CAPACITY = 64;
 static const float PI = 3.14159265359;
 static const int SDF_LIGHT_COUNT = 8;
 static const float STUDIO_PMREM_MAX_LOD = 9.0;
@@ -152,16 +147,6 @@ float3 primitiveEmissionRadiance(float fieldId)
 
 float sdfFieldId(int objectIndex)
 {
-    if (objectIndex == SELF_OBJECT_INDEX)
-    {
-        return FIELD_ID_SELF;
-    }
-
-    if (objectIndex == CURSOR_OBJECT_INDEX)
-    {
-        return FIELD_ID_CURSOR;
-    }
-
     return FIELD_ID_SDF_OBJECT_BASE + (float)objectIndex;
 }
 
