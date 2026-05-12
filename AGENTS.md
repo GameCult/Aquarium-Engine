@@ -57,7 +57,7 @@ instead of embalming it.
 Use focused checks:
 
 ```powershell
-dotnet build Aquarium.Engine.slnx
+dotnet build Aquarium.Engine.sln
 .\scripts\dev-reload.ps1 -Headless -RetainSlots 4
 ```
 

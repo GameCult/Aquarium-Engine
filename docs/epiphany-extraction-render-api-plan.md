@@ -631,7 +631,7 @@ Each slice must preserve:
 Every migration pass should run:
 
 ```powershell
-dotnet build Aquarium.Engine.slnx --no-restore
+dotnet build Aquarium.Engine.sln --no-restore
 .\scripts\dev-reload.ps1 -Headless -RetainSlots 4
 .\scripts\verify-boundaries.ps1
 ```

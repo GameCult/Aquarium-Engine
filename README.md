@@ -36,12 +36,12 @@ Aquarium currently expects the sibling `CultMath` and `CultLib` repos at
 `..\..\..\CultMath` / `..\..\..\CultLib` paths from the engine project.
 
 ```powershell
-dotnet build Aquarium.Engine.slnx
+dotnet build Aquarium.Engine.sln
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --client-assembly src\Aquarium.Epiphany\bin\Debug\net10.0\Aquarium.Epiphany.dll
 ```
 
-For Rider, open `Aquarium.Engine.sln`. The `.slnx` stays as the compact
-CLI-friendly solution, but Rider may show empty project trees when opening it.
+Open `Aquarium.Engine.sln` in Rider or build it from the CLI. It is the
+single solution inventory for the repo.
 
 `src\Aquarium.Sample.Minimal` is a tiny non-Epiphany client used to keep the
 engine boundary honest. It references only `Aquarium.Engine.Contracts`, declares

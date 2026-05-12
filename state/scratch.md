@@ -24,5 +24,5 @@ removed medium stack under a better haircut.
 
 ## Verification
 
-- `dotnet build Aquarium.Engine.slnx --no-restore`
+- `dotnet build Aquarium.Engine.sln --no-restore`
 - `.\scripts\dev-reload.ps1 -Headless -RetainSlots 4`

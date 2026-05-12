@@ -40,7 +40,7 @@ function Get-SourceFiles {
     $roots = @(
         (Join-Path $repoRoot "src"),
         (Join-Path $repoRoot "scripts"),
-        (Join-Path $repoRoot "Aquarium.Engine.slnx"),
+        (Join-Path $repoRoot "Aquarium.Engine.sln"),
         (Join-Path $repoRoot "global.json")
     )
 
@@ -61,7 +61,7 @@ function Get-SourceFiles {
                 $_.FullName -notmatch "\\obj\\" -and
                 $_.FullName -notmatch "\\artifacts\\" -and
                 (
-                    $_.Extension -in @(".cs", ".csproj", ".json", ".slnx", ".ps1") -or
+                    $_.Extension -in @(".cs", ".csproj", ".json", ".sln", ".ps1") -or
                     $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Engine\Assets\*")
                 )
             }
