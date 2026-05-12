@@ -56,10 +56,7 @@ struct RayMarchResult
     float fieldId;
     float3 normal;
     float coverage;
-    float materialId;
     float stepCount;
-    float lodTier;
-    float costTier;
     float eventTravel;
     float eventCoverage;
     float3 eventColor;
@@ -222,10 +219,7 @@ RayMarchResult traverseRay(float3 origin, float3 direction)
     result.fieldId = 0.0;
     result.normal = 0.0;
     result.coverage = 0.0;
-    result.materialId = 0.0;
     result.stepCount = 0.0;
-    result.lodTier = 0.0;
-    result.costTier = 0.0;
     result.eventTravel = farDistance + 1.0;
     result.eventCoverage = 0.0;
     result.eventColor = 0.0;
@@ -257,7 +251,7 @@ SceneOut D3D12ScenePS(VertexOut input)
     SceneOut output;
     output.colorTravel = float4(result.color, min(result.travel, farDistance + 1.0));
     output.metadata = float4(result.fieldId, result.normal);
-    output.control = float4(result.materialId, result.coverage, result.stepCount / 72.0, result.lodTier + result.costTier * 0.1);
+    output.control = float4(0.0, result.coverage, result.stepCount / 72.0, 0.0);
     output.eventColor = float4(result.eventColor, result.eventCoverage);
     output.eventMetadata = float4(FIELD_ID_GRID, result.eventTravel, result.eventCoverage, 0.0);
     output.depth = saturate(result.travel / max(farDistance, 0.001));

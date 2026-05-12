@@ -70,7 +70,7 @@ renderer_state:
     - Deferred scalar Grid height target rendered from additive brush passes.
     - Self Grid brush uses a widened 17-world-unit gravity bowl plus an Aetheria-style radial cosine wave; CPU, Grid shader, scene placement, and temporal reprojection share the same brush equation.
     - Direct-traced Grid surface is a terminating perfect mirror over the scalar height field, sampling Studio2 PMREM mip 0.
-    - Fullscreen scene pass owns background and Grid only; each visible body owns a separate proxy pipeline and shader file, with shared proxy plumbing factored into HLSL includes. Body proxy marching evaluates only bodyDistance; bodySurface runs once at the refined hit and returns the material packet used by shared PBR lighting.
+    - Fullscreen scene pass owns background and Grid only; each visible body owns a separate proxy pipeline and shader file, with shared proxy plumbing factored into HLSL includes. Body proxy marching evaluates only bodyDistance; bodySurface runs once at the refined hit and returns only PBR material values. Field identity is written by the proxy as temporal ownership metadata, not carried inside the surface packet.
     - Reusable SDF primitives live in D3D12SdfMath.hlsli; current role character organs live in D3D12AgentCharacters.hlsli.
     - Cursor is a luminous five-petal hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
     - SDF/analytic bodies for Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the cursor locator upload current and previous centers through `AgentVisualGpu`; Body plus Imagination use LOD 1 role SDFs.

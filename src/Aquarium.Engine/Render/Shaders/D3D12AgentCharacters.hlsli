@@ -4,8 +4,6 @@
 struct AgentSurface
 {
     float distanceValue;
-    float materialId;
-    float costTier;
 };
 
 float imaginationPetalSdf(float3 local, float angle, float activity, float heartbeat, float timeSeconds)
@@ -32,8 +30,6 @@ AgentSurface agentBodySdf(float3 local, AgentVisual agent)
     float shell = min(ribA, min(ribB, node));
     AgentSurface surface;
     surface.distanceValue = smoothUnion(core, shell, 0.045);
-    surface.materialId = core <= shell ? 4.0 : 4.35;
-    surface.costTier = 2.0;
     return surface;
 }
 
@@ -55,24 +51,18 @@ AgentSurface agentImaginationSdf(float3 local, AgentVisual agent, float timeSeco
     float detail = min(ring, halo);
     AgentSurface surface;
     surface.distanceValue = smoothUnion(bloom, detail, 0.05);
-    surface.materialId = bloom <= detail ? 2.0 : 2.4;
-    surface.costTier = 2.0;
     return surface;
 }
 
 AgentSurface agentFallbackSdf(float3 local, AgentVisual agent)
 {
-    float roleId = agent.previousCenterRole.w;
     float pulse = agent.state.y;
-    float squareness = lerp(1.18, 1.72, frac(roleId * 0.37));
-    float core = sdSuperellipsoid(local, float3(0.70, 0.58 + pulse * 0.04, 0.62), squareness);
+    float core = sdSuperellipsoid(local, float3(0.70, 0.58 + pulse * 0.04, 0.62), 1.34);
     float belt = sdTorus(local.xzy, float2(0.56, 0.026));
     float crown = sdTorus((local - float3(0.0, 0.0, 0.16)).yzx, float2(0.40, 0.018));
     float detail = min(belt, crown);
     AgentSurface surface;
     surface.distanceValue = smoothUnion(core, detail, 0.032);
-    surface.materialId = roleId + (core <= detail ? 0.0 : 0.22);
-    surface.costTier = 1.0;
     return surface;
 }
 

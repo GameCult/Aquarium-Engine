@@ -38,7 +38,7 @@ SamplerState sourceSampler : register(s0);
 struct AgentVisual
 {
     float4 centerRadius;
-    float4 previousCenterRole;
+    float4 previousCenterPad;
     float4 state;
     float4 lodIndexFlags;
 };
@@ -222,7 +222,7 @@ float3 temporalPreviousWorldPosition(float3 worldPosition, float fieldId)
     {
         int agentIndex = clamp((int)round(fieldId - FIELD_ID_AGENT_BASE), 0, AGENT_VISUAL_COUNT - 1);
         float3 currentCenter = agentVisuals[agentIndex].centerRadius.xyz;
-        float3 previousCenter = agentVisuals[agentIndex].previousCenterRole.xyz;
+        float3 previousCenter = agentVisuals[agentIndex].previousCenterPad.xyz;
         return previousCenter + (worldPosition - currentCenter);
     }
 
@@ -536,19 +536,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {
-        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? debugFieldIdColor(floor(currentControl.x) + 20.0) : 0.0;
-    }
-    else if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
-    {
         finalColor = currentControl.z.xxx;
-    }
-    else if (renderDebugMode >= 11.5 && renderDebugMode < 12.5)
-    {
-        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? floor(currentControl.w).xxx * 0.33 : 0.0;
-    }
-    else if (renderDebugMode >= 12.5 && renderDebugMode < 13.5)
-    {
-        finalColor = currentFieldId >= FIELD_ID_AGENT_BASE ? frac(currentControl.w).xxx * 5.0 : 0.0;
     }
     ResolveOut output;
     output.finalColor = float4(finalColor, 1.0);

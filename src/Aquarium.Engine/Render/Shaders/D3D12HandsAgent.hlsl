@@ -15,27 +15,18 @@ float bodyDistance(float3 p, int agentIndex)
 BodySurface bodySurface(float3 p, int agentIndex)
 {
     AgentVisual agent = agentVisuals[agentIndex];
-    float radius = max(agent.centerRadius.w, 0.001);
-    float3 local = (p - agent.centerRadius.xyz) / radius;
-    AgentSurface agentSurface = agentFallbackSdf(local, agent);
 
     BodySurface surface;
-    surface.distanceValue = agentSurface.distanceValue * radius;
-    surface.materialId = agentSurface.materialId;
-    surface.fieldId = FIELD_ID_AGENT_BASE + (float)agentIndex;
-    surface.roleId = agent.previousCenterRole.w;
-    surface.lodTier = agent.lodIndexFlags.x;
-    surface.costTier = agentSurface.costTier;
-    surface.albedo = 0.0;
-    surface.roughness = 0.0;
-    surface.f0 = 0.0;
-    surface.emission = 0.0;
+    surface.albedo = lerp(float3(0.72, 0.34, 0.18), float3(1.0, 0.76, 0.38), agent.state.x);
+    surface.roughness = 0.50;
+    surface.f0 = 0.04;
+    surface.emission = primitiveEmissionRadiance(bodyFieldId(agentIndex)) + surface.albedo * 0.035;
     return surface;
 }
 
 float3 shadeBody(float2 uv, float travel, float3 p, float3 normal, int agentIndex, BodySurface surface)
 {
-    return shadeRoleAgentBody(p, normal, agentIndex);
+    return shadeBodyPbr(p, normal, surface);
 }
 
 #include "D3D12BodyProxy.hlsli"

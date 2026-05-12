@@ -67,12 +67,6 @@ bool traceBody(float3 origin, float3 direction, int agentIndex, out float travel
     travel = max(-b - h, 0.0);
     normal = 0.0;
     stepCount = 0.0;
-    surface.distanceValue = 0.0;
-    surface.materialId = 0.0;
-    surface.fieldId = FIELD_ID_GRID;
-    surface.roleId = 0.0;
-    surface.lodTier = 0.0;
-    surface.costTier = 0.0;
     surface.albedo = 0.0;
     surface.roughness = 0.0;
     surface.f0 = 0.0;
@@ -129,10 +123,11 @@ SceneOut D3D12BodyProxyPS(AgentProxyVertexOut input)
     }
 
     float3 p = cameraPosition + rayDirection * travel;
+    float fieldId = bodyFieldId(agentIndex);
     SceneOut output;
     output.colorTravel = float4(shadeBody(uv, travel, p, normal, agentIndex, surface), min(travel, farDistance + 1.0));
-    output.metadata = float4(surface.fieldId, normal);
-    output.control = float4(surface.materialId, 1.0, stepCount / (float)BODY_TRACE_STEPS, surface.lodTier + surface.costTier * 0.1);
+    output.metadata = float4(fieldId, normal);
+    output.control = float4(0.0, 1.0, stepCount / (float)BODY_TRACE_STEPS, 0.0);
     output.eventColor = float4(0.0, 0.0, 0.0, 0.0);
     output.eventMetadata = float4(FIELD_ID_GRID, farDistance + 1.0, 0.0, 0.0);
     output.depth = saturate(travel / max(farDistance, 0.001));

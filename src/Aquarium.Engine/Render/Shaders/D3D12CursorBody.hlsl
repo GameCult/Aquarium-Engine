@@ -119,12 +119,6 @@ BodySurface bodySurface(float3 p, int agentIndex)
     float3 calyxAlbedo = float3(0.34, 0.66, 0.12);
 
     BodySurface surface;
-    surface.distanceValue = parts.distanceValue * CURSOR_RADIUS;
-    surface.materialId = 5.0 + isStamen * 0.1 + isCalyx * 0.2 + isThroat * 0.3;
-    surface.fieldId = FIELD_ID_CURSOR;
-    surface.roleId = 0.0;
-    surface.lodTier = 0.0;
-    surface.costTier = 1.0;
     surface.albedo = petalAlbedo * isPetal + throatAlbedo * isThroat + stamenAlbedo * isStamen + calyxAlbedo * isCalyx;
     surface.roughness = isCalyx > 0.5 ? 0.46 : 0.22;
     surface.f0 = lerp(float3(1.0, 0.38, 0.72), float3(0.04, 0.06, 0.03), isCalyx);

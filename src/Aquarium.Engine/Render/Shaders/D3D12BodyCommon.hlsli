@@ -35,7 +35,7 @@ StructuredBuffer<BodyLight> bodyLights : register(t12);
 struct AgentVisual
 {
     float4 centerRadius;
-    float4 previousCenterRole;
+    float4 previousCenterPad;
     float4 state;
     float4 lodIndexFlags;
 };
@@ -74,12 +74,6 @@ struct SceneOut
 
 struct BodySurface
 {
-    float distanceValue;
-    float materialId;
-    float fieldId;
-    float roleId;
-    float lodTier;
-    float costTier;
     float3 albedo;
     float roughness;
     float3 f0;
@@ -157,6 +151,21 @@ float3 primitiveEmissionRadiance(float fieldId)
     }
 
     return 0.0;
+}
+
+float bodyFieldId(int objectIndex)
+{
+    if (objectIndex == SELF_OBJECT_INDEX)
+    {
+        return FIELD_ID_SELF;
+    }
+
+    if (objectIndex == CURSOR_OBJECT_INDEX)
+    {
+        return FIELD_ID_CURSOR;
+    }
+
+    return FIELD_ID_AGENT_BASE + (float)objectIndex;
 }
 
 float3 bodyLightIrradianceAt(float3 p, float3 normal)
@@ -261,32 +270,6 @@ float3 shadeBodyPbr(float3 p, float3 normal, BodySurface surface)
         + studioIrradianceDiffuseRadiance(p, normal, surface.albedo, surface.roughness, surface.f0)
         + bodyLightSpecularRadiance(p, normal, surface.roughness, surface.f0, 7.0)
         + studioPmremSpecularRadiance(p, normal, surface.roughness, surface.f0);
-}
-
-float3 shadeRoleAgentBody(float3 p, float3 normal, int agentIndex)
-{
-    float roleId = agentVisuals[agentIndex].previousCenterRole.w;
-    float materialPulse = agentVisuals[agentIndex].state.y;
-    float3 emission = primitiveEmissionRadiance(FIELD_ID_AGENT_BASE + (float)agentIndex);
-    float3 albedo = lerp(float3(0.34, 0.42, 0.18), float3(0.70, 0.76, 0.42), hash21(float2(agentIndex, 6.3)));
-    float roughness = lerp(0.46, 0.72, hash21(float2(agentIndex, 11.9)));
-    if (abs(roleId - 2.0) < 0.25)
-    {
-        albedo = lerp(float3(0.38, 0.18, 0.72), float3(0.98, 0.56, 0.92), materialPulse);
-        roughness = 0.38;
-        emission += albedo * (0.08 + materialPulse * 0.08);
-    }
-    else if (abs(roleId - 4.0) < 0.25)
-    {
-        albedo = lerp(float3(0.18, 0.43, 0.50), float3(0.72, 0.86, 0.72), materialPulse);
-        roughness = 0.58;
-    }
-
-    float3 dielectricF0 = 0.04;
-    return emission
-        + albedo * bodyLightIrradianceAt(p, normal) / PI
-        + studioIrradianceDiffuseRadiance(p, normal, albedo, roughness, dielectricF0)
-        + studioPmremSpecularRadiance(p, normal, roughness, dielectricF0);
 }
 
 AgentProxyVertexOut D3D12AgentProxyVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)

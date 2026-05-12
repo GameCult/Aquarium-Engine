@@ -70,11 +70,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(6, "Lane Identity"),
         new(7, "Bloom"),
         new(8, "Exposed Luminance"),
-        new(9, "Agent Role"),
-        new(10, "Agent Material"),
-        new(11, "Agent Steps"),
-        new(12, "Agent LOD"),
-        new(13, "Agent Cost"),
+        new(9, "Agent Identity"),
+        new(10, "Agent Steps"),
     ];
 
     private readonly IDXGIFactory4 factory;
@@ -1151,16 +1148,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             var radius = AgentRadius(index);
             var center = AgentCenterAtGridHeight(index, frame.TimeSeconds);
             var previousCenter = AgentCenterAtGridHeight(index, previousTimeSeconds);
-            var roleId = AgentRoleId(index);
             var activity = 0.45f + 0.45f * Hash21(index + 2.7f, 31.0f);
             var heartbeat = 0.5f + 0.5f * MathF.Sin(frame.TimeSeconds * (1.2f + index * 0.09f) + index * 1.37f);
             var pressure = 0.25f + 0.25f * MathF.Sin(frame.TimeSeconds * 0.31f + index * 0.71f);
-            var expression = Math.Abs(roleId - 2.0f) < 0.01f || Math.Abs(roleId - 4.0f) < 0.01f ? 0.72f : 0.38f;
+            var expression = 0.38f + activity * 0.34f;
             var lod = 1.0f;
 
             agentVisuals[visualIndex] = new AgentVisualGpu(
                 new Vector4(center, radius),
-                new Vector4(previousCenter, roleId),
+                new Vector4(previousCenter, 0.0f),
                 new Vector4(activity, heartbeat, pressure, expression),
                 new Vector4(lod, visualIndex, 0.0f, 0.0f));
         }
@@ -1876,12 +1872,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
             MathF.Sin(angle) * orbitRadius);
     }
 
-    private static float AgentRoleId(int index)
-    {
-        ReadOnlySpan<float> roleIds = [1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f];
-        return roleIds[Math.Clamp(index, 0, roleIds.Length - 1)];
-    }
-
     private static Vector3 AgentCenterAtGridHeight(int index, float timeSeconds)
     {
         var radius = AgentRadius(index);
@@ -2072,7 +2062,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct AgentVisualGpu(
         Vector4 CenterRadius,
-        Vector4 PreviousCenterRole,
+        Vector4 PreviousCenterPad,
         Vector4 State,
         Vector4 LodIndexFlags);
 
