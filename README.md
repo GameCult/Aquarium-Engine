@@ -35,6 +35,16 @@ Aquarium currently expects the sibling `CultMath` and `CultLib` repos at
 `E:\Projects\CultMath` and `E:\Projects\CultLib`, or the equivalent
 `..\..\..\CultMath` / `..\..\..\CultLib` paths from the engine project.
 
+Aquarium consumes `AquariumSynth.Dsl` from the repo-local `packages` NuGet feed,
+not as a live project reference to `AquariumSynthCSharp`. This keeps Aquarium
+builds stable while synth work is in flight. To intentionally update that
+boundary, pack a new synth version and bump the `Aquarium.Engine` package
+reference:
+
+```powershell
+.\scripts\update-synth-package.ps1
+```
+
 ```powershell
 dotnet build Aquarium.Engine.sln
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --client-assembly src\Aquarium.Epiphany\bin\Debug\net10.0\Aquarium.Epiphany.dll

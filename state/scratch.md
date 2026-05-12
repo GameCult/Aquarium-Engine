@@ -11,8 +11,9 @@ Keep the engine/client boundary strict:
   debug UI plumbing, and device/toolchain integration.
 - Aquarium.Epiphany owns client policy, semantic state interpretation, role
   layout, and render-plan configuration through Aquarium.Engine.Contracts.
-- AquariumSynthCSharp owns synth internals and tests. Aquarium should remember
-  only the hosting boundary.
+- Aquarium consumes AquariumSynth.Dsl as a pinned package in the repo-local
+  `packages` feed. AquariumSynthCSharp owns synth internals and tests; update
+  the package only through an intentional version bump.
 
 The renderer work that matters next:
 
