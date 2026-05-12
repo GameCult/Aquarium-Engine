@@ -1,4 +1,5 @@
 using Aquarium.Engine.Input;
+using Aquarium.Engine.Render.Features;
 using Aquarium.Engine.Render.Graph;
 using SharpGen.Runtime;
 using Aquarium.Engine.Render.Ui;
@@ -26,7 +27,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int GridHeightTextureSize = 128;
     private const Format GridHeightFormat = Format.R16_Float;
     private const Format SceneDepthFormat = Format.D32_Float;
-    private const int MaxGridHeightBrushCount = 8;
     private const int MaxBodyLightCount = 64;
     private const int MaxBodyVisualCount = 64;
     private const float GridTransparentMinZ = -1.85f;
@@ -96,7 +96,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12CubeTexture studioIrradianceTexture;
     private readonly AquariumBodyLight[] bodyLights = new AquariumBodyLight[MaxBodyLightCount];
     private readonly AquariumBodyVisual[] bodyVisuals = new AquariumBodyVisual[MaxBodyVisualCount];
-    private readonly AquariumGridHeightBrush[] gridHeightBrushes = new AquariumGridHeightBrush[MaxGridHeightBrushCount];
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
@@ -109,7 +108,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private Vector2 previousCursorWorld;
     private float previousGridRadius = 0.001f;
     private float previousTimeSeconds;
-    private GridHeightBrushConstants gridHeightBrushConstants;
+    private D3D12GridHeightBrushConstants gridHeightBrushConstants;
     private GraphicsSettings settings = GraphicsSettings.Default;
     private double accumulatedFrameCpuMilliseconds;
     private double accumulatedRecordCpuMilliseconds;
@@ -1107,7 +1106,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.DrawInstanced(3, 1, 0, 0);
             activeCommandList.SetPipelineState(gridHeightBrushPipelineState!);
             activeCommandList.SetGraphicsRootDescriptorTable(2, frameResources.GridBrushConstantsDescriptor.Gpu);
-            activeCommandList.DrawInstanced(6, MaxGridHeightBrushCount, 0, 0);
+            activeCommandList.DrawInstanced(6, D3D12GridHeightBrushConstants.MaxBrushCount, 0, 0);
         }
         finally
         {
@@ -1117,22 +1116,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private void CopySceneState(AquariumSceneState scene)
     {
-        Array.Clear(gridHeightBrushes);
         Array.Clear(bodyVisuals);
         Array.Clear(bodyLights);
-        gridHeightBrushConstants = default;
-
-        var brushCount = Math.Min(scene.GridHeightBrushes.Count, MaxGridHeightBrushCount);
-        for (var index = 0; index < brushCount; index++)
-        {
-            var brush = scene.GridHeightBrushes[index];
-            gridHeightBrushes[index] = brush;
-            gridHeightBrushConstants.Set(
-                index,
-                new Vector4(brush.Center, brush.Radius, 0.0f),
-                new Vector4(brush.Power, brush.Amplitude, 0.0f, 0.0f),
-                new Vector4(brush.WaveAmplitude, brush.WaveFrequency, brush.WaveSpeed, brush.WaveSinePower));
-        }
+        gridHeightBrushConstants = D3D12GridHeightBrushConstants.FromBrushes(scene.GridHeightBrushes);
 
         var visualCount = Math.Min(scene.BodyVisuals.Count, MaxBodyVisualCount);
         for (var index = 0; index < visualCount; index++)
@@ -1770,83 +1756,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float BloomIntensity,
         float BloomVeilIntensity,
         Vector4 CursorWorlds);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private record struct GridHeightBrushConstants(
-        Vector4 CenterRadius0,
-        Vector4 CenterRadius1,
-        Vector4 CenterRadius2,
-        Vector4 CenterRadius3,
-        Vector4 CenterRadius4,
-        Vector4 CenterRadius5,
-        Vector4 CenterRadius6,
-        Vector4 CenterRadius7,
-        Vector4 Shape0,
-        Vector4 Shape1,
-        Vector4 Shape2,
-        Vector4 Shape3,
-        Vector4 Shape4,
-        Vector4 Shape5,
-        Vector4 Shape6,
-        Vector4 Shape7,
-        Vector4 Wave0,
-        Vector4 Wave1,
-        Vector4 Wave2,
-        Vector4 Wave3,
-        Vector4 Wave4,
-        Vector4 Wave5,
-        Vector4 Wave6,
-        Vector4 Wave7)
-    {
-        public void Set(int index, Vector4 centerRadius, Vector4 shape, Vector4 wave)
-        {
-            switch (index)
-            {
-                case 0:
-                    CenterRadius0 = centerRadius;
-                    Shape0 = shape;
-                    Wave0 = wave;
-                    break;
-                case 1:
-                    CenterRadius1 = centerRadius;
-                    Shape1 = shape;
-                    Wave1 = wave;
-                    break;
-                case 2:
-                    CenterRadius2 = centerRadius;
-                    Shape2 = shape;
-                    Wave2 = wave;
-                    break;
-                case 3:
-                    CenterRadius3 = centerRadius;
-                    Shape3 = shape;
-                    Wave3 = wave;
-                    break;
-                case 4:
-                    CenterRadius4 = centerRadius;
-                    Shape4 = shape;
-                    Wave4 = wave;
-                    break;
-                case 5:
-                    CenterRadius5 = centerRadius;
-                    Shape5 = shape;
-                    Wave5 = wave;
-                    break;
-                case 6:
-                    CenterRadius6 = centerRadius;
-                    Shape6 = shape;
-                    Wave6 = wave;
-                    break;
-                case 7:
-                    CenterRadius7 = centerRadius;
-                    Shape7 = shape;
-                    Wave7 = wave;
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(index), index, "Grid height brush index is outside the fixed brush table.");
-            }
-        }
-    }
 
     private sealed record D3D12ShaderPaths(
         string Grid,
