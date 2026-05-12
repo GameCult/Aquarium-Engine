@@ -81,7 +81,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         trackActiveBrush = renderTarget.CreateSolidColorBrush(new Color4(0.45f, 0.38f, 0.34f, 1.0f));
         titleFormat = CreateTextFormat("Montserrat", 18.0f, FontWeight.Thin);
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
-        monospaceFormat = CreateTextFormat("Ubuntu Sans Mono", 11.0f, FontWeight.Regular);
+        monospaceFormat = CreateTextFormat("Ubuntu Sans Mono", 11.0f, FontWeight.Regular, ParagraphAlignment.Near);
     }
 
     public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi, IReadOnlyList<DebugUi> clientUiPanels)
@@ -184,7 +184,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         direct2DFactory.Dispose();
     }
 
-    private IDWriteTextFormat CreateTextFormat(string familyName, float size, FontWeight weight)
+    private IDWriteTextFormat CreateTextFormat(string familyName, float size, FontWeight weight, ParagraphAlignment paragraphAlignment = ParagraphAlignment.Center)
     {
         var format = directWriteFactory.CreateTextFormat(
             familyName,
@@ -195,7 +195,7 @@ internal sealed class DirectWriteOverlay : IDisposable
             size,
             "en-us");
         format.WordWrapping = WordWrapping.NoWrap;
-        format.ParagraphAlignment = ParagraphAlignment.Center;
+        format.ParagraphAlignment = paragraphAlignment;
         return format;
     }
 

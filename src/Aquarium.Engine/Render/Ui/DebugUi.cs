@@ -937,7 +937,7 @@ internal sealed class DebugUi
         private const float TextLineHeight = 18.0f;
         private const float VerticalPadding = 9.0f;
 
-        public override float LayoutHeight => LabelHeight + VerticalPadding * 2.0f + Math.Max(1, lines) * TextLineHeight;
+        public override float LayoutHeight => LabelLineHeight + VerticalPadding * 2.0f + Math.Max(1, lines) * TextLineHeight;
 
         public override bool UseMonospace => monospace;
 
@@ -1002,9 +1002,13 @@ internal sealed class DebugUi
             ID2D1SolidColorBrush trackHoverBrush,
             ID2D1SolidColorBrush trackActiveBrush)
         {
-            var labelBounds = RectFromEdges(Bounds.Left + 8.0f, Bounds.Top, Bounds.Right - 8.0f, Bounds.Top + LabelHeight);
-            var box = RectFromEdges(Bounds.Left, Bounds.Top + LabelHeight, Bounds.Right, Bounds.Bottom);
-            target.DrawText(Label.ToUpperInvariant(), format, labelBounds, accentBrush, DrawTextOptions.Clip);
+            if (HasLabel)
+            {
+                var labelBounds = RectFromEdges(Bounds.Left + 8.0f, Bounds.Top, Bounds.Right - 8.0f, Bounds.Top + LabelHeight);
+                target.DrawText(Label.ToUpperInvariant(), format, labelBounds, accentBrush, DrawTextOptions.Clip);
+            }
+
+            var box = RectFromEdges(Bounds.Left, Bounds.Top + LabelLineHeight, Bounds.Right, Bounds.Bottom);
             var focused = IsFocused || IsActive;
             target.FillRectangle(box, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
             target.DrawRectangle(box, focused ? accentBrush : outlineBrush, focused ? 1.5f : 1.0f);
@@ -1016,12 +1020,6 @@ internal sealed class DebugUi
                 primaryBrush,
                 DrawTextOptions.Clip);
 
-            if (focused)
-            {
-                var caretX = box.Right - 12.0f;
-                var caretBottom = box.Bottom - 8.0f;
-                target.DrawLine(new Vector2(caretX, caretBottom - TextLineHeight + 2.0f), new Vector2(caretX, caretBottom), accentBrush, 1.25f);
-            }
         }
 
         private string DisplayText()
@@ -1046,6 +1044,10 @@ internal sealed class DebugUi
                 : box.Top + 6.0f;
             return RectFromEdges(box.Left + 8.0f, top, box.Right - 8.0f, bottom);
         }
+
+        private bool HasLabel => !string.IsNullOrWhiteSpace(Label);
+
+        private float LabelLineHeight => HasLabel ? LabelHeight : 0.0f;
 
         private static bool IsEmptyPrompt(string value)
         {
