@@ -47,6 +47,7 @@ current_model:
   docs:
     doctrine: docs/aquarium-engine-doctrine.md
     engine_client_boundary: docs/engine-client-boundary.md
+    epiphany_extraction_render_api_plan: docs/epiphany-extraction-render-api-plan.md
     renderer: docs/hlsl-renderer.md
     agent_sdf_visual_language: docs/epiphany-agent-sdf-visual-language.md
     runtime_surface: docs/cult-runtime-surface.md
@@ -90,9 +91,11 @@ renderer_state:
     - Replace fixed fallback role motion with real CultNet-derived AgentVisualState.
     - Build each agent role body from one coherent low-cost SDF form model before adding ornamental or state-reactive detail.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.
+    - Follow docs/epiphany-extraction-render-api-plan.md to move Epiphany-specific render policy out of Aquarium.Engine and expose client-declared render targets, cameras, shaders, passes, resources, and features.
 
 next_actions:
   - Keep main as the live development branch.
+  - Add boundary checks that keep Aquarium.Engine free of Aquarium.Epiphany references and shrink role/client names out of engine source as the graph API lands.
   - Verify publish output after every packaging-affecting change.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.

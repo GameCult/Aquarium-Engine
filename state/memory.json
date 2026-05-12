@@ -16,6 +16,7 @@
       "Aquarium Engine lives at E:\\Projects\\Aquarium-Engine. Main is the live development branch.",
       "Aquarium.Engine is the native engine layer: Win32 hosting, D3D12 rendering, input translation, reload transport, resource abstractions, and future render graph execution. It must not know Epiphany frontend roles, policy, or semantic client layout.",
       "Aquarium.Epiphany is the Epiphany client layer behind Aquarium.Engine.Contracts. It owns client runtime state, CultCache documents, CultNet interpretation, camera intent, and future render graph configuration against engine abstractions.",
+      "The render API migration target is docs/epiphany-extraction-render-api-plan.md: clients declare render targets, cameras, shaders, passes, buffers, textures, and features through Vortice-free Aquarium contracts; Aquarium compiles that graph into D3D12 resources, descriptors, barriers, pipeline state, resize, shader reload, presentation, and debug inspection.",
       "The host owns Win32 windowing, D3D12 rendering, input translation, and the client-runtime assembly boundary.",
       "D3D12 descriptor ownership stays explicit: static descriptors for long-lived views, per-frame transient descriptors reset only after fence wait, and whole-arena rebuilds on resize until real descriptor churn demands free lists.",
       "D3D12 previous-frame camera/Grid/time/cursor state is renderer-level temporal state, not per-swapchain-frame-resource state.",

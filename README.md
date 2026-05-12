@@ -167,6 +167,8 @@ go out with the trash; the repo is not a scrapbook.
 
 - `docs/aquarium-engine-doctrine.md`: engine doctrine and invariants.
 - `docs/engine-client-boundary.md`: Engine/Epiphany ownership split.
+- `docs/epiphany-extraction-render-api-plan.md`: migration plan for the client
+  extraction and ergonomic render graph API.
 - `docs/vortice-spine.md`: native host/renderer spine.
 - `docs/hlsl-renderer.md`: current shader path.
 - `docs/input.md`: camera and input contract.
