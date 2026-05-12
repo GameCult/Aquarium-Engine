@@ -310,7 +310,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             .Panel(panel =>
             {
                 panel
-                .Section("View")
+                .Section("View", () => activeDebugTab == 0)
                 .Options("Render Debug", () => RenderDebugMode, value => RenderDebugMode = Math.Clamp(value, GraphicsSettings.MinRenderDebugMode, GraphicsSettings.MaxRenderDebugMode), RenderDebugOptions, "Selects the active renderer debug view.", () => activeDebugTab == 0)
                 .Button("Reset View", () => RenderDebugMode = 0, "Returns to the final presented frame.", () => activeDebugTab == 0)
                 .Section("HDR", () => activeDebugTab == 0)
