@@ -27,6 +27,7 @@ internal sealed class DebugUi
     private const float TooltipHeight = 34.0f;
     private const float TabRowHeight = 30.0f;
     private const float TabButtonGap = 6.0f;
+    private const float ScreenMargin = 10.0f;
 
     private readonly List<DebugUiControl> controls = [];
     private readonly IReadOnlyList<string> tabs;
@@ -42,6 +43,7 @@ internal sealed class DebugUi
     private bool closeButtonActive;
     private Rect panelBounds;
     private Vector2 mousePosition;
+    private int lastViewportHeight = 720;
 
     public DebugUi(string title)
         : this(title, DefaultPanelLeft, DefaultPanelTop, DefaultPanelWidth, [], () => 0, _ => { })
@@ -153,8 +155,10 @@ internal sealed class DebugUi
             focusedTextId = null;
         }
 
+        var openOption = OpenOptionControl();
         WantsKeyboard = focusedTextId is not null;
-        WantsMouse = Contains(panelBounds, mousePosition);
+        WantsMouse = Contains(panelBounds, mousePosition)
+            || (openOption is not null && Contains(openOption.PopupBounds(lastViewportHeight), mousePosition));
         closeButtonHovered = Contains(CloseButtonBounds(), mousePosition);
         closeButtonActive = closeButtonHovered && input.LeftMouseDown;
         foreach (var control in controls.Where(control => control.IsVisible))
@@ -163,10 +167,20 @@ internal sealed class DebugUi
             control.IsActive = control.Id == activeControlId && input.LeftMouseDown;
         }
 
+        openOption?.UpdatePopupHover(mousePosition, lastViewportHeight);
+
         if (!input.LeftMouseDown)
         {
             activeSliderId = null;
             activeControlId = null;
+        }
+
+        if (openOption is not null
+            && Contains(openOption.PopupBounds(lastViewportHeight), mousePosition)
+            && Math.Abs(input.WheelDelta) > 0.0f)
+        {
+            openOption.ScrollPopup(input.WheelDelta, mousePosition, lastViewportHeight);
+            return;
         }
 
         if (activeSliderId is { } sliderId)
@@ -193,6 +207,27 @@ internal sealed class DebugUi
         {
             ApplyTextInput(input);
             return;
+        }
+
+        if (openOption is not null)
+        {
+            if (Contains(openOption.PopupBounds(lastViewportHeight), mousePosition))
+            {
+                openOption.ClickPopup(mousePosition, lastViewportHeight);
+                focusedTextId = null;
+                activeSliderId = null;
+                activeControlId = null;
+                return;
+            }
+
+            if (!openOption.HitTest(mousePosition))
+            {
+                openOption.DismissTransientState();
+                focusedTextId = null;
+                activeSliderId = null;
+                activeControlId = null;
+                return;
+            }
         }
 
         if (closeButtonHovered)
@@ -230,6 +265,11 @@ internal sealed class DebugUi
             control.Click(mousePosition);
             activeControlId = control.Id;
             control.IsActive = true;
+            if (control is OptionControl optionControl && optionControl.IsOpen)
+            {
+                optionControl.ClampScroll(lastViewportHeight);
+            }
+
             if (control is ITextInputControl)
             {
                 focusedTextId = control.Id;
@@ -296,6 +336,7 @@ internal sealed class DebugUi
             return;
         }
 
+        lastViewportHeight = viewportHeight;
         Layout();
 
         target.FillRectangle(panelBounds, panelBrush);
@@ -362,7 +403,22 @@ internal sealed class DebugUi
                 trackActiveBrush);
         }
 
+        OpenOptionControl()?.DrawPopup(
+            target,
+            smallFormat,
+            rowBrush,
+            hoverRowBrush,
+            outlineBrush,
+            primaryBrush,
+            accentBrush,
+            viewportHeight);
+
         DrawTooltip(target, smallFormat, panelBrush, outlineBrush, primaryBrush, accentBrush, viewportWidth, viewportHeight);
+    }
+
+    private OptionControl? OpenOptionControl()
+    {
+        return controls.OfType<OptionControl>().FirstOrDefault(control => control.IsVisible && control.IsOpen);
     }
 
     private void Layout()
@@ -769,25 +825,29 @@ internal sealed class DebugUi
     {
         private bool isOpen;
         private int hoveredOptionIndex = -1;
+        private int scrollOffset;
 
-        public override float LayoutHeight => RowHeight + (isOpen ? options.Count * RowHeight : 0.0f);
+        public bool IsOpen => isOpen;
 
         public override void UpdateHover(Vector2 mouse)
         {
             hoveredOptionIndex = -1;
             IsHovered = HitTest(mouse);
-            if (!isOpen || !IsHovered || Contains(MainBounds(), mouse))
+        }
+
+        public void UpdatePopupHover(Vector2 mouse, int viewportHeight)
+        {
+            hoveredOptionIndex = -1;
+            if (!isOpen || !Contains(PopupBounds(viewportHeight), mouse))
             {
                 return;
             }
 
-            for (var index = 0; index < options.Count; index++)
+            var localIndex = Math.Clamp((int)MathF.Floor((mouse.Y - PopupBounds(viewportHeight).Top) / RowHeight), 0, VisibleOptionCount(viewportHeight) - 1);
+            var optionIndex = scrollOffset + localIndex;
+            if (optionIndex >= 0 && optionIndex < options.Count)
             {
-                if (Contains(OptionBounds(index), mouse))
-                {
-                    hoveredOptionIndex = index;
-                    return;
-                }
+                hoveredOptionIndex = optionIndex;
             }
         }
 
@@ -796,20 +856,44 @@ internal sealed class DebugUi
             if (!isOpen)
             {
                 isOpen = true;
+                scrollOffset = SelectedOptionIndex();
                 return;
             }
 
             if (Contains(MainBounds(), mouse))
             {
                 isOpen = false;
-                return;
             }
+        }
 
+        public void ClickPopup(Vector2 mouse, int viewportHeight)
+        {
+            UpdatePopupHover(mouse, viewportHeight);
             if (hoveredOptionIndex >= 0 && hoveredOptionIndex < options.Count)
             {
                 write(options[hoveredOptionIndex].Value);
-                isOpen = false;
             }
+
+            isOpen = false;
+        }
+
+        public void ScrollPopup(float wheelDelta, Vector2 mouse, int viewportHeight)
+        {
+            if (!isOpen || options.Count <= VisibleOptionCount(viewportHeight))
+            {
+                return;
+            }
+
+            scrollOffset += wheelDelta > 0.0f ? -3 : 3;
+            ClampScroll(viewportHeight);
+            UpdatePopupHover(mouse, viewportHeight);
+        }
+
+        public void ClampScroll(int viewportHeight)
+        {
+            var visibleCount = VisibleOptionCount(viewportHeight);
+            var maxOffset = Math.Max(0, options.Count - visibleCount);
+            scrollOffset = Math.Clamp(scrollOffset, 0, maxOffset);
         }
 
         public override void DismissTransientState()
@@ -838,32 +922,64 @@ internal sealed class DebugUi
             target.FillRectangle(main, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
             target.DrawLine(new Vector2(main.Left, main.Bottom), new Vector2(main.Right, main.Bottom), outlineBrush, 1.0f);
             target.DrawText(Label.ToUpperInvariant(), format, RectFromEdges(main.Left + 8.0f, main.Top, main.Left + LabelWidth, main.Bottom), accentBrush, DrawTextOptions.Clip);
-            target.DrawText(SelectedLabel(), format, RectFromEdges(main.Left + LabelWidth + 10.0f, main.Top, main.Right - 32.0f, main.Bottom), primaryBrush, DrawTextOptions.Clip);
+            var valueBounds = ValueFieldBounds();
+            target.DrawText(SelectedLabel(), format, RectFromEdges(valueBounds.Left, main.Top, main.Right - 32.0f, main.Bottom), primaryBrush, DrawTextOptions.Clip);
 
             var arrowBrush = IsActive ? accentActiveBrush : IsHovered ? accentHoverBrush : accentBrush;
             var cy = (main.Top + main.Bottom) * 0.5f;
             target.DrawLine(new Vector2(main.Right - 24.0f, cy - 3.0f), new Vector2(main.Right - 18.0f, cy + 3.0f), arrowBrush, 1.5f);
             target.DrawLine(new Vector2(main.Right - 18.0f, cy + 3.0f), new Vector2(main.Right - 12.0f, cy - 3.0f), arrowBrush, 1.5f);
+        }
 
+        public void DrawPopup(
+            ID2D1RenderTarget target,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush outlineBrush,
+            ID2D1SolidColorBrush primaryBrush,
+            ID2D1SolidColorBrush accentBrush,
+            int viewportHeight)
+        {
             if (!isOpen)
             {
                 return;
             }
 
-            for (var index = 0; index < options.Count; index++)
+            ClampScroll(viewportHeight);
+            var popup = PopupBounds(viewportHeight);
+            target.FillRectangle(popup, rowBrush);
+            target.DrawRectangle(popup, outlineBrush, 1.0f);
+            var visibleCount = VisibleOptionCount(viewportHeight);
+            for (var localIndex = 0; localIndex < visibleCount; localIndex++)
             {
-                var bounds = OptionBounds(index);
-                var selected = options[index].Value == read();
-                var hovered = index == hoveredOptionIndex;
+                var optionIndex = scrollOffset + localIndex;
+                if (optionIndex >= options.Count)
+                {
+                    break;
+                }
+
+                var bounds = OptionBounds(localIndex, viewportHeight);
+                var selected = options[optionIndex].Value == read();
+                var hovered = optionIndex == hoveredOptionIndex;
                 target.FillRectangle(bounds, hovered ? hoverRowBrush : rowBrush);
                 target.DrawLine(new Vector2(bounds.Left, bounds.Bottom), new Vector2(bounds.Right, bounds.Bottom), outlineBrush, 1.0f);
                 var labelBrush = selected ? accentBrush : primaryBrush;
-                target.DrawText(options[index].Label, format, RectFromEdges(bounds.Left + 18.0f, bounds.Top, bounds.Right - 12.0f, bounds.Bottom), labelBrush, DrawTextOptions.Clip);
+                target.DrawText(options[optionIndex].Label, format, RectFromEdges(bounds.Left + 18.0f, bounds.Top, bounds.Right - 12.0f, bounds.Bottom), labelBrush, DrawTextOptions.Clip);
                 if (selected)
                 {
                     target.DrawLine(new Vector2(bounds.Left + 7.0f, bounds.Top + 16.0f), new Vector2(bounds.Left + 10.0f, bounds.Top + 20.0f), accentBrush, 1.75f);
                     target.DrawLine(new Vector2(bounds.Left + 10.0f, bounds.Top + 20.0f), new Vector2(bounds.Left + 15.0f, bounds.Top + 10.0f), accentBrush, 1.75f);
                 }
+            }
+
+            if (options.Count > visibleCount)
+            {
+                var track = RectFromEdges(popup.Right - 4.0f, popup.Top + 3.0f, popup.Right - 2.0f, popup.Bottom - 3.0f);
+                var thumbHeight = Math.Max(12.0f, track.Height * visibleCount / options.Count);
+                var maxOffset = Math.Max(1, options.Count - visibleCount);
+                var thumbTop = track.Top + (track.Height - thumbHeight) * scrollOffset / maxOffset;
+                target.FillRectangle(RectFromEdges(track.Left, thumbTop, track.Right, thumbTop + thumbHeight), accentBrush);
             }
         }
 
@@ -886,10 +1002,55 @@ internal sealed class DebugUi
             return RectFromEdges(Bounds.Left, Bounds.Top, Bounds.Right, Bounds.Top + RowHeight);
         }
 
-        private Rect OptionBounds(int index)
+        public Rect PopupBounds(int viewportHeight)
         {
-            var top = Bounds.Top + RowHeight + index * RowHeight;
-            return RectFromEdges(Bounds.Left + 8.0f, top, Bounds.Right, top + RowHeight);
+            var field = ValueFieldBounds();
+            var desiredHeight = options.Count * RowHeight;
+            var belowAvailable = Math.Max(RowHeight, viewportHeight - ScreenMargin - MainBounds().Bottom);
+            var aboveAvailable = Math.Max(RowHeight, MainBounds().Top - ScreenMargin);
+            var opensAbove = desiredHeight > belowAvailable && aboveAvailable > belowAvailable;
+            var available = opensAbove ? aboveAvailable : belowAvailable;
+            var height = VisibleOptionCount(viewportHeight) * RowHeight;
+            var top = opensAbove ? MainBounds().Top - Math.Min(height, available) : MainBounds().Bottom;
+            return RectFromEdges(field.Left, top, field.Right, top + Math.Min(height, available));
+        }
+
+        private Rect ValueFieldBounds()
+        {
+            var main = MainBounds();
+            return RectFromEdges(main.Left + LabelWidth + 10.0f, main.Top, main.Right, main.Bottom);
+        }
+
+        private Rect OptionBounds(int localIndex, int viewportHeight)
+        {
+            var popup = PopupBounds(viewportHeight);
+            var top = popup.Top + localIndex * RowHeight;
+            return RectFromEdges(popup.Left, top, popup.Right, top + RowHeight);
+        }
+
+        private int VisibleOptionCount(int viewportHeight)
+        {
+            var desiredCount = options.Count;
+            var belowAvailable = Math.Max(RowHeight, viewportHeight - ScreenMargin - MainBounds().Bottom);
+            var aboveAvailable = Math.Max(RowHeight, MainBounds().Top - ScreenMargin);
+            var desiredHeight = desiredCount * RowHeight;
+            var opensAbove = desiredHeight > belowAvailable && aboveAvailable > belowAvailable;
+            var available = opensAbove ? aboveAvailable : belowAvailable;
+            return Math.Clamp((int)MathF.Floor(available / RowHeight), 1, Math.Max(1, desiredCount));
+        }
+
+        private int SelectedOptionIndex()
+        {
+            var value = read();
+            for (var index = 0; index < options.Count; index++)
+            {
+                if (options[index].Value == value)
+                {
+                    return index;
+                }
+            }
+
+            return 0;
         }
     }
 
