@@ -35,6 +35,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
     private const string StudioPmremRelativePath = "Assets/Textures/studio2_pmrem.dds";
     private const string StudioIrradianceRelativePath = "Assets/Textures/studio2_irradiance.dds";
+    private const int RootFrameConstants = 0;
+    private const int RootSourceTexture = 1;
+    private const int RootHeightFieldBrushes = 2;
+    private const int RootSdfLights = 3;
+    private const int RootBloom = 4;
+    private const int RootCurrentSceneMetadata = 5;
+    private const int RootCurrentSceneControl = 6;
+    private const int RootHistory = 7;
+    private const int RootHistoryMetadata = 8;
+    private const int RootHistoryControl = 9;
+    private const int RootStudioPmrem = 10;
+    private const int RootStudioIrradiance = 11;
+    private const int RootSdfObjects = 12;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -918,12 +931,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             context.CommandList.SetPipelineState(scenePipelineState!);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.HeightFieldDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(3, frameResources.SdfLightDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(14, frameResources.StudioPmremDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(15, frameResources.StudioIrradianceDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(16, frameResources.SdfObjectDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootSourceTexture, frameResources.HeightFieldDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootSdfLights, frameResources.SdfLightDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootStudioPmrem, frameResources.StudioPmremDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootStudioIrradiance, frameResources.StudioIrradianceDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootSdfObjects, frameResources.SdfObjectDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -958,7 +971,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(RootFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
             sceneRenderTarget.Transition(activeCommandList, ResourceStates.PixelShaderResource);
 
             for (var level = 0; level < BloomLevelCount; level++)
@@ -1009,7 +1022,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         target.Transition(activeCommandList, ResourceStates.RenderTarget);
         activeCommandList.ClearRenderTargetView(target.RenderTargetView.Cpu, new Color4(0.0f, 0.0f, 0.0f, 1.0f));
         activeCommandList.SetPipelineState(pipelineState);
-        activeCommandList.SetGraphicsRootDescriptorTable(1, sourceDescriptor.Gpu);
+        activeCommandList.SetGraphicsRootDescriptorTable(RootSourceTexture, sourceDescriptor.Gpu);
         activeCommandList.RSSetViewports(targetViewport);
         activeCommandList.RSSetScissorRects(targetScissorRect);
         activeCommandList.OMSetRenderTargets(target.RenderTargetView.Cpu, null);
@@ -1042,15 +1055,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             context.CommandList.SetPipelineState(resolvePipelineState!);
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            context.CommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(1, frameResources.SceneDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(4, frameResources.BloomPresentationDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(5, frameResources.SceneMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(6, frameResources.SceneControlDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(7, frameResources.HistoryDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(8, frameResources.HistoryMetadataDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(9, frameResources.HistoryControlDescriptor.Gpu);
-            context.CommandList.SetGraphicsRootDescriptorTable(16, frameResources.SdfObjectDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootSourceTexture, frameResources.SceneDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootBloom, frameResources.BloomPresentationDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootCurrentSceneMetadata, frameResources.SceneMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootCurrentSceneControl, frameResources.SceneControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootHistory, frameResources.HistoryDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootHistoryMetadata, frameResources.HistoryMetadataDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootHistoryControl, frameResources.HistoryControlDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootSdfObjects, frameResources.SdfObjectDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
@@ -1098,14 +1111,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetPipelineState(heightFieldBasePipelineState!);
             activeCommandList.SetGraphicsRootSignature(fullscreenRootSignature);
-            activeCommandList.SetGraphicsRootDescriptorTable(0, frameResources.FrameConstantsDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(RootFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
             activeCommandList.RSSetViewports(viewport);
             activeCommandList.RSSetScissorRects(scissorRect);
             activeCommandList.OMSetRenderTargets(heightFieldRenderTarget.RenderTargetView.Cpu, null);
             activeCommandList.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             activeCommandList.DrawInstanced(3, 1, 0, 0);
             activeCommandList.SetPipelineState(heightFieldBrushPipelineState!);
-            activeCommandList.SetGraphicsRootDescriptorTable(2, frameResources.HeightFieldBrushConstantsDescriptor.Gpu);
+            activeCommandList.SetGraphicsRootDescriptorTable(RootHeightFieldBrushes, frameResources.HeightFieldBrushConstantsDescriptor.Gpu);
             activeCommandList.DrawInstanced(6, D3D12HeightFieldBrushConstants.MaxBrushCount, 0, 0);
         }
         finally
