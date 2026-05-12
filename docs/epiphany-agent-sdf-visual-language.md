@@ -429,13 +429,17 @@ and ribbons communicate branching possibility while still returning to a center.
 
 Math:
 
-- Polar lobe field around a seed sphere:
-  `r = base + amplitude * sin(k * theta + phase)`.
-- Ribbon petals as trefoil-knot tubes around the seed.
-- Smooth min unions for petal roots; sharp-ish material boundary near petal
-  tips.
-- Harmonic count `k = 4 + floor(activity * 3) + min(backlogCount, 3)`.
-  `amplitude = lerp(0.08, 0.28, activity)`.
+- Idea seed as a small opal superellipsoid.
+- Five curved ribbon-petal sheets around the seed. Each ribbon is driven by one
+  longitudinal parameter: root overlap, outward travel, upward cup, widening
+  blade, and tapering tip. This keeps the field readable from multiple angles
+  and avoids decorative polar distance fiction.
+- Small emissive idea sparks as bounded spheres near petal tips. These are
+  sparse accents, not a swarm.
+- Backlog shadow as a clipped low torus beneath the seed. Pressure can tighten
+  and lower it without changing the main silhouette.
+- Smooth unions only at structural joins: seed-to-ribbon roots, sparse sparks,
+  and the underside backlog ring.
 - Material regions: opal seed, pearlescent petals, emissive idea sparks, cool
   backlog shadow.
 
