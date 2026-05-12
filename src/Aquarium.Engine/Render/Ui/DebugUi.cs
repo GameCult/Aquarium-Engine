@@ -1281,14 +1281,17 @@ internal sealed class DebugUi
                 if (endColumn > startColumn)
                 {
                     using var layout = directWriteFactory.CreateTextLayout(displayLines[line], format, bounds.Width, TextLineHeight);
-                    var startX = TextPositionX(layout, startColumn, displayLines[line].Length);
-                    var endX = TextPositionX(layout, endColumn, displayLines[line].Length);
+                    var startHit = TextPositionHit(layout, startColumn, displayLines[line].Length);
+                    var endHit = TextPositionHit(layout, endColumn, displayLines[line].Length);
+                    var vertical = TextVerticalHit(layout, displayLines[line].Length);
+                    var selectionTop = top + line * TextLineHeight + vertical.Top;
+                    var selectionBottom = selectionTop + vertical.Height;
                     target.FillRectangle(
                         RectFromEdges(
-                            bounds.Left + startX,
-                            top + line * TextLineHeight + 2.0f,
-                            bounds.Left + endX,
-                            top + (line + 1) * TextLineHeight),
+                            bounds.Left + startHit.X,
+                            selectionTop,
+                            bounds.Left + endHit.X,
+                            selectionBottom),
                         activeRowBrush);
                 }
 
@@ -1326,9 +1329,10 @@ internal sealed class DebugUi
                 {
                     var column = Math.Clamp(caretIndex - lineStart, 0, displayLines[line].Length);
                     using var layout = directWriteFactory.CreateTextLayout(displayLines[line], format, bounds.Width, TextLineHeight);
-                    var x = bounds.Left + TextPositionX(layout, column, displayLines[line].Length);
-                    var y = top + line * TextLineHeight + 2.0f;
-                    target.DrawLine(new Vector2(x, y), new Vector2(x, y + TextLineHeight - 2.0f), accentBrush, 1.25f);
+                    var hit = TextPositionHit(layout, column, displayLines[line].Length);
+                    var x = bounds.Left + hit.X;
+                    var y = top + line * TextLineHeight + hit.Top;
+                    target.DrawLine(new Vector2(x, y), new Vector2(x, y + hit.Height), accentBrush, 1.25f);
                     return;
                 }
 
@@ -1374,7 +1378,7 @@ internal sealed class DebugUi
                 var edges = new float[displayLines[line].Length + 1];
                 for (var index = 0; index < edges.Length; index++)
                 {
-                    edges[index] = TextPositionX(layout, index, displayLines[line].Length);
+                    edges[index] = TextPositionHit(layout, index, displayLines[line].Length).X;
                 }
 
                 lineHitCache.Add(new LineHitCache(globalStart, bounds.Left, top + line * TextLineHeight, edges));
@@ -1382,11 +1386,11 @@ internal sealed class DebugUi
             }
         }
 
-        private static float TextPositionX(IDWriteTextLayout layout, int position, int length)
+        private static TextHit TextPositionHit(IDWriteTextLayout layout, int position, int length)
         {
             if (length == 0)
             {
-                return 0.0f;
+                return new TextHit(0.0f, 2.0f, TextLineHeight - 2.0f);
             }
 
             var clamped = Math.Clamp(position, 0, length);
@@ -1403,8 +1407,13 @@ internal sealed class DebugUi
                 trailing = new RawBool(false);
             }
 
-            layout.HitTestTextPosition(textPosition, trailing, out var x, out _, out _);
-            return x;
+            layout.HitTestTextPosition(textPosition, trailing, out var x, out _, out var metrics);
+            return new TextHit(x, metrics.Top, metrics.Height);
+        }
+
+        private static TextHit TextVerticalHit(IDWriteTextLayout layout, int length)
+        {
+            return TextPositionHit(layout, Math.Min(1, length), length);
         }
 
         private bool HasLabel => !string.IsNullOrWhiteSpace(Label);
@@ -1422,6 +1431,8 @@ internal sealed class DebugUi
         private int SelectionEnd => Math.Max(caretIndex, selectionAnchor);
 
         private readonly record struct LineHitCache(int GlobalStart, float OriginX, float OriginY, float[] Edges);
+
+        private readonly record struct TextHit(float X, float Top, float Height);
 
         private static bool IsEmptyPrompt(string value)
         {
