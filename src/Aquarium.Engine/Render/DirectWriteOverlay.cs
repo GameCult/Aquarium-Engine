@@ -87,32 +87,6 @@ internal sealed class DirectWriteOverlay : IDisposable
     public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi, IReadOnlyList<DebugUi> clientUiPanels)
     {
         renderTarget.BeginDraw();
-        DrawHeader(
-            "directwrite overlay",
-            titleFormat,
-            RectFromEdges(18, 14, Math.Min(width - 18, 340), 42),
-            primaryTextBrush);
-        renderTarget.DrawText(
-            $"view r {frame.View.Radius:0.00}  cam z {frame.CameraPosition.Z:0.00}",
-            smallFormat,
-            RectFromEdges(18, 38, Math.Min(width - 18, 420), 62),
-            quietTextBrush,
-            DrawTextOptions.Clip);
-        if (renderDebugMode > 0)
-        {
-            renderTarget.DrawText(
-                $"render debug {renderDebugMode}  F1 cycle  debug panel selects",
-                smallFormat,
-                RectFromEdges(18, 56, Math.Min(width - 18, 420), 80),
-                quietTextBrush,
-                DrawTextOptions.Clip);
-        }
-        renderTarget.DrawText(
-            "crisp text belongs after tonemapping",
-            smallFormat,
-            RectFromEdges(18, Math.Max(64, height - 36), Math.Min(width - 18, 420), height - 12),
-            quietTextBrush,
-            DrawTextOptions.Clip);
         debugUi?.Draw(
             renderTarget,
             directWriteFactory,

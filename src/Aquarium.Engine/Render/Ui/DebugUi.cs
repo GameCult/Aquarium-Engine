@@ -183,6 +183,21 @@ internal sealed class DebugUi
             return;
         }
 
+        if (Math.Abs(input.WheelDelta) > 0.0f)
+        {
+            for (var index = controls.Count - 1; index >= 0; index--)
+            {
+                var control = controls[index];
+                if (control.IsVisible
+                    && control.HitTest(mousePosition)
+                    && control is ITextInputControl textControl
+                    && textControl.Scroll(input.WheelDelta))
+                {
+                    return;
+                }
+            }
+        }
+
         if (activeSliderId is { } sliderId)
         {
             if (controls.FirstOrDefault(control => control.IsVisible && control.Id == sliderId) is SliderControl activeSlider)
@@ -431,7 +446,10 @@ internal sealed class DebugUi
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
 
-        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, y + 12.0f);
+        var bottom = lastViewportHeight > 0
+            ? Math.Max(y + 12.0f, lastViewportHeight - panelLeft)
+            : y + 12.0f;
+        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, bottom);
     }
 
     private Rect CloseButtonBounds()
@@ -636,6 +654,8 @@ internal sealed class DebugUi
         void ApplyTextInput(InputState input);
 
         void SelectToPoint(Vector2 point);
+
+        bool Scroll(float wheelDelta);
     }
 
     internal abstract class DebugUiControl(string label, string? tooltip = null, Func<bool>? isVisible = null)
@@ -1095,6 +1115,8 @@ internal sealed class DebugUi
         {
         }
 
+        public bool Scroll(float wheelDelta) => false;
+
         public override void Draw(
             ID2D1RenderTarget target,
             IDWriteFactory6 directWriteFactory,
@@ -1136,6 +1158,7 @@ internal sealed class DebugUi
         private readonly List<LineHitCache> lineHitCache = [];
         private int caretIndex = -1;
         private int selectionAnchor = -1;
+        private int firstVisibleLine = -1;
         private string lastValue = string.Empty;
 
         public override float LayoutHeight => LabelLineHeight + VerticalPadding * 2.0f + Math.Max(1, lines) * TextLineHeight;
@@ -1235,6 +1258,23 @@ internal sealed class DebugUi
             MoveCaret(IndexFromPoint(point), selecting: true, NormalizedValue);
         }
 
+        public bool Scroll(float wheelDelta)
+        {
+            var value = NormalizedValue;
+            var totalLines = LineCount(value);
+            var maxFirstLine = Math.Max(0, totalLines - lines);
+            if (maxFirstLine == 0)
+            {
+                firstVisibleLine = alignBottom ? 0 : -1;
+                return false;
+            }
+
+            var step = wheelDelta > 0.0f ? -3 : 3;
+            var current = VisibleStartLine(totalLines);
+            firstVisibleLine = Math.Clamp(current + step, 0, maxFirstLine);
+            return firstVisibleLine != current;
+        }
+
         public override void Click(Vector2 mouse)
         {
             SyncEditingState();
@@ -1305,18 +1345,14 @@ internal sealed class DebugUi
         private string[] DisplayLines()
         {
             var split = NormalizedValue.Split('\n');
-            return split.Length <= lines ? split : split.Skip(split.Length - lines).ToArray();
+            var startLine = VisibleStartLine(split.Length);
+            return split.Skip(startLine).Take(lines).ToArray();
         }
 
         private int DisplayStartIndex()
         {
             var split = NormalizedValue.Split('\n');
-            if (split.Length <= lines)
-            {
-                return 0;
-            }
-
-            var skippedLines = split.Length - lines;
+            var skippedLines = VisibleStartLine(split.Length);
             var index = 0;
             for (var line = 0; line < skippedLines; line++)
             {
@@ -1337,6 +1373,7 @@ internal sealed class DebugUi
             lastValue = value;
             caretIndex = ClampEditableIndex(value.Length, value);
             selectionAnchor = caretIndex;
+            firstVisibleLine = alignBottom ? Math.Max(0, LineCount(value) - lines) : 0;
         }
 
         private void SyncCommittedValue(string value)
@@ -1344,6 +1381,8 @@ internal sealed class DebugUi
             lastValue = value;
             caretIndex = ClampEditableIndex(caretIndex, value);
             selectionAnchor = ClampEditableIndex(selectionAnchor, value);
+            firstVisibleLine = Math.Clamp(firstVisibleLine, 0, Math.Max(0, LineCount(value) - lines));
+            EnsureCaretVisible(value);
         }
 
         private void MoveCaret(int index, bool selecting, string value)
@@ -1357,6 +1396,8 @@ internal sealed class DebugUi
             {
                 selectionAnchor = ClampEditableIndex(selectionAnchor, value);
             }
+
+            EnsureCaretVisible(value);
         }
 
         private string InsertText(string value, string text)
@@ -1642,6 +1683,59 @@ internal sealed class DebugUi
             }
 
             return value.Length;
+        }
+
+        private int VisibleStartLine(int totalLines)
+        {
+            var maxFirstLine = Math.Max(0, totalLines - lines);
+            if (firstVisibleLine < 0)
+            {
+                return alignBottom ? maxFirstLine : 0;
+            }
+
+            return Math.Clamp(firstVisibleLine, 0, maxFirstLine);
+        }
+
+        private void EnsureCaretVisible(string value)
+        {
+            var totalLines = LineCount(value);
+            var maxFirstLine = Math.Max(0, totalLines - lines);
+            var caretLine = LineNumber(value, caretIndex);
+            var first = VisibleStartLine(totalLines);
+            if (caretLine < first)
+            {
+                firstVisibleLine = caretLine;
+            }
+            else if (caretLine >= first + lines)
+            {
+                firstVisibleLine = caretLine - lines + 1;
+            }
+            else if (firstVisibleLine < 0)
+            {
+                firstVisibleLine = first;
+            }
+
+            firstVisibleLine = Math.Clamp(firstVisibleLine, 0, maxFirstLine);
+        }
+
+        private static int LineCount(string value)
+        {
+            return value.Count(ch => ch == '\n') + 1;
+        }
+
+        private static int LineNumber(string value, int index)
+        {
+            var clamped = Math.Clamp(index, 0, value.Length);
+            var line = 0;
+            for (var i = 0; i < clamped; i++)
+            {
+                if (value[i] == '\n')
+                {
+                    line++;
+                }
+            }
+
+            return line;
         }
 
         private readonly record struct LineHitCache(int GlobalStart, float OriginX, float OriginY, float[] Edges);

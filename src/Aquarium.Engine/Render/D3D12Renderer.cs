@@ -307,7 +307,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     private DebugUi CreateDebugUi(AquariumUiDocument clientUi)
     {
-        var ui = new DebugUi("Debug", 18.0f, 82.0f, 360.0f, debugTabTitles, () => activeDebugTab, SelectDebugTab)
+        var ui = new DebugUi("Debug", 18.0f, 18.0f, 520.0f, debugTabTitles, () => activeDebugTab, SelectDebugTab)
             .Panel(panel =>
             {
                 panel
@@ -323,7 +323,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 .Section("Synth Playground", () => activeDebugTab == 2)
                 .Options("Preset", () => synthPlaygroundPreset, SelectSynthPreset, SynthPresetOptions, "Loads a built-in synth patch.", () => activeDebugTab == 2)
                 .Readout("Status", () => $"{synthPlaygroundStatus.State}: {synthPlaygroundStatus.Message}", isVisible: () => activeDebugTab == 2)
-                .TextBox("Patch", () => synthPlaygroundScript, value => synthPlaygroundScript = value, lines: 7, acceptsReturn: true, monospace: true, tooltip: "Patch DSL source.", isVisible: () => activeDebugTab == 2)
+                .TextBox("Patch", () => synthPlaygroundScript, value => synthPlaygroundScript = value, lines: 18, acceptsReturn: true, monospace: true, tooltip: "Patch DSL source.", isVisible: () => activeDebugTab == 2)
                 .Slider("Gain", () => synthPlaygroundGain, value => synthPlaygroundGain = Math.Clamp(value, 0.0f, 1.0f), 0.0f, 1.0f, "0.###", "Playground patch gain.", () => activeDebugTab == 2)
                 .Button("Play", () => synthPlaygroundPlayRevision++, "Triggers the compiled playground patch.", () => activeDebugTab == 2);
             });
