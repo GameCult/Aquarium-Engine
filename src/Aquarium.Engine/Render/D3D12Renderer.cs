@@ -103,7 +103,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private IReadOnlyList<AquariumConsoleCommand> clientCommands = [];
     private string synthPlaygroundScript = AquariumSynth.Dsl.BuiltInScripts.ClassicSfxrPrimitiveGolfScripts[0].Script;
     private int synthPlaygroundPreset;
-    private int synthPlaygroundCompileRevision;
     private int synthPlaygroundPlayRevision;
     private float synthPlaygroundGain = 0.45f;
     private AquariumSynthPatchStatus synthPlaygroundStatus = new("aquarium-playground", AquariumSynthPatchCompileState.Idle, "idle", 0, 0.0);
@@ -273,7 +272,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         synthPlaygroundScript,
         AquariumSynthTrigger.Manual(synthPlaygroundPlayRevision),
         synthPlaygroundGain,
-        synthPlaygroundCompileRevision,
+        0,
         "aquarium_playground",
         status => synthPlaygroundStatus = status);
 
@@ -323,11 +322,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 .TextBox("", TerminalDisplay, UpdateTerminalInputFromDisplay, lines: 8, acceptsReturn: false, submit: ExecuteTerminalInput, monospace: true, alignBottom: true, tooltip: "Terminal log with live command prompt.", isVisible: () => activeDebugTab == 1)
                 .Section("Synth Playground", () => activeDebugTab == 2)
                 .Options("Preset", () => synthPlaygroundPreset, SelectSynthPreset, SynthPresetOptions, "Loads a built-in synth patch.", () => activeDebugTab == 2)
-                .Readout("Compile", () => $"{synthPlaygroundStatus.State}: {synthPlaygroundStatus.Message}", "Faust compile status.", () => activeDebugTab == 2)
+                .Readout("Status", () => $"{synthPlaygroundStatus.State}: {synthPlaygroundStatus.Message}", isVisible: () => activeDebugTab == 2)
                 .TextBox("Patch", () => synthPlaygroundScript, value => synthPlaygroundScript = value, lines: 7, acceptsReturn: true, monospace: true, tooltip: "Patch DSL source.", isVisible: () => activeDebugTab == 2)
                 .Slider("Gain", () => synthPlaygroundGain, value => synthPlaygroundGain = Math.Clamp(value, 0.0f, 1.0f), 0.0f, 1.0f, "0.###", "Playground patch gain.", () => activeDebugTab == 2)
-                .Button("Compile", () => synthPlaygroundCompileRevision++, "Forces async Faust compile.", () => activeDebugTab == 2)
-                .Button("Play", () => { synthPlaygroundCompileRevision++; synthPlaygroundPlayRevision++; }, "Compiles and schedules the playground patch.", () => activeDebugTab == 2);
+                .Button("Play", () => synthPlaygroundPlayRevision++, "Triggers the compiled playground patch.", () => activeDebugTab == 2);
             });
         for (var panelIndex = 0; panelIndex < clientUi.Panels.Count; panelIndex++)
         {
@@ -434,7 +432,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         synthPlaygroundPreset = Math.Clamp(index, 0, Math.Max(0, SynthPresets.Length - 1));
         synthPlaygroundScript = SynthPresets[synthPlaygroundPreset].Script;
-        synthPlaygroundCompileRevision++;
     }
 
     public void Render(AquariumFrame frame, int width, int height)
