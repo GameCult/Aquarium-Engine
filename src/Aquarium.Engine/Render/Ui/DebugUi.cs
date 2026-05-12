@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Ui;
+using SharpGen.Runtime;
 using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.Mathematics;
@@ -968,9 +969,10 @@ internal sealed class DebugUi
         private const float LabelHeight = 20.0f;
         private const float TextLineHeight = 18.0f;
         private const float VerticalPadding = 9.0f;
-        private const float CharacterWidth = 7.0f;
+        private const float FallbackCharacterWidth = 7.0f;
         private const float TextInsetX = 8.0f;
         private const float TextInsetY = 6.0f;
+        private readonly List<LineHitCache> lineHitCache = [];
         private int caretIndex = -1;
         private int selectionAnchor = -1;
         private string lastValue = string.Empty;
@@ -1108,12 +1110,13 @@ internal sealed class DebugUi
 
             var box = RectFromEdges(Bounds.Left, Bounds.Top + LabelLineHeight, Bounds.Right, Bounds.Bottom);
             var focused = IsFocused || IsActive;
-            target.FillRectangle(box, IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
+            target.FillRectangle(box, rowBrush);
             target.DrawRectangle(box, focused ? accentBrush : outlineBrush, focused ? 1.5f : 1.0f);
 
-            DrawSelection(target, activeRowBrush, box);
+            CacheLineHitGeometry(directWriteFactory, format, box);
+            DrawSelection(target, directWriteFactory, format, activeRowBrush, box);
             DrawBoxText(target, directWriteFactory, format, primaryBrush, box);
-            DrawCaret(target, accentBrush, box);
+            DrawCaret(target, directWriteFactory, format, accentBrush, box);
         }
 
         private string DisplayText()
@@ -1216,7 +1219,26 @@ internal sealed class DebugUi
             var displayLines = DisplayLines();
             var top = TextTop(bounds, displayLines.Length);
             var line = Math.Clamp((int)MathF.Floor((point.Y - top) / TextLineHeight), 0, Math.Max(0, displayLines.Length - 1));
-            var column = Math.Max(0, (int)MathF.Round((point.X - bounds.Left) / CharacterWidth));
+            var cache = line < lineHitCache.Count ? lineHitCache[line] : default;
+            if (cache.Edges.Length > 0)
+            {
+                var localX = point.X - cache.OriginX;
+                var nearest = 0;
+                var nearestDistance = float.MaxValue;
+                for (var edgeIndex = 0; edgeIndex < cache.Edges.Length; edgeIndex++)
+                {
+                    var distance = MathF.Abs(cache.Edges[edgeIndex] - localX);
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearest = edgeIndex;
+                    }
+                }
+
+                return Math.Min(cache.GlobalStart + nearest, NormalizedValue.Length);
+            }
+
+            var column = Math.Max(0, (int)MathF.Round((point.X - bounds.Left) / FallbackCharacterWidth));
             var index = DisplayStartIndex();
             for (var lineIndex = 0; lineIndex < line; lineIndex++)
             {
@@ -1226,7 +1248,12 @@ internal sealed class DebugUi
             return Math.Min(index + Math.Min(column, displayLines[line].Length), NormalizedValue.Length);
         }
 
-        private void DrawSelection(ID2D1RenderTarget target, ID2D1SolidColorBrush activeRowBrush, Rect box)
+        private void DrawSelection(
+            ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush activeRowBrush,
+            Rect box)
         {
             if (!HasSelection)
             {
@@ -1253,11 +1280,14 @@ internal sealed class DebugUi
                 var endColumn = Math.Min(displayLines[line].Length, end - lineStart);
                 if (endColumn > startColumn)
                 {
+                    using var layout = directWriteFactory.CreateTextLayout(displayLines[line], format, bounds.Width, TextLineHeight);
+                    var startX = TextPositionX(layout, startColumn, displayLines[line].Length);
+                    var endX = TextPositionX(layout, endColumn, displayLines[line].Length);
                     target.FillRectangle(
                         RectFromEdges(
-                            bounds.Left + startColumn * CharacterWidth,
+                            bounds.Left + startX,
                             top + line * TextLineHeight + 2.0f,
-                            bounds.Left + endColumn * CharacterWidth,
+                            bounds.Left + endX,
                             top + (line + 1) * TextLineHeight),
                         activeRowBrush);
                 }
@@ -1266,7 +1296,12 @@ internal sealed class DebugUi
             }
         }
 
-        private void DrawCaret(ID2D1RenderTarget target, ID2D1SolidColorBrush accentBrush, Rect box)
+        private void DrawCaret(
+            ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush accentBrush,
+            Rect box)
         {
             if (!IsFocused)
             {
@@ -1290,7 +1325,8 @@ internal sealed class DebugUi
                 if (caretIndex <= lineEnd || line == displayLines.Length - 1)
                 {
                     var column = Math.Clamp(caretIndex - lineStart, 0, displayLines[line].Length);
-                    var x = bounds.Left + column * CharacterWidth;
+                    using var layout = directWriteFactory.CreateTextLayout(displayLines[line], format, bounds.Width, TextLineHeight);
+                    var x = bounds.Left + TextPositionX(layout, column, displayLines[line].Length);
                     var y = top + line * TextLineHeight + 2.0f;
                     target.DrawLine(new Vector2(x, y), new Vector2(x, y + TextLineHeight - 2.0f), accentBrush, 1.25f);
                     return;
@@ -1325,6 +1361,52 @@ internal sealed class DebugUi
                 : bounds.Top;
         }
 
+        private void CacheLineHitGeometry(IDWriteFactory6 directWriteFactory, IDWriteTextFormat format, Rect box)
+        {
+            lineHitCache.Clear();
+            var bounds = TextBounds(box);
+            var displayLines = DisplayLines();
+            var top = TextTop(bounds, displayLines.Length);
+            var globalStart = DisplayStartIndex();
+            for (var line = 0; line < displayLines.Length; line++)
+            {
+                using var layout = directWriteFactory.CreateTextLayout(displayLines[line], format, bounds.Width, TextLineHeight);
+                var edges = new float[displayLines[line].Length + 1];
+                for (var index = 0; index < edges.Length; index++)
+                {
+                    edges[index] = TextPositionX(layout, index, displayLines[line].Length);
+                }
+
+                lineHitCache.Add(new LineHitCache(globalStart, bounds.Left, top + line * TextLineHeight, edges));
+                globalStart += displayLines[line].Length + 1;
+            }
+        }
+
+        private static float TextPositionX(IDWriteTextLayout layout, int position, int length)
+        {
+            if (length == 0)
+            {
+                return 0.0f;
+            }
+
+            var clamped = Math.Clamp(position, 0, length);
+            uint textPosition;
+            RawBool trailing;
+            if (clamped == length)
+            {
+                textPosition = (uint)Math.Max(0, length - 1);
+                trailing = new RawBool(true);
+            }
+            else
+            {
+                textPosition = (uint)clamped;
+                trailing = new RawBool(false);
+            }
+
+            layout.HitTestTextPosition(textPosition, trailing, out var x, out _, out _);
+            return x;
+        }
+
         private bool HasLabel => !string.IsNullOrWhiteSpace(Label);
 
         private float LabelLineHeight => HasLabel ? LabelHeight : 0.0f;
@@ -1338,6 +1420,8 @@ internal sealed class DebugUi
         private int SelectionStart => Math.Min(caretIndex, selectionAnchor);
 
         private int SelectionEnd => Math.Max(caretIndex, selectionAnchor);
+
+        private readonly record struct LineHitCache(int GlobalStart, float OriginX, float OriginY, float[] Edges);
 
         private static bool IsEmptyPrompt(string value)
         {
