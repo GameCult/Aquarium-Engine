@@ -1,4 +1,5 @@
 using Aquarium.Engine.Input;
+using Aquarium.Engine.Ui;
 
 namespace Aquarium.Engine.Render;
 
@@ -10,7 +11,7 @@ public interface IAquariumRenderer : IDisposable
 
     bool HasPresentedReadyFrame { get; }
 
-    void UpdateDebugUi(InputState input);
+    void UpdateUi(InputState input, AquariumUiDocument clientUi);
 
     void CycleRenderDebugMode();
 

@@ -47,7 +47,7 @@ public static class AquariumHost
             var deltaSeconds = (float)(now - lastFrame).TotalSeconds;
             lastFrame = now;
 
-            renderer.UpdateDebugUi(input);
+            renderer.UpdateUi(input, runtimeLoader.Runtime.Ui);
             ApplyRendererDebugInput(renderer, input);
             SyncRendererSettingsToRuntime(renderer, runtimeLoader.Runtime);
             runtimeLoader.Update(deltaSeconds, input);

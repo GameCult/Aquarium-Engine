@@ -2,6 +2,7 @@ using System.Numerics;
 using Aquarium.Engine;
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
+using Aquarium.Engine.Ui;
 using Aquarium.Epiphany.State;
 
 namespace Aquarium.Epiphany;
@@ -20,6 +21,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
     private Vector2 previousCursorWorld;
     private float secondsSinceStateSave;
     private bool graphicsSettingsDirty;
+    private bool timePaused;
 
     public AquariumRuntime(AquariumRuntimeOptions options)
     {
@@ -41,11 +43,19 @@ public sealed class AquariumRuntime : IAquariumRuntime
         ViewFrame = ViewFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
         previousFrameTimeSeconds = timeSeconds;
         previousCursorWorld = ViewFrame.Center;
+        Ui = new AquariumUiDocument()
+            .Panel("Epiphany", 396.0f, 82.0f, 360.0f, panel => panel
+                .Section("Runtime")
+                .Toggle("Pause Time", () => timePaused, value => timePaused = value, "Stops Epiphany simulation time while leaving the renderer alive.")
+                .Slider("Time", () => timeSeconds, value => timeSeconds = MathF.Max(0.0f, value), 0.0f, 720.0f, "0.0", "Scrubs Epiphany simulation time.")
+                .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache."));
     }
 
     public AquariumRuntimeOptions Options { get; }
 
     public AquariumRenderPlan RenderPlan { get; } = EpiphanyRenderPlan.Create();
+
+    public AquariumUiDocument Ui { get; }
 
     public AquariumFrame Frame => new(ViewFrame, cameraRig.Position, timeSeconds);
 
@@ -94,7 +104,11 @@ public sealed class AquariumRuntime : IAquariumRuntime
 
     public void Update(float deltaSeconds, InputState input)
     {
-        timeSeconds += Math.Max(deltaSeconds, 0.0f);
+        if (!timePaused)
+        {
+            timeSeconds += Math.Max(deltaSeconds, 0.0f);
+        }
+
         cameraRig.ApplyInput(input, deltaSeconds);
         ViewFrame = ViewFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
         secondsSinceStateSave += Math.Max(deltaSeconds, 0.0f);

@@ -1,5 +1,6 @@
 using Aquarium.Engine.Input;
 using Aquarium.Engine.Render;
+using Aquarium.Engine.Ui;
 
 namespace Aquarium.Engine;
 
@@ -12,6 +13,8 @@ public interface IAquariumRuntime : IDisposable
     GraphicsSettings GraphicsSettings { get; set; }
 
     AquariumRenderPlan RenderPlan { get; }
+
+    AquariumUiDocument Ui { get; }
 
     void Start();
 

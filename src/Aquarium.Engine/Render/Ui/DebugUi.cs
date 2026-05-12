@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Aquarium.Engine.Input;
+using Aquarium.Engine.Ui;
 using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.Mathematics;
@@ -9,9 +10,9 @@ namespace Aquarium.Engine.Render.Ui;
 
 internal sealed class DebugUi
 {
-    private const float PanelLeft = 18.0f;
-    private const float PanelTop = 82.0f;
-    private const float PanelWidth = 360.0f;
+    private const float DefaultPanelLeft = 18.0f;
+    private const float DefaultPanelTop = 82.0f;
+    private const float DefaultPanelWidth = 360.0f;
     private const float HeaderHeight = 42.0f;
     private const float RowHeight = 31.0f;
     private const float RowGap = 6.0f;
@@ -25,6 +26,9 @@ internal sealed class DebugUi
     private const float TooltipHeight = 34.0f;
 
     private readonly List<DebugUiControl> controls = [];
+    private readonly float panelLeft;
+    private readonly float panelTop;
+    private readonly float panelWidth;
     private int? activeSliderId;
     private int? activeControlId;
     private bool closeButtonHovered;
@@ -33,8 +37,16 @@ internal sealed class DebugUi
     private Vector2 mousePosition;
 
     public DebugUi(string title)
+        : this(title, DefaultPanelLeft, DefaultPanelTop, DefaultPanelWidth)
+    {
+    }
+
+    public DebugUi(string title, float left, float top, float width)
     {
         Title = title;
+        panelLeft = left;
+        panelTop = top;
+        panelWidth = width;
     }
 
     public string Title { get; }
@@ -43,11 +55,53 @@ internal sealed class DebugUi
 
     public bool WantsMouse { get; private set; }
 
+    public static DebugUi FromContract(AquariumUiPanel source)
+    {
+        var ui = new DebugUi(source.Title, source.Left, source.Top, source.Width);
+        foreach (var control in source.Controls)
+        {
+            ui.AddContractControl(control);
+        }
+
+        return ui;
+    }
+
     public DebugUi Panel(Action<DebugUiPanel> compose)
     {
         var panel = new DebugUiPanel(controls);
         compose(panel);
         return this;
+    }
+
+    private void AddContractControl(AquariumUiControl control)
+    {
+        switch (control)
+        {
+            case AquariumUiSection section:
+                controls.Add(new SectionControl(section.Label, () => section.Visible));
+                break;
+            case AquariumUiButton button:
+                controls.Add(new ButtonControl(button.Label, button.Action, button.Tooltip, () => button.Visible));
+                break;
+            case AquariumUiToggle toggle:
+                controls.Add(new ToggleControl(toggle.Label, toggle.Read, toggle.Write, toggle.Tooltip, () => toggle.Visible));
+                break;
+            case AquariumUiFloatSlider slider:
+                controls.Add(new FloatSliderControl(slider.Label, slider.Read, slider.Write, slider.Min, slider.Max, slider.Format, slider.Tooltip, () => slider.Visible));
+                break;
+            case AquariumUiIntSlider slider:
+                controls.Add(new IntSliderControl(slider.Label, slider.Read, slider.Write, slider.Min, slider.Max, slider.Tooltip, () => slider.Visible));
+                break;
+            case AquariumUiOptions options:
+                controls.Add(new OptionControl(
+                    options.Label,
+                    options.Read,
+                    options.Write,
+                    options.Options.Select(option => new DebugUiOption(option.Value, option.Label)).ToArray(),
+                    options.Tooltip,
+                    () => options.Visible));
+                break;
+        }
     }
 
     public void Update(InputState input)
@@ -223,15 +277,15 @@ internal sealed class DebugUi
 
     private void Layout()
     {
-        var y = PanelTop + HeaderHeight + 10.0f;
+        var y = panelTop + HeaderHeight + 10.0f;
         foreach (var control in controls.Where(control => control.IsVisible))
         {
             var height = control.LayoutHeight;
-            control.Bounds = RectFromEdges(PanelLeft + 10.0f, y, PanelLeft + PanelWidth - 10.0f, y + height);
+            control.Bounds = RectFromEdges(panelLeft + 10.0f, y, panelLeft + panelWidth - 10.0f, y + height);
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
 
-        panelBounds = RectFromEdges(PanelLeft, PanelTop, PanelLeft + PanelWidth, y + 30.0f);
+        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, y + 30.0f);
     }
 
     private Rect CloseButtonBounds()

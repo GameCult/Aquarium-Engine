@@ -82,7 +82,7 @@ internal sealed class DirectWriteOverlay : IDisposable
         smallFormat = CreateTextFormat("Ubuntu Sans", 11.0f, FontWeight.Regular);
     }
 
-    public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi)
+    public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi, IReadOnlyList<DebugUi> clientUiPanels)
     {
         renderTarget.BeginDraw();
         DrawHeader(
@@ -130,6 +130,28 @@ internal sealed class DirectWriteOverlay : IDisposable
             trackActiveBrush,
             width,
             height);
+        foreach (var panel in clientUiPanels)
+        {
+            panel.Draw(
+                renderTarget,
+                titleFormat,
+                smallFormat,
+                panelBrush,
+                rowBrush,
+                hoverRowBrush,
+                activeRowBrush,
+                outlineBrush,
+                primaryTextBrush,
+                quietTextBrush,
+                accentBrush,
+                accentHoverBrush,
+                accentActiveBrush,
+                dimAccentBrush,
+                trackHoverBrush,
+                trackActiveBrush,
+                width,
+                height);
+        }
         renderTarget.EndDraw();
     }
 

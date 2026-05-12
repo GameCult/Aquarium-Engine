@@ -3,6 +3,7 @@ using Aquarium.Engine.Render.Features;
 using Aquarium.Engine.Render.Graph;
 using SharpGen.Runtime;
 using Aquarium.Engine.Render.Ui;
+using Aquarium.Engine.Ui;
 using Vortice;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
@@ -89,6 +90,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly ID3D12Fence fence;
     private readonly AutoResetEvent fenceEvent = new(false);
     private readonly DebugUi debugUi;
+    private IReadOnlyList<DebugUi> clientUiPanels = [];
+    private AquariumUiDocument? currentClientUi;
     private ID3D11Resource[] overlayWrappedBackBuffers = [];
     private DirectWriteOverlay[] overlays = [];
     private D3D12RenderTarget heightFieldRenderTarget;
@@ -244,9 +247,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
     public bool HasPresentedReadyFrame => hasPresentedReadyFrame;
 
-    public void UpdateDebugUi(InputState input)
+    public void UpdateUi(InputState input, AquariumUiDocument clientUi)
     {
         debugUi.Update(input);
+        if (!ReferenceEquals(currentClientUi, clientUi))
+        {
+            currentClientUi = clientUi;
+            clientUiPanels = clientUi.Panels.Select(DebugUi.FromContract).ToArray();
+        }
+
+        foreach (var panel in clientUiPanels)
+        {
+            panel.Update(input);
+        }
     }
 
     public void CycleRenderDebugMode()
@@ -561,7 +574,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         var wrappedBackBuffer = overlayWrappedBackBuffers[frameIndex];
         overlayOn12Device.AcquireWrappedResources([wrappedBackBuffer]);
-        overlays[frameIndex].Render(frame, RenderDebugMode, debugUi);
+        overlays[frameIndex].Render(frame, RenderDebugMode, debugUi, clientUiPanels);
         overlayOn12Device.ReleaseWrappedResources([wrappedBackBuffer]);
         overlayContext.Flush();
         frameResources.BackBuffer.MarkState(ResourceStates.Present);
