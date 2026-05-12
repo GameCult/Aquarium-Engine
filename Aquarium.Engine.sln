@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameCult.Caching.MessagePac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameCult.Networking", "..\CultLib\src\GameCult.Networking\GameCult.Networking.csproj", "{BDE44048-7BA1-45C0-A69C-F70E5188FFE1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Sample.Minimal", "src\Aquarium.Sample.Minimal\Aquarium.Sample.Minimal.csproj", "{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -155,6 +157,18 @@ Global
 		{BDE44048-7BA1-45C0-A69C-F70E5188FFE1}.Release|x64.Build.0 = Release|Any CPU
 		{BDE44048-7BA1-45C0-A69C-F70E5188FFE1}.Release|x86.ActiveCfg = Release|Any CPU
 		{BDE44048-7BA1-45C0-A69C-F70E5188FFE1}.Release|x86.Build.0 = Release|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Debug|x64.Build.0 = Debug|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Debug|x86.Build.0 = Debug|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x64.ActiveCfg = Release|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x64.Build.0 = Release|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x86.ActiveCfg = Release|Any CPU
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -163,5 +177,6 @@ Global
 		{08D15A38-B6AB-459B-8BF9-3CCA8555A022} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{51FE01D8-9EEF-46B2-8D8C-3307AC2221C1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{33654E0D-B31A-4062-B6AC-C1CE4C1A1F65} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

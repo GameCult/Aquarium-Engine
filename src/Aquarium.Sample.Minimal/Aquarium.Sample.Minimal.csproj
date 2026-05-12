@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Aquarium.Sample.Minimal</AssemblyName>
+    <RootNamespace>Aquarium.Sample.Minimal</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aquarium.Engine.Contracts\Aquarium.Engine.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

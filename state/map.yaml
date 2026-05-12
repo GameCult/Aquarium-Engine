@@ -34,6 +34,8 @@ current_model:
     state_store: src/Aquarium.Epiphany/State/AquariumCultStateStore.cs
     state_document: epiphany.aquarium.live_state
     graphics_settings_document: epiphany.aquarium.graphics_settings
+  samples:
+    minimal_client: src/Aquarium.Sample.Minimal
   dependencies:
     cult_math: E:\Projects\CultMath
     cult_lib: E:\Projects\CultLib
@@ -81,6 +83,7 @@ renderer_state:
   next:
     - Extend explicit renderer debug modes for hits, normals, depth, bins, and lighting.
     - Replace the current legacy fixed D3D12 pass execution with the declared AquariumRenderPlan graph compiler and executor.
+    - Keep src/Aquarium.Sample.Minimal building and launchable as the non-Epiphany boundary proof.
     - Replace fixed fallback role motion with real CultNet-derived AgentVisualState.
     - Build each agent role body from one coherent low-cost SDF form model before adding ornamental or state-reactive detail.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.

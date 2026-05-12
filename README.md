@@ -43,6 +43,10 @@ dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --client-asse
 For Rider, open `Aquarium.Engine.sln`. The `.slnx` stays as the compact
 CLI-friendly solution, but Rider may show empty project trees when opening it.
 
+`src\Aquarium.Sample.Minimal` is a tiny non-Epiphany client used to keep the
+engine boundary honest. It references only `Aquarium.Engine.Contracts`, declares
+an `AquariumRenderPlan`, and boots through the same host/client loader path.
+
 For iteration while an Aquarium window is already open, use the dev reload
 runner instead of `dotnet run`:
 
