@@ -349,9 +349,14 @@ Math:
 
 - Exact sphere core with continuous inlay/vein fields on its surface.
 - A compact log-spherical lattice maps local direction and logarithmic radius
-  into nested shell waves. Orbital rails are level sets where radial shell bands
-  cross angular harmonic bands; gate nodes are the crossing points between
-  multiple bands in that same lattice.
+  into stable nested shells. Orbital rails are level sets where fixed radial
+  shell strata cross angular harmonic bands; gate nodes are the crossing points
+  between multiple bands in that same lattice.
+- Shell radius is structural, not animated. Phase may rotate each shell's
+  angular frame and add mild band distortion, but it must not move radial zero
+  crossings or create rings by expanding points into circles. Multiple
+  concentric shells should occupy orthogonal orbital frames so complexity nests
+  cleanly instead of colliding on one surface.
 - Smooth union is reserved for joining the core to lattice-derived rails,
   gates, inlays, and seam marks. Do not hand-place independent hoops or
   separate torus inventories when the form wants one coherent orbital grammar.

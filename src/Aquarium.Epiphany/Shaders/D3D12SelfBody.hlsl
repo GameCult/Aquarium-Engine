@@ -27,16 +27,39 @@ float3x3 selfOrbitalFrame(float phase)
         normalize(float3(0.38, -0.74 * c.x, 0.56 * c.y)));
 }
 
-float3 selfLatticeWaves(float3 dir, float shell, float phase)
+float3 selfLatticeCoordinates(float3 dir, float shellIndex, float phase)
 {
-    float3x3 frame = selfOrbitalFrame(phase);
+    float3x3 frame = selfOrbitalFrame(phase + shellIndex * 2.0943951);
     float3 latitude = mul(frame, dir);
-    return sin(latitude * float3(5.0, 6.0, 7.0) + shell * float3(1.15, -1.45, 1.85) + phase * float3(0.31, -0.23, 0.17));
+    float3 shellPhase = shellIndex * float3(1.3, 2.1, 3.4);
+    return latitude + 0.055 * sin(latitude.zxy * float3(3.0, 4.0, 5.0) + shellPhase + phase * 0.23);
 }
 
 float min3(float3 value)
 {
     return min(value.x, min(value.y, value.z));
+}
+
+float selfShellRadius(float shellIndex, float pressure)
+{
+    float radius = 0.64 + shellIndex * 0.22 + shellIndex * shellIndex * 0.035;
+    return lerp(radius, radius * 0.88, pressure);
+}
+
+void selfShellField(float3 dir, float r, float shellIndex, float pressure, float phase, inout float rail, inout float gate)
+{
+    float shell = r - selfShellRadius(shellIndex, pressure);
+    float3 bands = abs(selfLatticeCoordinates(dir, shellIndex, phase)) * r;
+    float thickness = lerp(0.010, 0.016, saturate(shellIndex * 0.5));
+
+    float shellRail = length(float2(shell, min3(bands))) - thickness;
+    float crossing = min(
+        length(float2(bands.x, bands.y)),
+        min(length(float2(bands.y, bands.z)), length(float2(bands.z, bands.x))));
+    float shellGate = length(float2(shell * 1.25, crossing * 0.72)) - (thickness * 1.9);
+
+    rail = min(rail, shellRail);
+    gate = min(gate, shellGate);
 }
 
 SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
@@ -50,25 +73,22 @@ SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
     float3 dir = local / r;
     float shell = log(r / 0.54);
     float coreRadius = 0.50 + 0.020 * sin(timeSeconds * 0.75 + heartbeat * 6.28318);
-    float shellTightness = lerp(1.0, 1.18, pressure);
+    float rail = 10.0;
+    float gate = 10.0;
 
-    float3 waves = selfLatticeWaves(dir, shell, phase);
-    float angularBand = min3(abs(waves));
-    float shellPhase = shell * (5.20 * shellTightness) + dot(waves, float3(0.18, -0.13, 0.15));
-    float shellBand = abs(sin(shellPhase)) * r / (5.20 * shellTightness);
+    [unroll]
+    for (int i = 0; i < 3; i++)
+    {
+        selfShellField(dir, r, (float)i, pressure, phase, rail, gate);
+    }
 
-    float railScale = r * (0.20 + 0.08 * saturate(abs(dir.z)));
-    float rail = length(float2(shellBand, angularBand * railScale)) - 0.012;
-
-    float crossing = min(
-        length(float2(abs(waves.x), abs(waves.y))),
-        min(length(float2(abs(waves.y), abs(waves.z))), length(float2(abs(waves.z), abs(waves.x)))));
-    float gate = length(float2(shellBand * 1.25, crossing * r * 0.18)) - (0.024 + activity * 0.010);
+    float3 coreBands = abs(selfLatticeCoordinates(dir, -1.0, phase));
+    float angularBand = min3(coreBands);
 
     float coreShell = r - (coreRadius + 0.006);
-    float coreInk = min(angularBand, abs(sin(shell * 2.2 + dot(waves, float3(0.21, 0.21, 0.21)) + phase * 0.19)));
+    float coreInk = min(angularBand, abs(sin(shell * 2.2 + dot(coreBands, float3(0.21, 0.21, 0.21)) + phase * 0.19)));
     float inlay = length(float2(coreShell, coreInk * r * 0.11)) - 0.006;
-    float seam = length(float2(r - (coreRadius + 0.002), abs(waves.x) * r * 0.09)) - lerp(0.002, 0.006, activity);
+    float seam = length(float2(r - (coreRadius + 0.002), coreBands.x * r * 0.09)) - lerp(0.002, 0.006, activity);
 
     float core = sdSphere(local, coreRadius);
     float routed = smoothUnion(core, inlay, 0.006);
@@ -84,7 +104,7 @@ SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
     field.seam = seam;
     field.distanceValue = routed;
     field.vein = 0.5 + 0.5 * sin(dot(dir, normalize(float3(0.37, 0.63, -0.68))) * 12.0 + shell * 1.7 + phase * 0.35);
-    field.glow = 0.5 + 0.5 * sin(shell * 2.1 + dot(waves, float3(0.42, 0.31, -0.27)) + phase * 0.55);
+    field.glow = 0.5 + 0.5 * sin(shell * 2.1 + dot(coreBands, float3(0.42, 0.31, -0.27)) + phase * 0.55);
     return field;
 }
 
