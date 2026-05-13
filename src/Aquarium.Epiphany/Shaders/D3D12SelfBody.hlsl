@@ -15,35 +15,35 @@ struct SelfParts
 struct SelfOrbitSpace
 {
     float r;
-    float theta;
-    float phi;
+    float3 dir;
+    float2 spinA;
+    float2 spinB;
+    float z;
     float shell;
     float scale;
 };
 
-float wrapPi(float value)
+float2 rotate2(float2 p, float angle)
 {
-    return frac(value / (2.0 * PI) + 0.5) * (2.0 * PI) - PI;
-}
-
-float periodicDistance(float value, float period)
-{
-    return abs(frac(value / period + 0.5) - 0.5) * period;
+    float c = cos(angle);
+    float s = sin(angle);
+    return float2(p.x * c - p.y * s, p.x * s + p.y * c);
 }
 
 SelfOrbitSpace selfOrbitSpace(float3 local, float phase)
 {
     float r = max(length(local), 0.0001);
-    float theta = atan2(local.y, local.x);
-    float phi = acos(clamp(local.z / r, -1.0, 1.0));
+    float3 dir = local / r;
     float logRadius = log(r / 0.58);
     float shell = logRadius * 2.35;
-    float polarTighten = 0.52 + 0.48 * sin(phi);
+    float polarTighten = 0.58 + 0.42 * sqrt(saturate(1.0 - dir.z * dir.z));
 
     SelfOrbitSpace space;
     space.r = r;
-    space.theta = theta + shell * 0.72 + phase * 0.18;
-    space.phi = phi + 0.18 * sin(theta * 2.0 - phase * 0.35);
+    space.dir = dir;
+    space.spinA = rotate2(dir.xy, shell * 0.72 + phase * 0.18);
+    space.spinB = rotate2(float2(dir.x, dir.z), shell * -0.48 + phase * 0.13);
+    space.z = dir.z;
     space.shell = shell;
     space.scale = r * polarTighten;
     return space;
@@ -58,9 +58,9 @@ float sdSelfCore(float3 local, float heartbeat, float timeSeconds)
 float sdSelfRailFamily(SelfOrbitSpace space, float pressure, float phase)
 {
     float shellRadius = space.r - lerp(0.76, 0.66, pressure);
-    float equatorRail = periodicDistance(space.phi - PI * 0.50 + 0.16 * sin(space.theta * 2.0 + phase), PI * 0.50);
-    float meridianRail = periodicDistance(space.theta + 0.34 * sin(space.phi * 2.0 - phase * 0.7), PI * 0.50);
-    float spiralRail = periodicDistance(space.theta * 1.5 + space.phi * 0.85 + space.shell - phase * 0.55, PI * 0.72);
+    float equatorRail = abs(space.z + 0.13 * sin(phase + space.spinA.x * 3.0));
+    float meridianRail = abs(dot(space.spinA, normalize(float2(0.76, 0.65))));
+    float spiralRail = abs(dot(float2(space.spinB.x, space.z), normalize(float2(0.62, 0.78))) + 0.22 * sin(space.shell + phase * 0.55));
     float shellRail = length(float2(shellRadius, equatorRail * space.scale)) - 0.018;
     float meridianTube = length(float2(shellRadius, meridianRail * space.scale)) - 0.014;
     float spiralTube = length(float2(shellRadius, spiralRail * space.scale)) - 0.012;
@@ -70,9 +70,9 @@ float sdSelfRailFamily(SelfOrbitSpace space, float pressure, float phase)
 float sdSelfGateFamily(SelfOrbitSpace space, float pressure, float phase)
 {
     float shellRadius = space.r - lerp(0.76, 0.66, pressure);
-    float equatorRail = periodicDistance(space.phi - PI * 0.50 + 0.16 * sin(space.theta * 2.0 + phase), PI * 0.50);
-    float meridianRail = periodicDistance(space.theta + 0.34 * sin(space.phi * 2.0 - phase * 0.7), PI * 0.50);
-    float spiralRail = periodicDistance(space.theta * 1.5 + space.phi * 0.85 + space.shell - phase * 0.55, PI * 0.72);
+    float equatorRail = abs(space.z + 0.13 * sin(phase + space.spinA.x * 3.0));
+    float meridianRail = abs(dot(space.spinA, normalize(float2(0.76, 0.65))));
+    float spiralRail = abs(dot(float2(space.spinB.x, space.z), normalize(float2(0.62, 0.78))) + 0.22 * sin(space.shell + phase * 0.55));
     float gateA = length(float3(shellRadius * 1.35, equatorRail * space.scale, meridianRail * space.scale)) - 0.036;
     float gateB = length(float3(shellRadius * 1.35, equatorRail * space.scale, spiralRail * space.scale)) - 0.030;
     return min(gateA, gateB);
@@ -80,7 +80,7 @@ float sdSelfGateFamily(SelfOrbitSpace space, float pressure, float phase)
 
 float sdSelfSeam(SelfOrbitSpace space, float activity)
 {
-    float seamBand = periodicDistance(space.phi - PI * 0.50, PI) * space.scale;
+    float seamBand = abs(space.z) * space.scale;
     float shellRadius = abs(space.r - lerp(0.515, 0.49, activity));
     return max(shellRadius - 0.010, seamBand - 0.028);
 }
