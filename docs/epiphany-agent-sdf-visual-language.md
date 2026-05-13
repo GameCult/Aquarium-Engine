@@ -332,18 +332,18 @@ Role ids: `coordinator`, `epiphany.self`
 
 Purpose: routing, authority, checkpoint, run state, and review boundary.
 
-Appearance: a central routing heart made of a warm core sphere crossed by
-several smooth torus arcs. The arcs look like quiet rails orbiting a command
-seed, with small gate nodes at their intersections. Self should feel central
-and decisive, not busy. The orrery comparison is a motion metaphor: the routing
+Appearance: a central routing heart made of a black void core crossed by
+several luminous band-like orbital rails. The rails look like an orrery orbiting
+a command seed. Self should feel central and decisive, not busy. The orrery
+comparison is a motion metaphor: the routing
 rails should have nested orbital order and slow phase motion rather than
 static, intersecting hoops. The angelic read should come from overwhelming but
 coherent symmetry and radiance, not literal symbolic anatomy.
 
 Reasoning: Self is not a worker lane. It preserves agency by routing work,
 rejecting bad authority claims, and deciding which organ deserves the next
-move. A central core with orbit gates makes the idea visible: many possible
-paths, one current routing decision.
+move. A central void core with nested orbit bands makes the idea visible: many
+possible paths, one current routing authority.
 
 Math:
 
@@ -353,23 +353,21 @@ Math:
   whose material regions can overtake the sphere.
 - A compact log-spherical lattice maps local direction and logarithmic radius
   into stable nested shells. Orbital rails are level sets where fixed radial
-  shell strata cross angular harmonic bands; gate nodes are compact crossings
-  where all angular bands agree in that same lattice. Pairwise shallow rail
-  intersections should remain rail material, not stretch into gate-colored
-  slabs.
+  shell strata cross angular harmonic bands. Do not preserve a separate gate
+  node field unless the nodes are visually readable and own a real routing
+  signal.
 - Shell radius is structural, not animated. Phase may rotate each shell's
   angular frame and add mild band distortion, but it must not move radial zero
   crossings or create rings by expanding points into circles. Multiple
   concentric shells should occupy orthogonal orbital frames so complexity nests
   cleanly instead of colliding on one surface.
-- Smooth union is reserved for joining the core to lattice-derived rails,
-  gates, inlays, and seam marks. Do not hand-place independent hoops or
-  separate torus inventories when the form wants one coherent orbital grammar.
-- Material regions: black void core, one gold core band, metallic
-  gold/orichalcum routing rails, bright current target gate, and dark review
-  seam. Rails should be readable bands rather than hairline emitters. Emission
-  belongs to active gate nodes and the core Fresnel rim; rails use PBR material
-  contrast so they do not turn into fireflies.
+- Smooth union is reserved for joining the core to lattice-derived rails and the
+  single core band. Do not hand-place independent hoops or separate torus
+  inventories when the form wants one coherent orbital grammar.
+- Material regions: black void core, one gold core band, and luminous
+  gold/orichalcum routing rails. Self's own direct SDF light is heavily
+  attenuated on Self surfaces; the core uses custom Fresnel, while the rail
+  bands use shaped material response plus controlled emission.
 - Implementation note: complexity should emerge from the coordinate
   abstraction. If the shader grows by adding more named hoop equations, stop and
   rebuild the field grammar instead.
@@ -379,12 +377,13 @@ Movement:
 - Slow center pulse from heartbeat phase.
 - Orbital rail families rotate at different slow phase rates so the orrery is a
   motion metaphor, not static decoration.
-- `targetRole` resolves through `roleAnchor(targetRole)`. The active routing
-  gate is the torus arc whose tangent points closest to `routeDirection`.
-- Selected target role lights that gate and sends a traveling pulse along the
-  matching arc.
+- `targetRole` resolves through `roleAnchor(targetRole)`. Future active routing
+  emphasis should travel along the lattice rail whose tangent points closest to
+  `routeDirection`; do not reintroduce invisible gate nodes as placeholder
+  symbolism.
 - `requiresReview` adds a narrow dark seam around the core.
-- `canAutoRun` sharpens and brightens the active gate.
+- `canAutoRun` sharpens and brightens the active rail emphasis when that signal
+  has a live visual contract.
 - High pressure makes the arcs tighten around the core instead of expanding.
 
 Surfaces:
