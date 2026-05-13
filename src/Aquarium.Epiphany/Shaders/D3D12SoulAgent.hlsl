@@ -25,6 +25,11 @@ struct SoulCutField
     float d;
 };
 
+float soulFacetEdge(float firstFace, float secondFace, float dominantFace)
+{
+    return max(abs(firstFace - secondFace), dominantFace - max(firstFace, secondFace));
+}
+
 SoulCutField soulCutField(float3 local, float confidence, float risk)
 {
     float breathe = 0.020 + confidence * 0.018;
@@ -71,24 +76,24 @@ SoulField soulField(float3 local, SdfObject sdfObject)
     float chamber = saturate(1.0 - length(cuts.warped) * 1.22);
 
     float riskPlane = cuts.b - cuts.c * 0.58 + cuts.d * 0.24 + 0.018 * sin(timeSeconds * 0.51 + confidence * 2.0);
-    float edgeAB = abs(faceA - faceB);
-    float edgeAC = abs(faceA - faceC);
-    float edgeAD = abs(faceA - faceD);
-    float edgeBC = abs(faceB - faceC);
-    float edgeBD = abs(faceB - faceD);
-    float edgeCD = abs(faceC - faceD);
-    float edgeAgreement = min(min(edgeAB, edgeAC), min(min(edgeAD, edgeBC), min(edgeBD, edgeCD)));
-    float riskEdge = min(min(edgeBC, edgeAD), edgeCD);
-    float riskWidth = lerp(0.010, 0.036, risk);
+    float edgeAB = soulFacetEdge(faceA, faceB, dominant);
+    float edgeAC = soulFacetEdge(faceA, faceC, dominant);
+    float edgeAD = soulFacetEdge(faceA, faceD, dominant);
+    float edgeBC = soulFacetEdge(faceB, faceC, dominant);
+    float edgeBD = soulFacetEdge(faceB, faceD, dominant);
+    float edgeCD = soulFacetEdge(faceC, faceD, dominant);
+    float edgeAgreement = min(edgeAD, edgeBC);
+    float riskEdge = edgeCD;
+    float riskWidth = lerp(0.006, 0.018, risk);
     float riskBand = max(riskEdge, abs(riskPlane) * 0.22 - (0.16 + risk * 0.10));
     float riskSeam = riskBand - riskWidth;
-    float branchA = max(edgeAC, abs(riskPlane + cuts.d * 0.18) * 0.24 - 0.11);
-    float branchB = max(edgeBD, abs(riskPlane - cuts.a * 0.16) * 0.24 - 0.10);
-    float branchC = max(edgeAB, abs(riskPlane + cuts.c * 0.12) * 0.24 - 0.09);
-    float fracture = min(min(branchA, branchB), branchC) - riskWidth * 0.40;
+    float branchA = max(edgeAC, abs(riskPlane + cuts.d * 0.18) * 0.30 - 0.075);
+    float branchB = max(edgeBD, abs(riskPlane - cuts.a * 0.16) * 0.30 - 0.070);
+    float branchC = max(edgeAB, abs(riskPlane + cuts.c * 0.12) * 0.30 - 0.065);
+    float fracture = min(min(branchA, branchB), branchC) - riskWidth * 0.50;
 
     float edgeMask = smoothstep(0.01, 0.10, dominant - smallest);
-    float findingWidth = lerp(0.008, 0.020, confidence) * edgeMask;
+    float findingWidth = lerp(0.004, 0.010, confidence) * edgeMask;
     float findingEdge = edgeAgreement - findingWidth;
     float paneA = abs(cuts.a * 0.62 + cuts.b * 0.28 - cuts.c * 0.18);
     float paneB = abs(cuts.c * 0.58 - cuts.d * 0.34 + cuts.a * 0.16);
@@ -98,13 +103,13 @@ SoulField soulField(float3 local, SdfObject sdfObject)
     float surfaceBand = 1.0 - smoothstep(0.010, 0.18, abs(body));
     float equatorLift = 1.0 - smoothstep(0.08, 0.56, abs(local.y));
     float activeFacet = smoothstep(0.02, 0.16, dominant - smallest);
-    float seamMask = 1.0 - smoothstep(0.0, riskWidth + 0.020, abs(riskSeam));
-    float findingMask = 1.0 - smoothstep(0.0, findingWidth + 0.018, abs(findingEdge));
-    float fractureMask = (1.0 - smoothstep(0.0, riskWidth + 0.016, abs(fracture))) * risk;
+    float seamMask = 1.0 - smoothstep(riskWidth * 0.25, riskWidth + 0.006, abs(riskSeam));
+    float findingMask = 1.0 - smoothstep(findingWidth * 0.25, findingWidth + 0.005, abs(findingEdge));
+    float fractureMask = (1.0 - smoothstep(riskWidth * 0.20, riskWidth + 0.004, abs(fracture))) * risk;
     float facetLift = (0.018 + confidence * 0.018 + risk * 0.018) * equatorLift * activeFacet;
-    float grooveCut = (0.014 + confidence * 0.010) * findingMask
-        + (0.018 + risk * 0.024) * seamMask * risk
-        + (0.012 + risk * 0.020) * fractureMask;
+    float grooveCut = (0.010 + confidence * 0.008) * findingMask
+        + (0.016 + risk * 0.020) * seamMask * risk
+        + (0.010 + risk * 0.018) * fractureMask;
     float relief = surfaceBand * (facetLift - grooveCut);
 
     SoulField field;
@@ -137,9 +142,9 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float confidence = saturate(sdfObject.state.y);
     float risk = saturate(sdfObject.state.z * 1.55 + (1.0 - confidence) * 0.35);
 
-    float riskMask = (1.0 - smoothstep(0.0, 0.030, abs(field.riskSeam))) * risk;
-    float fractureMask = (1.0 - riskMask) * (1.0 - smoothstep(0.0, 0.022, abs(field.fracture))) * risk;
-    float findingMask = (1.0 - riskMask) * (1.0 - fractureMask) * (1.0 - smoothstep(0.0, 0.028, abs(field.findingEdge)));
+    float riskMask = (1.0 - smoothstep(0.002, 0.016, abs(field.riskSeam))) * risk;
+    float fractureMask = (1.0 - riskMask) * (1.0 - smoothstep(0.0015, 0.012, abs(field.fracture))) * risk;
+    float findingMask = (1.0 - riskMask) * (1.0 - fractureMask) * (1.0 - smoothstep(0.002, 0.014, abs(field.findingEdge)));
     float paneMask = (1.0 - riskMask) * (1.0 - fractureMask) * (1.0 - findingMask) * (1.0 - smoothstep(0.0, 0.020, abs(field.paneGroove)));
     float facetMask = saturate(1.0 - riskMask - fractureMask - findingMask - paneMask);
 
@@ -153,10 +158,10 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.baseColor = facetColor * facetMask + paneColor * paneMask + findingColor * findingMask + riskColor * saturate(riskMask + fractureMask);
     surface.metallic = 0.0;
     surface.roughness = 0.055 * facetMask + 0.070 * paneMask + 0.080 * findingMask + 0.13 * saturate(riskMask + fractureMask);
-    surface.emission = paneColor * paneMask * (0.12 + confidence * 0.22)
-        + findingColor * findingMask * (0.42 + confidence * 0.82)
-        + riskColor * riskMask * (0.28 + risk * 0.95)
-        + riskColor * fractureMask * (0.20 + risk * 0.74);
+    surface.emission = paneColor * paneMask * (0.10 + confidence * 0.18)
+        + findingColor * findingMask * (0.30 + confidence * 0.58)
+        + riskColor * riskMask * (0.22 + risk * 0.70)
+        + riskColor * fractureMask * (0.16 + risk * 0.54);
     return surface;
 }
 
@@ -189,8 +194,8 @@ float3 soulCrystalShade(float3 p, float3 normal, int sdfIndex, SdfSurface surfac
     float internalChamber = field.chamber * field.chamber;
     float paneCaustic = (1.0 - smoothstep(0.0, 0.020, abs(field.paneGroove)))
         * (0.55 + 0.45 * sin((cuts.a * 17.0 + cuts.b * 23.0 + cuts.c * 31.0 + cuts.d * 11.0) + timeSeconds * 0.23));
-    float crackLight = (1.0 - smoothstep(0.0, 0.024, abs(field.riskSeam))) * risk
-        + (1.0 - smoothstep(0.0, 0.018, abs(field.fracture))) * risk * 0.82;
+    float crackLight = (1.0 - smoothstep(0.002, 0.014, abs(field.riskSeam))) * risk
+        + (1.0 - smoothstep(0.0015, 0.010, abs(field.fracture))) * risk * 0.82;
     float pulse = 0.88 + 0.12 * sin(timeSeconds * 1.7 + confidence * 2.4);
     float3 oathLight = float3(1.0, 0.95, 0.78) * pulse * (0.58 + confidence * 1.35) * (centerGlow * 0.78 + internalChamber * 1.32 + rimGlow * 0.26);
     float3 edgeLight = float3(0.42, 0.72, 1.0) * (rimGlow * 0.90 + facetFlash * 0.55 + paneCaustic * 0.60) * (0.72 + confidence * 0.9);
