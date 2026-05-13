@@ -26,6 +26,13 @@ This repo is not the Epiphany harness. The visible frame belongs to Aquarium.
   check standard literature, production talks, engine docs, or proven local
   patterns. Build the durable machine, not a sequence of shy approximations that
   accrete into Jenga.
+- When a visual, physical, or simulation spec describes a continuous form, start
+  with continuous field math or a coherent parameterization that owns the form.
+  Do not assemble the thing from piecewise capsules, boxes, slabs, adapters, or
+  helper organs just because that is the shortest path to pixels. Piecewise
+  construction is allowed only when the form itself is piecewise or when a
+  measured constraint makes the continuous model impractical; document that cut
+  line and keep the compensator small.
 - The camera target is the Grid center. Grid radius follows zoom distance.
   Pitch, yaw, and screen projection do not resize the Grid.
 - Body anchors are world-space simulation state. They do not ride with the Grid
