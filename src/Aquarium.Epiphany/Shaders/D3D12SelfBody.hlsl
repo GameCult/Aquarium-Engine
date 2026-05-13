@@ -15,14 +15,25 @@ struct SelfField
 
 float3x3 selfOrbitalFrame(float phase)
 {
-    float2 a = float2(cos(phase * 0.19), sin(phase * 0.19));
-    float2 b = float2(cos(phase * -0.13 + 1.7), sin(phase * -0.13 + 1.7));
-    float2 c = float2(cos(phase * 0.11 + 3.2), sin(phase * 0.11 + 3.2));
+    float3 pole = normalize(float3(
+        0.42 * cos(phase * 0.17) + 0.31 * sin(phase * 0.11 + 1.9),
+        0.47 * sin(phase * 0.23 + 1.1),
+        0.74 + 0.12 * cos(phase * 0.13 + 2.7)));
+    float3 seed = normalize(float3(
+        cos(phase * 0.31 + 2.0),
+        sin(phase * 0.29 + 0.6),
+        0.37 * sin(phase * 0.19 + 3.4)));
+
+    float3 tangentA = normalize(seed - pole * dot(seed, pole));
+    float3 tangentB = cross(pole, tangentA);
+    float spin = phase * 0.41;
+    float spinCos = cos(spin);
+    float spinSin = sin(spin);
 
     return float3x3(
-        normalize(float3(0.82 * a.x, 0.82 * a.y, 0.57)),
-        normalize(float3(-0.42 * b.x, 0.72, 0.56 * b.y)),
-        normalize(float3(0.38, -0.74 * c.x, 0.56 * c.y)));
+        tangentA * spinCos + tangentB * spinSin,
+        tangentB * spinCos - tangentA * spinSin,
+        pole);
 }
 
 float3 selfLatticeCoordinates(float3 dir, float shellIndex, float phase)
