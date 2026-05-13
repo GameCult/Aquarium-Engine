@@ -50,10 +50,8 @@ void selfShellField(float3 dir, float r, float shellIndex, float pressure, float
     float thickness = lerp(0.020, 0.030, saturate(shellIndex * 0.5));
 
     float shellRail = length(float2(shell, min3(bands))) - thickness;
-    float crossing = min(
-        length(float2(bands.x, bands.y)),
-        min(length(float2(bands.y, bands.z)), length(float2(bands.z, bands.x))));
-    float shellGate = length(float2(shell * 1.25, crossing * 0.72)) - (thickness * 1.55);
+    float crossing = length(bands);
+    float shellGate = length(float2(shell * 1.35, crossing * 0.90)) - (thickness * 1.35);
 
     rail = min(rail, shellRail);
     gate = min(gate, shellGate);

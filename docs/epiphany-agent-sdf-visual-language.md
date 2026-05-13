@@ -353,8 +353,10 @@ Math:
   whose material regions can overtake the sphere.
 - A compact log-spherical lattice maps local direction and logarithmic radius
   into stable nested shells. Orbital rails are level sets where fixed radial
-  shell strata cross angular harmonic bands; gate nodes are the crossing points
-  between multiple bands in that same lattice.
+  shell strata cross angular harmonic bands; gate nodes are compact crossings
+  where all angular bands agree in that same lattice. Pairwise shallow rail
+  intersections should remain rail material, not stretch into gate-colored
+  slabs.
 - Shell radius is structural, not animated. Phase may rotate each shell's
   angular frame and add mild band distortion, but it must not move radial zero
   crossings or create rings by expanding points into circles. Multiple
