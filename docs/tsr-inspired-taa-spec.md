@@ -241,24 +241,22 @@ Current Gate 3J implementation:
 - history/age/weight debug modes remain useful diagnostics, but stale Grid color
   history no longer drives the final visible Grid
 
-Current Gate 3L implementation:
+Current Gate 3L/3M implementation:
 
-- projection jitter is scaled to zero for the live frame
-- visible jitter on Self/planet surfaces means the resolve is not yet hiding the
-  sample offset well enough, so jitter stays disabled until opaque and Grid
-  paths both prove stable
-- the abandoned unjittered Grid retrace was removed; with jitter disabled, Grid
-  analytic color reconstructs from the existing current hit instead of solving
-  the surface twice
-
-Current Gate 3M implementation:
-
-- final presentation no longer blends temporal color history for any surface
-- the history, metadata, and control ping-pongs remain for debug views and for
-  future stochastic-event work
-- mode `0` is current-frame color after analytic Grid reconstruction and
-  tonemapping; modes `2` through `4` show what the diagnostic temporal path
-  would have sampled, aged, and weighted
+- projection jitter uses a small Halton sequence, currently scaled below half a
+  pixel so the resolve gets sample diversity without visible whole-frame wobble
+- current and previous jitter are both uploaded through frame constants; previous
+  history projection removes the previous jitter before sampling history
+- final presentation blends validated temporal color history in mode `0`
+- SDF object highlights have a narrow hot-current path: when the current SDF
+  sample is much brighter than valid reprojected history, color rejection is
+  relaxed so history can damp transient specular fireflies while travel, field,
+  normal, coverage, and coverage-continuity validation still apply
+- bloom presentation is attenuated when the resolved scene luminance is much
+  lower than the raw current scene luminance, so current-frame fireflies do not
+  keep blooming after temporal history has damped the underlying scene color
+- modes `2` through `4` show the sampled history, accepted history age, and
+  history weight
 
 Still missing:
 

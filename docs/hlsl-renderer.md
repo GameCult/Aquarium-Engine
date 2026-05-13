@@ -63,10 +63,13 @@ is allowed to quietly solve a bad light story.
 ## Temporal Diagnostics
 
 The temporal resolver is documented in `docs/tsr-inspired-taa-spec.md`. The live
-frame keeps color, metadata, and control history for inspection. Projection
-jitter is disabled and final presentation favors current truth over stale
-history. Dormant event lanes are not preserved without a producer and pass
-contract.
+frame keeps color, metadata, and control history. Projection jitter uses a small
+Halton sequence, and final presentation blends validated history. SDF object
+highlights get a narrow hot-current history path so transient specular spikes
+can be damped without relaxing travel, field, or normal validation. Bloom is
+attenuated when the resolved scene has damped a much hotter current sample, so
+transient fireflies do not keep blooming through the current-frame bloom path.
+Dormant event lanes are not preserved without a producer and pass contract.
 
 Debug modes:
 

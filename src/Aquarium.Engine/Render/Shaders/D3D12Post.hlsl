@@ -211,9 +211,9 @@ float3 bloomColorAt(float2 uv)
         bloomTexture2.SampleLevel(sourceSampler, uv, 0.0).rgb * 0.24;
 }
 
-float3 presentColor(float3 scene, float2 uv)
+float3 presentColor(float3 scene, float2 uv, float bloomScale)
 {
-    float3 bloom = bloomColorAt(uv);
+    float3 bloom = bloomColorAt(uv) * bloomScale;
     float3 exposedScene = scene * max(exposure, 0.001);
     return aces(exposedScene + bloom * bloomIntensity + luminance(bloom) * bloomVeilIntensity);
 }
@@ -330,6 +330,10 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float3 clampedHistory = clamp(previous.rgb, neighborhoodMin, neighborhoodMax);
             float colorDelta = length(clampedHistory - currentColor);
             float colorWeight = 1.0 - smoothstep(0.18, 1.2, colorDelta);
+            float currentLuma = luminance(currentColor);
+            float historyLuma = luminance(clampedHistory);
+            float hotSdfCurrent = currentFieldId >= FIELD_ID_SDF_OBJECT_BASE ? smoothstep(1.0, 5.0, currentLuma - historyLuma) : 0.0;
+            colorWeight = max(colorWeight, hotSdfCurrent * 0.82);
             float coverageWeight = smoothstep(0.02, 0.55, currentCoverage);
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
@@ -344,7 +348,8 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float combinedHistoryWeight = historyWeight;
     float combinedHistoryAge = historyAge;
     float3 resolved = lerp(currentColor, historyColor, combinedHistoryWeight);
-    float3 finalColor = presentColor(resolved, input.uv);
+    float bloomStability = saturate((luminance(resolved) + 0.25) / max(luminance(currentColor) + 0.25, 0.0001));
+    float3 finalColor = presentColor(resolved, input.uv, bloomStability);
     if (renderDebugMode > 0.5 && renderDebugMode < 1.5)
     {
         finalColor = aces(rawCurrentColor * max(exposure, 0.001));

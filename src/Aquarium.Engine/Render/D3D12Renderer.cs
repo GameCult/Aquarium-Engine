@@ -136,6 +136,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private Vector3 previousCameraPosition;
     private Vector2 previousViewCenter;
     private Vector2 previousCursorWorld;
+    private Vector2 previousJitterPixels;
     private float previousViewRadius = 0.001f;
     private float previousTimeSeconds;
     private D3D12HeightFieldBrushConstants heightFieldBrushConstants;
@@ -453,6 +454,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         var viewOrigin = new Vector3(frame.View.Center.X, frame.View.Center.Y, 0.0f);
         var farDistance = Vector3.Distance(frame.CameraPosition, viewOrigin) + MathF.Max(frame.View.Radius, 0.001f);
+        var jitterPixels = TemporalJitterPixels(temporalFrameIndex);
         if (temporalFrameIndex == 0)
         {
             previousCameraPosition = frame.CameraPosition;
@@ -460,6 +462,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             previousCursorWorld = frame.CursorWorld;
             previousViewRadius = frame.View.Radius;
             previousTimeSeconds = frame.TimeSeconds;
+            previousJitterPixels = jitterPixels;
         }
 
         CopySceneState(frame.Scene);
@@ -475,8 +478,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             previousCameraPosition,
             previousViewRadius,
             previousViewCenter,
-            Vector2.Zero,
-            Vector2.Zero,
+            jitterPixels,
+            previousJitterPixels,
             RenderDebugMode,
             settings.SceneExposure,
             settings.BloomIntensity,
@@ -563,9 +566,32 @@ public sealed class D3D12Renderer : IAquariumRenderer
         previousCursorWorld = frame.CursorWorld;
         previousViewRadius = frame.View.Radius;
         previousTimeSeconds = frame.TimeSeconds;
+        previousJitterPixels = jitterPixels;
         hasPresentedReadyFrame = true;
         temporalFrameIndex++;
         frameIndex = (int)swapChain.CurrentBackBufferIndex;
+    }
+
+    private static Vector2 TemporalJitterPixels(int index)
+    {
+        const float scale = 0.42f;
+        return new Vector2(
+            (Halton(index + 1, 2) - 0.5f) * scale,
+            (Halton(index + 1, 3) - 0.5f) * scale);
+    }
+
+    private static float Halton(int index, int basis)
+    {
+        var result = 0.0f;
+        var fraction = 1.0f / basis;
+        while (index > 0)
+        {
+            result += fraction * (index % basis);
+            index /= basis;
+            fraction /= basis;
+        }
+
+        return result;
     }
 
     private bool PipelinesReady =>
