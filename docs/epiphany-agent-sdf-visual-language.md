@@ -420,8 +420,11 @@ Role ids: `imagination`, `epiphany.imagination`
 
 Purpose: planning, drafts, backlog, objective shaping, and candidate options.
 
-Appearance: an impossible flower made from prismatic ribbon petals around a
-small idea seed. The silhouette should keep almost becoming another silhouette.
+Appearance: an impossible flower made from translucent prismatic ribbon-sheets
+around a luminous opal idea seed. It should read like glass, soap film, and
+aurora caught in a botanical topology: broad curling sheets, raised glowing
+rims, nested negative-space apertures, and a vertical fountain of candidate
+forms. The silhouette should keep almost becoming another silhouette.
 
 Reasoning: Imagination is generative, but not decorative chaos. It produces
 bounded candidate shapes: captures become drafts, drafts become objectives. Petals
@@ -429,15 +432,61 @@ and ribbons communicate branching possibility while still returning to a center.
 
 Math:
 
-- Polar lobe field around a seed sphere:
-  `r = base + amplitude * sin(k * theta + phase)`.
-- Ribbon petals as trefoil-knot tubes around the seed.
-- Smooth min unions for petal roots; sharp-ish material boundary near petal
-  tips.
-- Harmonic count `k = 4 + floor(activity * 3) + min(backlogCount, 3)`.
-  `amplitude = lerp(0.08, 0.28, activity)`.
-- Material regions: opal seed, pearlescent petals, emissive idea sparks, cool
+- Central opal bud: a faceted egg/superquadric seed, vertically upright, with a
+  small calyx-like cradle at its base. This is the topological root; all ribbons
+  either emerge from it or visibly curl around it.
+- Primary bloom: six large ribbon-sheets arranged as three mirrored pairs around
+  the seed. Each sheet has one continuous center curve rising from the lower
+  cradle, flaring outward, curling back inward to form a visible aperture, then
+  tapering to a lifted lip. The sheet is a thin slab/film around that curve, not
+  a fat ellipsoid or simple tube.
+- Sheet parameterization:
+  `u in [0,1]` moves from root to lip.
+  `center(u)` is a cubic Bezier or equivalent curve with upward lift, outward
+  flare, and inward curl.
+  `width(u)` grows from a narrow root to a broad blade, then narrows at the lip.
+  `thickness(u)` stays thin and nearly constant; visible mass comes from the
+  curled sheet area and raised rim, not from petal bulk.
+  `curl(u)` rotates the sheet normal around the center curve so the blade forms
+  a loop/aperture.
+- Raised rim: every primary sheet has two brighter rim tubes running along its
+  long edges. Rims define the readable silhouette and may use tapered capsule
+  chains. The translucent film between rims may be approximated with bounded
+  sheet/slab fields or material shimmer, but the rim paths must be actual traced
+  geometry.
+- Nested secondary curls: inside each primary aperture, add one smaller echo
+  ribbon or rim arc that follows the same curl direction. These secondary forms
+  are lower priority than the primary silhouette and should be LOD-gated before
+  they become a compile/runtime burden.
+- Vertical candidate filaments: a sparse set of golden emissive tendrils rises
+  from the seed through the center gap. These are thin tapered curves with small
+  bead sparks, not a particle swarm.
+- Harmonic layout controls: the overall bloom uses rotational harmonics only to
+  place and phase the ribbon families:
+  `pairCount = 3`, `primaryCount = 6`, `openness = activity`,
+  `curl = lerp(0.55, 1.25, activity)`, and
+  `secondaryCurlCount = min(backlogCount, 3)`.
+  Do not use a decorative polar radius field as the primary surface unless it
+  produces the same sheet, rim, and aperture topology.
+- Smooth unions are allowed at structural joins: seed-to-root cradle, root
+  bundles, rim-to-sheet contact, and bead/tendril bases. Do not smooth-union the
+  whole bloom into a blob; negative space is part of the form.
+- Material regions: opal seed, translucent pearlescent film, bright cyan/gold
+  rim highlights, emissive idea sparks, warm candidate filaments, and cool
   backlog shadow.
+
+Topology invariants:
+
+- The first read is a luminous central seed wrapped by broad translucent curling
+  ribbons.
+- At least three clean interior apertures must remain visible from the default
+  camera angle.
+- Primary ribbons must be sheets with rim structure, not merely tubes. Tubes may
+  carry rims and tendrils, but they do not satisfy the petal requirement alone.
+- The bloom is vertically biased: lower roots gather near the seed, upper lips
+  lift and curl outward like a fountain.
+- Fine glitter, internal color streaks, and star specks are material/shading
+  detail unless they are sparse bead sparks or candidate filaments.
 
 Movement:
 
