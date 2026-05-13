@@ -334,9 +334,10 @@ Purpose: routing, authority, checkpoint, run state, and review boundary.
 
 Appearance: a central routing heart made of a warm command sphere inside a
 fantasy orrery. Smooth torus arcs and tilted orbital rings cross around the
-core like authority rails, with small gate/eye nodes riding the orbits. It
-should carry a controlled many-eyed angelic read: radiant, watchful, and
-decisive, but not a uniform glow cloud.
+core like authority rails, with small gate nodes riding the active arcs. The
+angelic reference is a vibe of overwhelming ordered complexity, not literal
+eyes: Self should feel radiant, watchful, and decisive without becoming a
+uniform glow cloud or a cluster of loose symbols.
 
 Reasoning: Self is not a worker lane. It preserves agency by routing work,
 rejecting bad authority claims, and deciding which organ deserves the next
@@ -348,17 +349,19 @@ Math:
 - Exact sphere core with radius `1.0`.
 - Four torus arcs in tilted planes, clipped by angular masks.
 - Several thinner tilted orrery rings around the core.
-- Smooth union between the core, small gate-node spheres, and eye beads.
+- Smooth union between the core and small gate-node spheres.
 - Thin emissive routing filaments as torus-segment SDFs with sinusoidal radius
   modulation along the arc.
 - Material regions: warm ceramic core, metallic gold/orichalcum routing rails,
-  dimmer orrery rings, pale gate/eye bodies, bright current target pupils, and
-  dark review seam. Emission is an accent on rails, pupils, and active gates;
-  it must not wash out component boundaries.
+  dimmer orrery rings, pale gate bodies, bright current target accents, and
+  dark review seam. Emission is an accent on rails and active gates; it must
+  not wash out component boundaries.
 
 Movement:
 
 - Slow center pulse from heartbeat phase.
+- Orbital rails and rings rotate at different slow phase rates so the orrery is
+  a motion metaphor, not static decoration.
 - `targetRole` resolves through `roleAnchor(targetRole)`. The active routing
   gate is the torus arc whose tangent points closest to `routeDirection`.
 - Selected target role lights that gate and sends a traveling pulse along the
