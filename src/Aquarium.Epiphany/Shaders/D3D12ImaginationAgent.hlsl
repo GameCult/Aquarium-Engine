@@ -6,7 +6,9 @@ static const int SDF_INDEX = 2;
 struct ImaginationParts
 {
     float seed;
-    float ribbons;
+    float film;
+    float rim;
+    float tendrils;
     float sparks;
     float shadow;
     float distanceValue;
@@ -20,24 +22,7 @@ float2 harmonic5(float2 direction)
     float c3 = c2 * c;
     float c4 = c2 * c2;
     float c5 = c4 * c;
-    float cos5 = 16.0 * c5 - 20.0 * c3 + 5.0 * c;
-    float sin5 = s * (16.0 * c4 - 12.0 * c2 + 1.0);
-    return float2(cos5, sin5);
-}
-
-float2 harmonic7(float2 direction)
-{
-    float c = direction.x;
-    float s = direction.y;
-    float c2 = c * c;
-    float c3 = c2 * c;
-    float c4 = c2 * c2;
-    float c5 = c4 * c;
-    float c6 = c3 * c3;
-    float c7 = c6 * c;
-    float cos7 = 64.0 * c7 - 112.0 * c5 + 56.0 * c3 - 7.0 * c;
-    float sin7 = s * (64.0 * c6 - 80.0 * c4 + 24.0 * c2 - 1.0);
-    return float2(cos7, sin7);
+    return float2(16.0 * c5 - 20.0 * c3 + 5.0 * c, s * (16.0 * c4 - 12.0 * c2 + 1.0));
 }
 
 float sdImaginationSeed(float3 local, float activity, float phase)
@@ -46,63 +31,81 @@ float sdImaginationSeed(float3 local, float activity, float phase)
     float xyLength = length(xy);
     float2 direction = xyLength > 0.0001 ? xy / xyLength : float2(1.0, 0.0);
     float2 h5 = harmonic5(direction);
-    float2 h7 = harmonic7(direction);
-    float lobe5 = h5.x * cos(phase) - h5.y * sin(phase);
-    float lobe7 = h7.x * cos(phase * 1.31) - h7.y * sin(phase * 1.31);
-    float amplitude = lerp(0.08, 0.28, activity);
-    float lobe = lerp(lobe5, lobe7, smoothstep(0.48, 0.92, activity));
-    float verticalMask = 1.0 - smoothstep(0.44, 0.92, abs(local.z));
-    float radius = 0.30 + amplitude * lobe * verticalMask;
-    float seed = length(float3(local.xy, local.z * 0.86)) - radius;
-    return max(seed, abs(local.z) - 0.58);
+    float lobe = h5.x * cos(phase) - h5.y * sin(phase);
+    float verticalMask = 1.0 - smoothstep(0.40, 0.76, abs(local.z - 0.02));
+    float radius = 0.24 + lerp(0.04, 0.15, activity) * lobe * verticalMask;
+    float egg = length(float3(local.xy / max(radius, 0.04), (local.z - 0.04) / 0.38)) - 1.0;
+    return egg * min(radius, 0.38);
 }
 
-float3 trefoilPoint(float t, float twist, float openness)
+float pairCenterOut(float u, float activity)
 {
-    float x = sin(t) + 2.0 * sin(2.0 * t);
-    float y = cos(t) - 2.0 * cos(2.0 * t);
-    float z = -sin(3.0 * t);
-    float2 rotated = float2(
-        x * cos(twist) - y * sin(twist),
-        x * sin(twist) + y * cos(twist));
-    return float3(rotated * (0.155 + openness * 0.015), z * (0.105 + openness * 0.020) + 0.16);
+    return 0.12 + 0.92 * u - 0.42 * u * u + 0.05 * activity * sin(u * 6.28318);
 }
 
-float sdTrefoilSegment(float3 local, float twist, float openness, float phase, float segmentIndex)
+float pairCenterSide(float u, float curl)
 {
-    float t0 = (segmentIndex / 6.0) * 6.2831853 + phase;
-    float t1 = ((segmentIndex + 1.0) / 6.0) * 6.2831853 + phase;
-    float u = (segmentIndex + 1.0) / 6.0;
-    float tubeRadius = lerp(0.046, 0.032, smoothstep(0.35, 1.0, u));
-    return sdCapsuleSegment(local, trefoilPoint(t0, twist, openness), trefoilPoint(t1, twist, openness), tubeRadius);
+    return curl * 0.20 * sin(u * 3.14159) * smoothstep(0.08, 0.82, u);
 }
 
-float sdTrefoilRibbonTube(float3 local, float twist, float activity, float heartbeat, float timeSeconds)
+float pairWidth(float u, float activity)
 {
-    float openness = lerp(0.55, 1.0, activity);
-    float phase = timeSeconds * 0.25 + heartbeat * 6.28318;
-    float distanceValue = sdTrefoilSegment(local, twist, openness, phase, 0.0);
-    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 1.0));
-    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 2.0));
-    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 3.0));
-    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 4.0));
-    distanceValue = min(distanceValue, sdTrefoilSegment(local, twist, openness, phase, 5.0));
-    return distanceValue;
+    return 0.045 + sin(saturate(u) * 3.14159) * (0.24 + activity * 0.07);
 }
 
-float sdRibbonRoot(float3 local, float angle)
+float3 pairPoint(float angle, float u, float signedEdge, float activity, float curl)
 {
     float2 radial = float2(cos(angle), sin(angle));
-    float3 a = float3(radial * 0.10, -0.02);
-    float3 b = float3(radial * 0.26, 0.11);
-    return sdTaperedCapsuleSegment(local, a, b, 0.040, 0.022);
+    float2 tangent = float2(-radial.y, radial.x);
+    float side = pairCenterSide(u, curl) + signedEdge * pairWidth(u, activity);
+    float lift = -0.28 + 1.05 * u;
+    return float3(radial * pairCenterOut(u, activity) + tangent * side, lift);
+}
+
+float sdSheetPairFilm(float3 local, float angle, float activity, float curl)
+{
+    float2 radial = float2(cos(angle), sin(angle));
+    float2 tangent = float2(-radial.y, radial.x);
+    float3 q = float3(dot(local.xy, radial), dot(local.xy, tangent), local.z);
+    float u = saturate((q.z + 0.28) / 1.05);
+    float sideCenter = pairCenterSide(u, curl);
+    float sheetOut = abs(q.x - pairCenterOut(u, activity)) - 0.028;
+    float sheetSide = abs(abs(q.y) - sideCenter) - pairWidth(u, activity);
+    float sheetRange = max(-u, u - 1.0) * 1.05;
+    return max(max(sheetOut, sheetSide), sheetRange);
+}
+
+float sdSheetPairRims(float3 local, float angle, float activity, float curl)
+{
+    float outerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, 1.0, activity, curl), pairPoint(angle, 1.00, 1.0, activity, curl), 0.030, 0.016);
+    float outerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, -1.0, activity, curl), pairPoint(angle, 1.00, -1.0, activity, curl), 0.030, 0.016);
+    float innerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.10, -0.72, activity, curl), pairPoint(angle, 0.92, -0.72, activity, curl), 0.022, 0.014);
+    float innerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.10, 0.72, activity, curl), pairPoint(angle, 0.92, 0.72, activity, curl), 0.022, 0.014);
+    float root = sdTaperedCapsuleSegment(local, float3(0.0, 0.0, -0.18), pairPoint(angle, 0.16, 0.0, activity, curl), 0.052, 0.030);
+    return smoothUnion(min(min(outerA, outerB), min(innerA, innerB)), root, 0.035);
+}
+
+float sdSheetPair(float3 local, float angle, float activity, float curl, out float film, out float rim)
+{
+    film = sdSheetPairFilm(local, angle, activity, curl);
+    rim = sdSheetPairRims(local, angle, activity, curl);
+    return smoothUnion(film, rim, 0.018);
+}
+
+float sdCandidateTendril(float3 local, float angle, float height, float phase)
+{
+    float2 radial = float2(cos(angle), sin(angle));
+    float3 a = float3(radial * 0.03, 0.02);
+    float3 b = float3(radial * (0.08 + 0.04 * sin(phase)), height * 0.52);
+    float3 c = float3(radial * (0.16 + 0.05 * cos(phase)), height);
+    return sdQuadraticTube(local, a, b, c, 0.010, 0.004);
 }
 
 float sdImaginationSparks(float3 local, float phase, float activity)
 {
-    float spark0 = sdSphere(local - float3(cos(phase) * 0.47, sin(phase) * 0.47, 0.32), 0.036);
-    float spark1 = sdSphere(local - float3(cos(phase + 2.31) * 0.40, sin(phase + 2.31) * 0.40, 0.44), 0.028 + activity * 0.010);
-    float spark2 = sdSphere(local - float3(cos(phase + 4.42) * 0.52, sin(phase + 4.42) * 0.52, 0.22), 0.026);
+    float spark0 = sdSphere(local - float3(cos(phase) * 0.24, sin(phase) * 0.24, 0.58), 0.030);
+    float spark1 = sdSphere(local - float3(cos(phase + 2.31) * 0.16, sin(phase + 2.31) * 0.16, 0.42), 0.022 + activity * 0.008);
+    float spark2 = sdSphere(local - float3(cos(phase + 4.42) * 0.28, sin(phase + 4.42) * 0.28, 0.70), 0.020);
     return min(spark0, min(spark1, spark2));
 }
 
@@ -111,33 +114,43 @@ ImaginationParts imaginationParts(float3 local, SdfObject sdfObject, float timeS
     float activity = saturate(sdfObject.state.x);
     float heartbeat = saturate(sdfObject.state.y);
     float pressure = saturate(sdfObject.state.z);
-    float phase = timeSeconds * 0.31 + heartbeat * 1.7;
+    float phase = timeSeconds * 0.18 + heartbeat * 1.7;
+    float curl = lerp(0.55, 1.25, activity);
     float seed = sdImaginationSeed(local, activity, phase);
 
-    float ribbon0 = sdTrefoilRibbonTube(local, phase + 0.00, activity, heartbeat, timeSeconds);
-    float ribbon1 = sdTrefoilRibbonTube(local, phase + 2.09, activity, heartbeat, timeSeconds);
-    float ribbon2 = sdTrefoilRibbonTube(local, phase + 4.18, activity, heartbeat, timeSeconds);
-    float ribbons = min(ribbon0, min(ribbon1, ribbon2));
+    float film0;
+    float rim0;
+    float sheet0 = sdSheetPair(local, phase + 0.00, activity, curl, film0, rim0);
+    float film1;
+    float rim1;
+    float sheet1 = sdSheetPair(local, phase + 2.09, activity, curl, film1, rim1);
+    float film2;
+    float rim2;
+    float sheet2 = sdSheetPair(local, phase + 4.18, activity, curl, film2, rim2);
 
-    float root0 = sdRibbonRoot(local, phase + 0.00);
-    float root1 = sdRibbonRoot(local, phase + 2.09);
-    float root2 = sdRibbonRoot(local, phase + 4.18);
-    float roots = min(root0, min(root1, root2));
-    ribbons = smoothUnion(ribbons, roots, 0.045);
+    float film = min(film0, min(film1, film2));
+    float rim = min(rim0, min(rim1, rim2));
+    float sheets = min(sheet0, min(sheet1, sheet2));
 
-    float sparks = sdImaginationSparks(local, phase * 1.7, activity);
-    float shadowRing = sdTorus((local - float3(0.0, 0.0, -0.20 - pressure * 0.05)).xzy, float2(0.36 + pressure * 0.09, 0.026));
-    float shadow = max(shadowRing, local.z + 0.18);
+    float tendril0 = sdCandidateTendril(local, phase + 0.40, 0.78, timeSeconds * 0.50);
+    float tendril1 = sdCandidateTendril(local, phase + 2.70, 0.62, timeSeconds * 0.47 + 1.7);
+    float tendrils = min(tendril0, tendril1);
+    float sparks = sdImaginationSparks(local, phase * 2.1, activity);
+    float shadowRing = sdTorus((local - float3(0.0, 0.0, -0.26 - pressure * 0.04)).xzy, float2(0.32 + pressure * 0.08, 0.024));
+    float shadow = max(shadowRing, local.z + 0.23);
 
-    float flower = smoothUnion(seed, ribbons, 0.075);
-    flower = smoothUnion(flower, sparks, 0.026);
+    float bloom = smoothUnion(seed, sheets, 0.075);
+    bloom = smoothUnion(bloom, tendrils, 0.018);
+    bloom = smoothUnion(bloom, sparks, 0.020);
 
     ImaginationParts parts;
     parts.seed = seed;
-    parts.ribbons = ribbons;
+    parts.film = film;
+    parts.rim = rim;
+    parts.tendrils = tendrils;
     parts.sparks = sparks;
     parts.shadow = shadow;
-    parts.distanceValue = smoothUnion(flower, shadow, 0.035);
+    parts.distanceValue = smoothUnion(bloom, shadow, 0.030);
     return parts;
 }
 
@@ -155,25 +168,29 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float radius = max(sdfObject.centerRadius.w, 0.001);
     float3 local = (p - sdfObject.centerRadius.xyz) / radius;
     ImaginationParts parts = imaginationParts(local, sdfObject, timeSeconds);
-    float bloomPart = min(parts.seed, parts.ribbons);
+    float bloomPart = min(parts.seed, min(parts.film, parts.rim));
     float isSpark = parts.sparks <= min(bloomPart, parts.shadow) ? 1.0 : 0.0;
-    float isShadow = (1.0 - isSpark) * (parts.shadow <= bloomPart ? 1.0 : 0.0);
-    float isRibbon = (1.0 - isSpark) * (1.0 - isShadow) * (parts.ribbons <= parts.seed ? 1.0 : 0.0);
-    float isSeed = (1.0 - isSpark) * (1.0 - isShadow) * (1.0 - isRibbon);
+    float isTendril = (1.0 - isSpark) * (parts.tendrils <= min(bloomPart, parts.shadow) ? 1.0 : 0.0);
+    float isShadow = (1.0 - isSpark) * (1.0 - isTendril) * (parts.shadow <= bloomPart ? 1.0 : 0.0);
+    float isRim = (1.0 - isSpark) * (1.0 - isTendril) * (1.0 - isShadow) * (parts.rim <= min(parts.seed, parts.film) ? 1.0 : 0.0);
+    float isFilm = (1.0 - isSpark) * (1.0 - isTendril) * (1.0 - isShadow) * (1.0 - isRim) * (parts.film <= parts.seed ? 1.0 : 0.0);
+    float isSeed = (1.0 - isSpark) * (1.0 - isTendril) * (1.0 - isShadow) * (1.0 - isRim) * (1.0 - isFilm);
     float shimmer = 0.5 + 0.5 * sin(local.x * 5.0 - local.y * 3.0 + local.z * 4.0 + timeSeconds * 1.2);
     float3 seedColor = lerp(float3(0.34, 0.16, 0.78), float3(0.88, 0.78, 1.0), shimmer);
-    float3 ribbonColor = lerp(float3(0.54, 0.18, 0.96), float3(1.0, 0.56, 0.94), saturate(sdfObject.state.x));
+    float3 filmColor = lerp(float3(0.22, 0.72, 1.0), float3(1.0, 0.50, 0.94), saturate(sdfObject.state.x));
+    float3 rimColor = lerp(float3(0.72, 1.0, 1.0), float3(1.0, 0.78, 0.34), shimmer);
     float3 sparkColor = float3(1.0, 0.74, 0.26);
     float3 shadowColor = float3(0.08, 0.07, 0.20);
 
     SdfSurface surface;
-    surface.baseColor = seedColor * isSeed + ribbonColor * isRibbon + sparkColor * isSpark + shadowColor * isShadow;
+    surface.baseColor = seedColor * isSeed + filmColor * isFilm + rimColor * isRim + sparkColor * (isSpark + isTendril) + shadowColor * isShadow;
     surface.metallic = 0.0;
-    surface.roughness = 0.32 * isSeed + 0.24 * isRibbon + 0.16 * isSpark + 0.72 * isShadow;
+    surface.roughness = 0.32 * isSeed + 0.16 * isFilm + 0.20 * isRim + 0.14 * (isSpark + isTendril) + 0.72 * isShadow;
     surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex))
-        + seedColor * isSeed * 0.10
-        + ribbonColor * isRibbon * (0.12 + sdfObject.state.y * 0.10)
-        + sparkColor * isSpark * 1.35
+        + seedColor * isSeed * 0.12
+        + filmColor * isFilm * (0.10 + sdfObject.state.y * 0.10)
+        + rimColor * isRim * (0.55 + sdfObject.state.y * 0.20)
+        + sparkColor * (isSpark * 1.35 + isTendril * 0.85)
         + shadowColor * isShadow * 0.015;
     return surface;
 }
