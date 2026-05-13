@@ -48,7 +48,7 @@ void selfShellField(float3 dir, float r, float shellIndex, float pressure, float
     float3 bands = abs(selfLatticeCoordinates(dir, shellIndex, phase)) * r;
     float thickness = lerp(0.020, 0.030, saturate(shellIndex * 0.5));
 
-    float shellRail = max(abs(shell) - thickness * 0.34, min3(bands) - thickness * 1.55);
+    float shellRail = length(float2(shell * 1.18, min3(bands) * 0.74)) - thickness;
 
     rail = min(rail, shellRail);
 }
@@ -112,11 +112,11 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
 
     SdfSurface surface;
     surface.baseColor = coreColor * isCore + inlayColor * isInlay + railColor * isRail;
-    surface.metallic = 0.0 * isCore + 0.38 * isInlay + 0.58 * isRail;
-    surface.roughness = 1.0 * isCore + 0.34 * isInlay + 0.36 * isRail;
+    surface.metallic = 0.0 * isCore + 0.62 * isInlay + 0.76 * isRail;
+    surface.roughness = 1.0 * isCore + 0.22 * isInlay + 0.26 * isRail;
 
-    surface.emission = inlayColor * isInlay * 0.45
-        + railColor * isRail * (0.85 + sdfObject.state.y * 0.18);
+    surface.emission = inlayColor * isInlay * 0.34
+        + railColor * isRail * (0.42 + sdfObject.state.y * 0.10);
     return surface;
 }
 
