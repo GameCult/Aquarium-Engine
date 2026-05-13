@@ -8,6 +8,7 @@ struct SelfField
     float core;
     float inlay;
     float rail;
+    float stripe;
     float gate;
     float distanceValue;
 };
@@ -43,17 +44,24 @@ float selfShellRadius(float shellIndex, float pressure)
     return lerp(radius, radius * 0.88, pressure);
 }
 
-void selfShellField(float3 dir, float r, float shellIndex, float pressure, float phase, inout float rail, inout float gate)
+void selfShellField(float3 dir, float r, float shellIndex, float pressure, float phase, inout float rail, inout float stripe, inout float gate)
 {
     float shell = r - selfShellRadius(shellIndex, pressure);
     float3 bands = abs(selfLatticeCoordinates(dir, shellIndex, phase)) * r;
-    float thickness = lerp(0.020, 0.030, saturate(shellIndex * 0.5));
+    float band = min3(bands);
+    float radialHalf = lerp(0.015, 0.021, saturate(shellIndex * 0.5));
+    float bandHalf = lerp(0.040, 0.058, saturate(shellIndex * 0.5));
+    float rounding = radialHalf * 0.62;
 
-    float shellRail = length(float2(shell, min3(bands))) - thickness;
+    float2 railBand = abs(float2(shell, band)) - float2(radialHalf, bandHalf);
+    float shellRail = length(max(railBand, 0.0)) + min(max(railBand.x, railBand.y), 0.0) - rounding;
+    float2 innerStripe = abs(float2(shell + radialHalf + rounding * 0.70, band)) - float2(radialHalf * 0.30, bandHalf * 0.18);
+    float shellStripe = length(max(innerStripe, 0.0)) + min(max(innerStripe.x, innerStripe.y), 0.0) - radialHalf * 0.05;
     float crossing = length(bands);
-    float shellGate = length(float2(shell * 1.35, crossing * 0.90)) - (thickness * 1.35);
+    float shellGate = length(float2(shell * 1.35, crossing * 0.90)) - (bandHalf * 0.72);
 
     rail = min(rail, shellRail);
+    stripe = min(stripe, shellStripe);
     gate = min(gate, shellGate);
 }
 
@@ -67,12 +75,13 @@ SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
     float3 dir = local / r;
     float coreRadius = 0.50;
     float rail = 10.0;
+    float stripe = 10.0;
     float gate = 10.0;
 
     [unroll]
     for (int i = 0; i < 3; i++)
     {
-        selfShellField(dir, r, (float)i, pressure, phase, rail, gate);
+        selfShellField(dir, r, (float)i, pressure, phase, rail, stripe, gate);
     }
 
     float3 coreBands = abs(selfLatticeCoordinates(dir, -1.0, phase));
@@ -89,6 +98,7 @@ SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
     field.core = core;
     field.inlay = inlay;
     field.rail = rail;
+    field.stripe = stripe;
     field.gate = gate;
     field.distanceValue = routed;
     return field;
@@ -111,21 +121,24 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
 
     float isGate = field.gate <= min(min(field.core, field.inlay), field.rail) ? 1.0 : 0.0;
     float isRail = (1.0 - isGate) * (field.rail <= min(field.core, field.inlay) ? 1.0 : 0.0);
+    float isStripe = isRail * (field.stripe <= 0.0 ? 1.0 : 0.0);
     float isInlay = (1.0 - isGate) * (1.0 - isRail) * (field.inlay <= field.core ? 1.0 : 0.0);
     float isCore = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isInlay);
 
     float3 coreColor = float3(0.0, 0.0, 0.0);
     float3 inlayColor = float3(1.0, 0.70, 0.22);
     float3 railColor = float3(0.86, 0.54, 0.20);
+    float3 stripeColor = float3(1.0, 0.84, 0.34);
     float3 gateColor = lerp(float3(0.78, 0.66, 0.42), float3(1.0, 0.82, 0.42), saturate(sdfObject.state.x));
 
     SdfSurface surface;
-    surface.baseColor = coreColor * isCore + inlayColor * isInlay + railColor * isRail + gateColor * isGate;
+    surface.baseColor = coreColor * isCore + inlayColor * isInlay + lerp(railColor, stripeColor, isStripe) * isRail + gateColor * isGate;
     surface.metallic = 0.0 * isCore + 0.64 * isInlay + 0.72 * isRail + 0.18 * isGate;
     surface.roughness = 1.0 * isCore + 0.20 * isInlay + 0.24 * isRail + 0.18 * isGate;
 
     float3 selfLight = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
     surface.emission = selfLight * (isGate * 0.08)
+        + stripeColor * isStripe * (0.92 + sdfObject.state.y * 0.16)
         + gateColor * isGate * (0.42 + sdfObject.state.y * 0.12);
     return surface;
 }
