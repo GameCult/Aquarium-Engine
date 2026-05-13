@@ -85,7 +85,7 @@ SelfParts selfParts(float3 local, SdfObject sdfObject, float timeSeconds)
     float pressure = saturate(sdfObject.state.z);
     float phase = timeSeconds * 0.55 + heartbeat * 6.28318;
     float pulse = 0.025 * sin(phase);
-    float core = sdSphere(local, 0.62 + pulse);
+    float core = sdSphere(local, 0.48 + pulse);
 
     float arc0 = sdRoutingArc(local, 0.00, 0.50, pressure, phase);
     float arc1 = sdRoutingArc(local, 1.57, -0.58, pressure, phase + 1.2);
@@ -116,11 +116,11 @@ SelfParts selfParts(float3 local, SdfObject sdfObject, float timeSeconds)
     float pupil3 = eyePupil(local, -1.18, 0.28, -0.72 + phase * 0.05, 0.74);
     float pupil = min(min(pupil0, pupil1), min(pupil2, pupil3));
 
-    float seamRing = sdTorus(local.xzy, float2(0.63, 0.012));
+    float seamRing = sdTorus(local.xzy, float2(0.50, 0.010));
     float seamMask = abs(local.z) - 0.10;
     float seam = max(seamRing, -seamMask);
 
-    float routed = smoothUnion(core, rail, 0.045);
+    float routed = smoothUnion(core, rail, 0.030);
     routed = smoothUnion(routed, halo, 0.020);
     routed = smoothUnion(routed, gate, 0.036);
     routed = smoothUnion(routed, pupil, 0.010);
@@ -159,10 +159,10 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float isSeam = (1.0 - isPupil) * (1.0 - isGate) * (1.0 - isRail) * (1.0 - isHalo) * (parts.seam <= min(parts.core, nonCore) ? 1.0 : 0.0);
     float isCore = (1.0 - isPupil) * (1.0 - isGate) * (1.0 - isRail) * (1.0 - isHalo) * (1.0 - isSeam);
     float glow = 0.5 + 0.5 * sin(timeSeconds * 1.4 + local.x * 2.0 - local.y * 1.5 + local.z * 2.5);
-    float3 coreColor = lerp(float3(0.82, 0.46, 0.24), float3(1.0, 0.72, 0.42), glow);
-    float3 railColor = float3(0.96, 0.58, 0.20);
+    float3 coreColor = lerp(float3(0.50, 0.26, 0.15), float3(0.82, 0.48, 0.26), glow);
+    float3 railColor = float3(0.78, 0.45, 0.16);
     float3 haloColor = float3(0.70, 0.53, 0.34);
-    float3 gateColor = lerp(float3(0.90, 0.78, 0.54), float3(1.0, 0.92, 0.68), saturate(sdfObject.state.x));
+    float3 gateColor = lerp(float3(0.70, 0.62, 0.46), float3(0.92, 0.78, 0.50), saturate(sdfObject.state.x));
     float3 pupilColor = float3(0.10, 0.045, 0.018);
     float3 seamColor = float3(0.06, 0.028, 0.020);
 
@@ -170,12 +170,13 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.baseColor = coreColor * isCore + railColor * isRail + haloColor * isHalo + gateColor * isGate + pupilColor * isPupil + seamColor * isSeam;
     surface.metallic = 0.0 * isCore + 0.65 * isRail + 0.82 * isHalo + 0.0 * isGate + 0.0 * isPupil + 0.0 * isSeam;
     surface.roughness = 0.42 * isCore + 0.26 * isRail + 0.22 * isHalo + 0.18 * isGate + 0.32 * isPupil + 0.78 * isSeam;
-    surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex))
-        + coreColor * isCore * 0.10
-        + railColor * isRail * 0.42
-        + haloColor * isHalo * 0.10
-        + gateColor * isGate * (0.34 + sdfObject.state.y * 0.18)
-        + float3(1.0, 0.62, 0.14) * isPupil * (1.4 + sdfObject.state.y * 0.30)
+    float3 selfLight = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
+    surface.emission = selfLight * (isRail * 0.05 + isGate * 0.04 + isPupil * 0.12)
+        + coreColor * isCore * 0.015
+        + railColor * isRail * 0.16
+        + haloColor * isHalo * 0.025
+        + gateColor * isGate * (0.10 + sdfObject.state.y * 0.06)
+        + float3(1.0, 0.50, 0.08) * isPupil * (0.65 + sdfObject.state.y * 0.18)
         + seamColor * isSeam * 0.01;
     return surface;
 }
