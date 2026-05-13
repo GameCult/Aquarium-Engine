@@ -121,8 +121,8 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
 
     SdfSurface surface;
     surface.baseColor = coreColor * isCore + inlayColor * isInlay + railColor * isRail + gateColor * isGate;
-    surface.metallic = 0.0;
-    surface.roughness = 1.0 * isCore + 0.72 * isInlay + 0.78 * isRail + 0.62 * isGate;
+    surface.metallic = 0.0 * isCore + 0.64 * isInlay + 0.72 * isRail + 0.18 * isGate;
+    surface.roughness = 1.0 * isCore + 0.20 * isInlay + 0.24 * isRail + 0.18 * isGate;
 
     float3 selfLight = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
     surface.emission = selfLight * (isGate * 0.08)
