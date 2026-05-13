@@ -63,6 +63,7 @@
       "Imagination's live shader realizes the six-petal topology as three mirrored sheet-pair fields. Keep film, rim, tendril, spark, shadow, and seed distances separated through material classification so raised rims can glow without collapsing the petal sheets into one generic blob.",
       "Do not reintroduce Imagination's old polar-lobed seed or traced half-torus shadow. The seed is a plain luminous opal bud unless the spec asks otherwise; backlog shadow needs a visual contract before it becomes traced geometry.",
       "Imagination's ribbon sheets should use one continuous pair-space field for film and raised edge rims. Do not rebuild the bloom from piecewise rim capsules or straight root/tip posts when the sheet parameterization can own the silhouette directly.",
+      "Self's body is the routing authority object: a warm central sphere crossed by continuous clipped torus-arc rails, bright gate nodes, and a dark review seam. Keep it decisive and radiant through PBR surface regions plus emission; do not collapse it back to a raw emissive placeholder sphere.",
       "Heavy/specialized SDF evaluators should not live inside generic packed-id helpers when those helpers are called repeatedly; avoid shader compiler path cloning.",
       "Lighting is diegetic. Self is the initial emitter; later other Selves should emit through an explicit body light lane, not generic field instances or ambient convenience fill.",
       "Keep bundled blue-noise texture assets available for future dithering/noise work even when no current pass samples them.",
