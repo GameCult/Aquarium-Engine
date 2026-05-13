@@ -18,11 +18,6 @@ struct SoulDomain
     float frost;
 };
 
-float soulMin3(float3 value)
-{
-    return min(value.x, min(value.y, value.z));
-}
-
 float soulLine(float distanceToLine, float width)
 {
     return saturate(1.0 - distanceToLine / max(width, 0.0001));
@@ -49,23 +44,31 @@ SoulDomain soulDomain(float3 local, SdfObject sdfObject)
     float scale = lerp(0.405, 0.455, confidence) - risk * 0.014;
     float bevel = lerp(0.018, 0.006, confidence) + risk * 0.004;
 
-    float3 n0 = normalize(float3(1.00, 0.92, 1.08));
-    float3 n1 = normalize(float3(-0.96, 1.04, 0.98));
-    float3 n2 = normalize(float3(1.08, -0.88, 0.96));
-    float3 n3 = normalize(float3(0.94, 1.10, -0.90));
-    float3 n4 = normalize(float3(-1.02, -0.94, 1.04));
-    float3 n5 = normalize(float3(-0.90, 1.02, -1.08));
-    float3 n6 = normalize(float3(1.06, -1.00, -0.92));
-    float3 n7 = normalize(float3(-1.00, -0.96, -1.02));
+    float3 n0 = normalize(float3(1.00, 0.78, 1.14));
+    float3 n1 = normalize(float3(-0.72, 1.12, 0.98));
+    float3 n2 = normalize(float3(1.18, -0.74, 0.82));
+    float3 n3 = normalize(float3(0.82, 1.26, -0.70));
+    float3 n4 = normalize(float3(-1.14, -0.70, 0.92));
+    float3 n5 = normalize(float3(-0.70, 0.86, -1.24));
+    float3 n6 = normalize(float3(1.04, -1.12, -0.68));
+    float3 n7 = normalize(float3(-0.98, -1.04, -0.94));
+    float3 n8 = normalize(float3(0.30, 1.24, 0.16));
+    float3 n9 = normalize(float3(-0.24, -1.18, 0.44));
+    float3 n10 = normalize(float3(1.20, 0.12, -0.24));
+    float3 n11 = normalize(float3(-1.10, 0.30, -0.18));
 
-    float p0 = dot(local, n0) - scale * 1.00;
-    float p1 = dot(local, n1) - scale * 0.99;
-    float p2 = dot(local, n2) - scale * 1.01;
-    float p3 = dot(local, n3) - scale * 0.98;
-    float p4 = dot(local, n4) - scale * 1.02;
-    float p5 = dot(local, n5) - scale * 1.00;
-    float p6 = dot(local, n6) - scale * 0.99;
-    float p7 = dot(local, n7) - scale * 1.01;
+    float p0 = dot(local, n0) - scale * 1.02;
+    float p1 = dot(local, n1) - scale * 0.97;
+    float p2 = dot(local, n2) - scale * 1.04;
+    float p3 = dot(local, n3) - scale * 0.96;
+    float p4 = dot(local, n4) - scale * 1.03;
+    float p5 = dot(local, n5) - scale * 1.01;
+    float p6 = dot(local, n6) - scale * 0.98;
+    float p7 = dot(local, n7) - scale * 1.05;
+    float p8 = dot(local, n8) - scale * 0.74;
+    float p9 = dot(local, n9) - scale * 0.72;
+    float p10 = dot(local, n10) - scale * 0.76;
+    float p11 = dot(local, n11) - scale * 0.75;
 
     float dominant = p0;
     float3 facetNormal = n0;
@@ -76,6 +79,10 @@ SoulDomain soulDomain(float3 local, SdfObject sdfObject)
     soulSelectPlane(dominant, facetNormal, p5, n5);
     soulSelectPlane(dominant, facetNormal, p6, n6);
     soulSelectPlane(dominant, facetNormal, p7, n7);
+    soulSelectPlane(dominant, facetNormal, p8, n8);
+    soulSelectPlane(dominant, facetNormal, p9, n9);
+    soulSelectPlane(dominant, facetNormal, p10, n10);
+    soulSelectPlane(dominant, facetNormal, p11, n11);
 
     float e01 = soulEdgeDistance(p0, p1, dominant);
     float e02 = soulEdgeDistance(p0, p2, dominant);
@@ -89,13 +96,27 @@ SoulDomain soulDomain(float3 local, SdfObject sdfObject)
     float e47 = soulEdgeDistance(p4, p7, dominant);
     float e57 = soulEdgeDistance(p5, p7, dominant);
     float e67 = soulEdgeDistance(p6, p7, dominant);
+    float e18 = soulEdgeDistance(p1, p8, dominant);
+    float e38 = soulEdgeDistance(p3, p8, dominant);
+    float e08 = soulEdgeDistance(p0, p8, dominant);
+    float e29 = soulEdgeDistance(p2, p9, dominant);
+    float e49 = soulEdgeDistance(p4, p9, dominant);
+    float e69 = soulEdgeDistance(p6, p9, dominant);
+    float e010 = soulEdgeDistance(p0, p10, dominant);
+    float e310 = soulEdgeDistance(p3, p10, dominant);
+    float e610 = soulEdgeDistance(p6, p10, dominant);
+    float e111 = soulEdgeDistance(p1, p11, dominant);
+    float e511 = soulEdgeDistance(p5, p11, dominant);
+    float e711 = soulEdgeDistance(p7, p11, dominant);
     float edge = min(min(min(e01, e02), min(e03, e14)), min(min(e15, e24), min(min(e26, e35), min(min(e36, e47), min(e57, e67)))));
+    edge = min(edge, min(min(e18, e38), min(e08, min(e29, e49))));
+    edge = min(edge, min(min(e69, e010), min(e310, min(e610, min(e111, min(e511, e711))))));
 
-    float finding = min(min(e02, e35), e67);
-    float riskGate = abs(dot(local, normalize(float3(0.18, 0.96, -0.24)))) * 0.16 - (0.030 + risk * 0.050);
-    float riskEdge = min(min(e03, e47), e15);
+    float finding = min(min(e010, e38), min(e49, e67));
+    float riskGate = abs(dot(local, normalize(float3(0.16, 0.92, -0.36)))) * 0.15 - (0.028 + risk * 0.050);
+    float riskEdge = min(min(e310, e18), min(e511, e29));
     float riskSeam = max(riskEdge, riskGate);
-    float fracture = max(min(e24, e57), abs(dot(local, normalize(float3(-0.72, 0.36, 0.60)))) * 0.13 - (0.022 + risk * 0.030));
+    float fracture = max(min(min(e24, e57), e711), abs(dot(local, normalize(float3(-0.72, 0.36, 0.60)))) * 0.13 - (0.020 + risk * 0.030));
 
     float surfaceBand = 1.0 - smoothstep(0.010, 0.090, abs(dominant - bevel));
     float faceInterior = smoothstep(0.030, 0.115, edge);
