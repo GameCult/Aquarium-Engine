@@ -14,43 +14,27 @@ struct ImaginationParts
     float distanceValue;
 };
 
-float2 harmonic5(float2 direction)
+float sdImaginationSeed(float3 local)
 {
-    float c = direction.x;
-    float s = direction.y;
-    float c2 = c * c;
-    float c3 = c2 * c;
-    float c4 = c2 * c2;
-    float c5 = c4 * c;
-    return float2(16.0 * c5 - 20.0 * c3 + 5.0 * c, s * (16.0 * c4 - 12.0 * c2 + 1.0));
-}
-
-float sdImaginationSeed(float3 local, float activity, float phase)
-{
-    float2 xy = local.xy;
-    float xyLength = length(xy);
-    float2 direction = xyLength > 0.0001 ? xy / xyLength : float2(1.0, 0.0);
-    float2 h5 = harmonic5(direction);
-    float lobe = h5.x * cos(phase) - h5.y * sin(phase);
-    float verticalMask = 1.0 - smoothstep(0.40, 0.76, abs(local.z - 0.02));
-    float radius = 0.24 + lerp(0.04, 0.15, activity) * lobe * verticalMask;
-    float egg = length(float3(local.xy / max(radius, 0.04), (local.z - 0.04) / 0.38)) - 1.0;
-    return egg * min(radius, 0.38);
+    float3 p = local - float3(0.0, 0.0, 0.03);
+    float egg = sdEllipsoid(p, float3(0.18, 0.18, 0.32));
+    float bottomTuck = local.z + 0.22;
+    return max(egg, -bottomTuck);
 }
 
 float pairCenterOut(float u, float activity)
 {
-    return 0.12 + 0.92 * u - 0.42 * u * u + 0.05 * activity * sin(u * 6.28318);
+    return 0.09 + 1.28 * u - 0.76 * u * u + 0.030 * activity * sin(u * 3.14159);
 }
 
 float pairCenterSide(float u, float curl)
 {
-    return curl * 0.20 * sin(u * 3.14159) * smoothstep(0.08, 0.82, u);
+    return curl * 0.30 * sin(u * 3.14159);
 }
 
 float pairWidth(float u, float activity)
 {
-    return 0.045 + sin(saturate(u) * 3.14159) * (0.24 + activity * 0.07);
+    return 0.018 + sin(saturate(u) * 3.14159) * (0.13 + activity * 0.035);
 }
 
 float3 pairPoint(float angle, float u, float signedEdge, float activity, float curl)
@@ -58,7 +42,7 @@ float3 pairPoint(float angle, float u, float signedEdge, float activity, float c
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
     float side = pairCenterSide(u, curl) + signedEdge * pairWidth(u, activity);
-    float lift = -0.28 + 1.05 * u;
+    float lift = -0.24 + 0.92 * u + 0.18 * sin(u * 3.14159);
     return float3(radial * pairCenterOut(u, activity) + tangent * side, lift);
 }
 
@@ -67,21 +51,21 @@ float sdSheetPairFilm(float3 local, float angle, float activity, float curl)
     float2 radial = float2(cos(angle), sin(angle));
     float2 tangent = float2(-radial.y, radial.x);
     float3 q = float3(dot(local.xy, radial), dot(local.xy, tangent), local.z);
-    float u = saturate((q.z + 0.28) / 1.05);
+    float u = saturate((q.z + 0.24) / 0.92);
     float sideCenter = pairCenterSide(u, curl);
-    float sheetOut = abs(q.x - pairCenterOut(u, activity)) - 0.028;
+    float sheetOut = abs(q.x - pairCenterOut(u, activity)) - 0.020;
     float sheetSide = abs(abs(q.y) - sideCenter) - pairWidth(u, activity);
-    float sheetRange = max(-u, u - 1.0) * 1.05;
+    float sheetRange = max(-u, u - 1.0) * 0.92;
     return max(max(sheetOut, sheetSide), sheetRange);
 }
 
 float sdSheetPairRims(float3 local, float angle, float activity, float curl)
 {
-    float outerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, 1.0, activity, curl), pairPoint(angle, 1.00, 1.0, activity, curl), 0.030, 0.016);
-    float outerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, -1.0, activity, curl), pairPoint(angle, 1.00, -1.0, activity, curl), 0.030, 0.016);
-    float innerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.10, -0.72, activity, curl), pairPoint(angle, 0.92, -0.72, activity, curl), 0.022, 0.014);
-    float innerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.10, 0.72, activity, curl), pairPoint(angle, 0.92, 0.72, activity, curl), 0.022, 0.014);
-    float root = sdTaperedCapsuleSegment(local, float3(0.0, 0.0, -0.18), pairPoint(angle, 0.16, 0.0, activity, curl), 0.052, 0.030);
+    float outerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, 1.0, activity, curl), pairPoint(angle, 1.00, 0.42, activity, curl), 0.028, 0.010);
+    float outerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, -1.0, activity, curl), pairPoint(angle, 1.00, -0.42, activity, curl), 0.028, 0.010);
+    float innerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.08, -0.44, activity, curl), pairPoint(angle, 0.94, -0.18, activity, curl), 0.020, 0.010);
+    float innerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.08, 0.44, activity, curl), pairPoint(angle, 0.94, 0.18, activity, curl), 0.020, 0.010);
+    float root = sdTaperedCapsuleSegment(local, float3(0.0, 0.0, -0.20), pairPoint(angle, 0.14, 0.0, activity, curl), 0.036, 0.020);
     return smoothUnion(min(min(outerA, outerB), min(innerA, innerB)), root, 0.035);
 }
 
@@ -113,10 +97,9 @@ ImaginationParts imaginationParts(float3 local, SdfObject sdfObject, float timeS
 {
     float activity = saturate(sdfObject.state.x);
     float heartbeat = saturate(sdfObject.state.y);
-    float pressure = saturate(sdfObject.state.z);
     float phase = timeSeconds * 0.18 + heartbeat * 1.7;
     float curl = lerp(0.55, 1.25, activity);
-    float seed = sdImaginationSeed(local, activity, phase);
+    float seed = sdImaginationSeed(local);
 
     float film0;
     float rim0;
@@ -136,10 +119,9 @@ ImaginationParts imaginationParts(float3 local, SdfObject sdfObject, float timeS
     float tendril1 = sdCandidateTendril(local, phase + 2.70, 0.62, timeSeconds * 0.47 + 1.7);
     float tendrils = min(tendril0, tendril1);
     float sparks = sdImaginationSparks(local, phase * 2.1, activity);
-    float shadowRing = sdTorus((local - float3(0.0, 0.0, -0.26 - pressure * 0.04)).xzy, float2(0.32 + pressure * 0.08, 0.024));
-    float shadow = max(shadowRing, local.z + 0.23);
+    float shadow = 4.0;
 
-    float bloom = smoothUnion(seed, sheets, 0.075);
+    float bloom = smoothUnion(seed, sheets, 0.050);
     bloom = smoothUnion(bloom, tendrils, 0.018);
     bloom = smoothUnion(bloom, sparks, 0.020);
 
