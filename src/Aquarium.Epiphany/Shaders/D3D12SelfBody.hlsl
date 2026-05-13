@@ -57,22 +57,25 @@ float sdSelfCore(float3 local, float heartbeat, float timeSeconds)
 
 float sdSelfRailFamily(SelfOrbitSpace space, float pressure, float phase)
 {
-    float shellRadius = abs(space.r - lerp(0.76, 0.66, pressure));
+    float shellRadius = space.r - lerp(0.76, 0.66, pressure);
     float equatorRail = periodicDistance(space.phi - PI * 0.50 + 0.16 * sin(space.theta * 2.0 + phase), PI * 0.50);
     float meridianRail = periodicDistance(space.theta + 0.34 * sin(space.phi * 2.0 - phase * 0.7), PI * 0.50);
     float spiralRail = periodicDistance(space.theta * 1.5 + space.phi * 0.85 + space.shell - phase * 0.55, PI * 0.72);
-    float angularRail = min(equatorRail, min(meridianRail, spiralRail)) * space.scale;
-    return max(shellRadius, angularRail - 0.020);
+    float shellRail = length(float2(shellRadius, equatorRail * space.scale)) - 0.018;
+    float meridianTube = length(float2(shellRadius, meridianRail * space.scale)) - 0.014;
+    float spiralTube = length(float2(shellRadius, spiralRail * space.scale)) - 0.012;
+    return min(shellRail, min(meridianTube, spiralTube));
 }
 
 float sdSelfGateFamily(SelfOrbitSpace space, float pressure, float phase)
 {
-    float shellRadius = abs(space.r - lerp(0.76, 0.66, pressure));
-    float routeA = periodicDistance(space.theta + space.phi * 0.50 - phase * 0.42, PI * 0.50);
-    float routeB = periodicDistance(space.theta * 1.5 - space.phi + phase * 0.25, PI);
-    float routeC = periodicDistance(space.phi - PI * 0.50, PI * 0.42);
-    float node = length(float3(shellRadius * 1.6, routeA * space.scale, min(routeB, routeC) * space.scale)) - 0.052;
-    return node;
+    float shellRadius = space.r - lerp(0.76, 0.66, pressure);
+    float equatorRail = periodicDistance(space.phi - PI * 0.50 + 0.16 * sin(space.theta * 2.0 + phase), PI * 0.50);
+    float meridianRail = periodicDistance(space.theta + 0.34 * sin(space.phi * 2.0 - phase * 0.7), PI * 0.50);
+    float spiralRail = periodicDistance(space.theta * 1.5 + space.phi * 0.85 + space.shell - phase * 0.55, PI * 0.72);
+    float gateA = length(float3(shellRadius * 1.35, equatorRail * space.scale, meridianRail * space.scale)) - 0.036;
+    float gateB = length(float3(shellRadius * 1.35, equatorRail * space.scale, spiralRail * space.scale)) - 0.030;
+    return min(gateA, gateB);
 }
 
 float sdSelfSeam(SelfOrbitSpace space, float activity)
