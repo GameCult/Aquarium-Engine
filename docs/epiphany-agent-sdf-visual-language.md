@@ -347,7 +347,10 @@ paths, one current routing decision.
 
 Math:
 
-- Exact sphere core with continuous inlay/vein fields on its surface.
+- Exact stable sphere core rendered as a black void with golden Fresnel
+  edge-lighting, bypassing the shared PBR shader for that core region. Keep one
+  gold lattice band on the core surface; do not stack multiple crossing bands
+  whose material regions can overtake the sphere.
 - A compact log-spherical lattice maps local direction and logarithmic radius
   into stable nested shells. Orbital rails are level sets where fixed radial
   shell strata cross angular harmonic bands; gate nodes are the crossing points

@@ -9,10 +9,7 @@ struct SelfField
     float inlay;
     float rail;
     float gate;
-    float seam;
     float distanceValue;
-    float vein;
-    float glow;
 };
 
 float3x3 selfOrbitalFrame(float phase)
@@ -64,15 +61,13 @@ void selfShellField(float3 dir, float r, float shellIndex, float pressure, float
 
 SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
 {
-    float activity = saturate(sdfObject.state.x);
     float heartbeat = saturate(sdfObject.state.y);
     float pressure = saturate(sdfObject.state.z);
     float phase = timeSeconds * 0.72 + heartbeat * 2.1;
 
     float r = max(length(local), 0.0001);
     float3 dir = local / r;
-    float shell = log(r / 0.54);
-    float coreRadius = 0.50 + 0.020 * sin(timeSeconds * 0.75 + heartbeat * 6.28318);
+    float coreRadius = 0.50;
     float rail = 10.0;
     float gate = 10.0;
 
@@ -83,28 +78,21 @@ SelfField selfField(float3 local, SdfObject sdfObject, float timeSeconds)
     }
 
     float3 coreBands = abs(selfLatticeCoordinates(dir, -1.0, phase));
-    float angularBand = min3(coreBands);
 
     float coreShell = r - (coreRadius + 0.006);
-    float coreInk = min(angularBand, abs(sin(shell * 2.2 + dot(coreBands, float3(0.21, 0.21, 0.21)) + phase * 0.19)));
-    float inlay = length(float2(coreShell, coreInk * r * 0.11)) - 0.006;
-    float seam = length(float2(r - (coreRadius + 0.002), coreBands.x * r * 0.09)) - lerp(0.002, 0.006, activity);
+    float inlay = length(float2(coreShell, coreBands.x * r * 0.10)) - 0.007;
 
     float core = sdSphere(local, coreRadius);
     float routed = smoothUnion(core, inlay, 0.006);
     routed = smoothUnion(routed, rail, 0.026);
     routed = smoothUnion(routed, gate, 0.030);
-    routed = smoothUnion(routed, seam, 0.008);
 
     SelfField field;
     field.core = core;
     field.inlay = inlay;
     field.rail = rail;
     field.gate = gate;
-    field.seam = seam;
     field.distanceValue = routed;
-    field.vein = 0.5 + 0.5 * sin(dot(dir, normalize(float3(0.37, 0.63, -0.68))) * 12.0 + shell * 1.7 + phase * 0.35);
-    field.glow = 0.5 + 0.5 * sin(shell * 2.1 + dot(coreBands, float3(0.42, 0.31, -0.27)) + phase * 0.55);
     return field;
 }
 
@@ -123,35 +111,44 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float3 local = (p - sdfObject.centerRadius.xyz) / radius;
     SelfField field = selfField(local, sdfObject, timeSeconds);
 
-    float isGate = field.gate <= min(min(min(field.core, field.inlay), field.rail), field.seam) ? 1.0 : 0.0;
-    float isRail = (1.0 - isGate) * (field.rail <= min(min(field.core, field.inlay), field.seam) ? 1.0 : 0.0);
-    float isInlay = (1.0 - isGate) * (1.0 - isRail) * (field.inlay <= min(field.core, field.seam) ? 1.0 : 0.0);
-    float isSeam = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isInlay) * (field.seam <= field.core ? 1.0 : 0.0);
-    float isCore = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isInlay) * (1.0 - isSeam);
+    float isGate = field.gate <= min(min(field.core, field.inlay), field.rail) ? 1.0 : 0.0;
+    float isRail = (1.0 - isGate) * (field.rail <= min(field.core, field.inlay) ? 1.0 : 0.0);
+    float isInlay = (1.0 - isGate) * (1.0 - isRail) * (field.inlay <= field.core ? 1.0 : 0.0);
+    float isCore = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isInlay);
 
-    float3 coreColor = lerp(float3(0.78, 0.53, 0.35), float3(1.0, 0.84, 0.58), field.glow) + field.vein * 0.05;
-    float3 inlayColor = float3(1.0, 0.72, 0.28);
+    float3 coreColor = float3(0.0, 0.0, 0.0);
+    float3 inlayColor = float3(1.0, 0.70, 0.22);
     float3 railColor = float3(0.86, 0.54, 0.20);
     float3 gateColor = lerp(float3(0.78, 0.66, 0.42), float3(1.0, 0.82, 0.42), saturate(sdfObject.state.x));
-    float3 seamColor = float3(0.12, 0.065, 0.028);
 
     SdfSurface surface;
-    surface.baseColor = coreColor * isCore + inlayColor * isInlay + railColor * isRail + gateColor * isGate + seamColor * isSeam;
-    surface.metallic = 0.0 * isCore + 0.64 * isInlay + 0.72 * isRail + 0.18 * isGate + 0.0 * isSeam;
-    surface.roughness = 0.34 * isCore + 0.20 * isInlay + 0.24 * isRail + 0.18 * isGate + 0.52 * isSeam;
+    surface.baseColor = coreColor * isCore + inlayColor * isInlay + railColor * isRail + gateColor * isGate;
+    surface.metallic = 0.0 * isCore + 0.64 * isInlay + 0.72 * isRail + 0.18 * isGate;
+    surface.roughness = 1.0 * isCore + 0.20 * isInlay + 0.24 * isRail + 0.18 * isGate;
 
     float3 selfLight = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
     surface.emission = selfLight * (isRail * 0.045 + isGate * 0.08)
-        + coreColor * isCore * (0.070 + field.vein * 0.030)
         + inlayColor * isInlay * 0.30
         + railColor * isRail * 0.18
-        + gateColor * isGate * (0.22 + sdfObject.state.y * 0.08)
-        + seamColor * isSeam * 0.008;
+        + gateColor * isGate * (0.22 + sdfObject.state.y * 0.08);
     return surface;
 }
 
 float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, SdfSurface surface)
 {
+    SdfObject sdfObject = sdfObjects[sdfIndex];
+    float radius = max(sdfObject.centerRadius.w, 0.001);
+    float3 local = (p - sdfObject.centerRadius.xyz) / radius;
+    SelfField field = selfField(local, sdfObject, timeSeconds);
+    bool isCore = field.core <= min(min(field.inlay, field.rail), field.gate);
+    if (isCore)
+    {
+        float3 viewDirection = normalize(cameraPosition - p);
+        float rim = pow(1.0 - saturate(dot(normal, viewDirection)), 2.2);
+        float3 gold = float3(1.0, 0.62, 0.18);
+        return float3(0.001, 0.0006, 0.0) + gold * (rim * 1.35 + pow(rim, 4.0) * 3.0);
+    }
+
     return shadeSdfPbr(p, normal, surface);
 }
 
