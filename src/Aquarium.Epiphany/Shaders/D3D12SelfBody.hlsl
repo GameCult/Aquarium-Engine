@@ -7,61 +7,79 @@ struct SelfParts
 {
     float core;
     float rail;
-    float halo;
     float gate;
     float seam;
     float distanceValue;
 };
 
-float sdTorusArc(float3 q, float majorRadius, float tubeRadius, float2 midDirection, float halfAngle)
+struct SelfOrbitSpace
 {
-    float2 radial = q.xy;
-    float radialLength = max(length(radial), 0.0001);
-    float2 direction = radial / radialLength;
-    float angularDistance = (cos(halfAngle) - dot(direction, midDirection)) * majorRadius;
-    float torus = length(float2(radialLength - majorRadius, q.z)) - tubeRadius;
-    return max(torus, angularDistance);
+    float r;
+    float theta;
+    float phi;
+    float shell;
+    float scale;
+};
+
+float wrapPi(float value)
+{
+    return frac(value / (2.0 * PI) + 0.5) * (2.0 * PI) - PI;
 }
 
-float3 rotateZ(float3 p, float angle)
+float periodicDistance(float value, float period)
 {
-    float c = cos(angle);
-    float s = sin(angle);
-    return float3(p.x * c - p.y * s, p.x * s + p.y * c, p.z);
+    return abs(frac(value / period + 0.5) - 0.5) * period;
 }
 
-float3 selfOrbitPlane(float3 local, float angle, float tilt)
+SelfOrbitSpace selfOrbitSpace(float3 local, float phase)
 {
-    float3 p = rotateZ(local, angle);
-    return float3(p.x, p.z * cos(tilt) - p.y * sin(tilt), p.z * sin(tilt) + p.y * cos(tilt));
+    float r = max(length(local), 0.0001);
+    float theta = atan2(local.y, local.x);
+    float phi = acos(clamp(local.z / r, -1.0, 1.0));
+    float logRadius = log(r / 0.58);
+    float shell = logRadius * 2.35;
+    float polarTighten = 0.52 + 0.48 * sin(phi);
+
+    SelfOrbitSpace space;
+    space.r = r;
+    space.theta = theta + shell * 0.72 + phase * 0.18;
+    space.phi = phi + 0.18 * sin(theta * 2.0 - phase * 0.35);
+    space.shell = shell;
+    space.scale = r * polarTighten;
+    return space;
 }
 
-float3 selfOrbitPoint(float angle, float tilt, float orbitAngle, float orbitRadius)
+float sdSelfCore(float3 local, float heartbeat, float timeSeconds)
 {
-    float3 q = float3(cos(orbitAngle) * orbitRadius, sin(orbitAngle) * orbitRadius, 0.0);
-    float3 p = float3(q.x, q.z * sin(tilt) + q.y * cos(tilt), q.z * cos(tilt) - q.y * sin(tilt));
-    return rotateZ(p, -angle);
+    float pulse = 0.020 * sin(timeSeconds * 0.75 + heartbeat * 6.28318);
+    return sdSphere(local, 0.50 + pulse);
 }
 
-float sdRoutingArc(float3 local, float angle, float tilt, float pressure, float phase)
+float sdSelfRailFamily(SelfOrbitSpace space, float pressure, float phase)
 {
-    float3 q = selfOrbitPlane(local, angle, tilt);
-    float majorRadius = lerp(0.82, 0.68, pressure);
-    float tubeRadius = 0.025 + 0.006 * sin(phase + angle * 1.7);
-    return sdTorusArc(q, majorRadius, tubeRadius, float2(1.0, 0.0), 1.22);
+    float shellRadius = abs(space.r - lerp(0.76, 0.66, pressure));
+    float equatorRail = periodicDistance(space.phi - PI * 0.50 + 0.16 * sin(space.theta * 2.0 + phase), PI * 0.50);
+    float meridianRail = periodicDistance(space.theta + 0.34 * sin(space.phi * 2.0 - phase * 0.7), PI * 0.50);
+    float spiralRail = periodicDistance(space.theta * 1.5 + space.phi * 0.85 + space.shell - phase * 0.55, PI * 0.72);
+    float angularRail = min(equatorRail, min(meridianRail, spiralRail)) * space.scale;
+    return max(shellRadius, angularRail - 0.020);
 }
 
-float sdOrreryRing(float3 local, float angle, float tilt, float pressure, float radius, float tubeRadius)
+float sdSelfGateFamily(SelfOrbitSpace space, float pressure, float phase)
 {
-    float3 q = selfOrbitPlane(local, angle, tilt);
-    return sdTorus(q, float2(lerp(radius, radius * 0.88, pressure), tubeRadius));
+    float shellRadius = abs(space.r - lerp(0.76, 0.66, pressure));
+    float routeA = periodicDistance(space.theta + space.phi * 0.50 - phase * 0.42, PI * 0.50);
+    float routeB = periodicDistance(space.theta * 1.5 - space.phi + phase * 0.25, PI);
+    float routeC = periodicDistance(space.phi - PI * 0.50, PI * 0.42);
+    float node = length(float3(shellRadius * 1.6, routeA * space.scale, min(routeB, routeC) * space.scale)) - 0.052;
+    return node;
 }
 
-float gateNode(float3 local, float angle, float tilt, float pressure)
+float sdSelfSeam(SelfOrbitSpace space, float activity)
 {
-    float majorRadius = lerp(0.82, 0.68, pressure);
-    float3 node = selfOrbitPoint(angle, tilt, 0.0, majorRadius);
-    return sdSphere(local - node, 0.075);
+    float seamBand = periodicDistance(space.phi - PI * 0.50, PI) * space.scale;
+    float shellRadius = abs(space.r - lerp(0.515, 0.49, activity));
+    return max(shellRadius - 0.010, seamBand - 0.028);
 }
 
 SelfParts selfParts(float3 local, SdfObject sdfObject, float timeSeconds)
@@ -69,41 +87,21 @@ SelfParts selfParts(float3 local, SdfObject sdfObject, float timeSeconds)
     float activity = saturate(sdfObject.state.x);
     float heartbeat = saturate(sdfObject.state.y);
     float pressure = saturate(sdfObject.state.z);
-    float phase = timeSeconds * 0.55 + heartbeat * 6.28318;
-    float pulse = 0.025 * sin(phase);
-    float core = sdSphere(local, 0.48 + pulse);
+    float phase = timeSeconds * 0.72 + heartbeat * 2.1;
+    SelfOrbitSpace space = selfOrbitSpace(local, phase);
 
-    float orbitPhase = timeSeconds * 0.18 + heartbeat * 0.90;
-    float arc0 = sdRoutingArc(local, 0.00 + orbitPhase * 0.32, 0.50, pressure, phase);
-    float arc1 = sdRoutingArc(local, 1.57 - orbitPhase * 0.24, -0.58, pressure, phase + 1.2);
-    float arc2 = sdRoutingArc(local, 3.14 + orbitPhase * 0.18, 0.76, pressure, phase + 2.4);
-    float arc3 = sdRoutingArc(local, -1.57 - orbitPhase * 0.28, -0.34, pressure, phase + 3.6);
-    float rail = min(min(arc0, arc1), min(arc2, arc3));
+    float core = sdSelfCore(local, heartbeat, timeSeconds);
+    float rail = sdSelfRailFamily(space, pressure, phase);
+    float gate = sdSelfGateFamily(space, pressure, phase);
+    float seam = sdSelfSeam(space, activity);
 
-    float halo0 = sdOrreryRing(local, 0.42 + orbitPhase * 0.20, 1.15, pressure, 0.98, 0.012);
-    float halo1 = sdOrreryRing(local, 2.12 - orbitPhase * 0.16, -0.92, pressure, 0.92, 0.010);
-    float halo2 = sdOrreryRing(local, -1.18 + orbitPhase * 0.12, 0.28, pressure, 0.74, 0.009);
-    float halo = min(halo0, min(halo1, halo2));
-
-    float gate0 = gateNode(local, 0.00 + orbitPhase * 0.32, 0.50, pressure);
-    float gate1 = gateNode(local, 1.57 - orbitPhase * 0.24, -0.58, pressure);
-    float gate2 = gateNode(local, 3.14 + orbitPhase * 0.18, 0.76, pressure);
-    float gate3 = gateNode(local, -1.57 - orbitPhase * 0.28, -0.34, pressure);
-    float gate = min(min(gate0, gate1), min(gate2, gate3));
-
-    float seamRing = sdTorus(local.xzy, float2(0.50, 0.010));
-    float seamMask = abs(local.z) - 0.10;
-    float seam = max(seamRing, -seamMask);
-
-    float routed = smoothUnion(core, rail, 0.030);
-    routed = smoothUnion(routed, halo, 0.020);
-    routed = smoothUnion(routed, gate, 0.036);
-    float distanceValue = smoothUnion(routed, seam, lerp(0.012, 0.030, activity));
+    float routed = smoothUnion(core, rail, 0.026);
+    routed = smoothUnion(routed, gate, 0.032);
+    float distanceValue = smoothUnion(routed, seam, 0.012);
 
     SelfParts parts;
     parts.core = core;
     parts.rail = rail;
-    parts.halo = halo;
     parts.gate = gate;
     parts.seam = seam;
     parts.distanceValue = distanceValue;
@@ -124,30 +122,28 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float radius = max(sdfObject.centerRadius.w, 0.001);
     float3 local = (p - sdfObject.centerRadius.xyz) / radius;
     SelfParts parts = selfParts(local, sdfObject, timeSeconds);
-    float nonCore = min(min(parts.rail, parts.halo), min(parts.gate, parts.seam));
-    float isGate = parts.gate <= min(min(parts.core, parts.rail), min(parts.halo, parts.seam)) ? 1.0 : 0.0;
-    float isRail = (1.0 - isGate) * (parts.rail <= min(min(parts.core, parts.halo), parts.seam) ? 1.0 : 0.0);
-    float isHalo = (1.0 - isGate) * (1.0 - isRail) * (parts.halo <= min(parts.core, parts.seam) ? 1.0 : 0.0);
-    float isSeam = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isHalo) * (parts.seam <= min(parts.core, nonCore) ? 1.0 : 0.0);
-    float isCore = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isHalo) * (1.0 - isSeam);
-    float glow = 0.5 + 0.5 * sin(timeSeconds * 1.4 + local.x * 2.0 - local.y * 1.5 + local.z * 2.5);
-    float3 coreColor = lerp(float3(0.50, 0.26, 0.15), float3(0.82, 0.48, 0.26), glow);
-    float3 railColor = float3(0.78, 0.45, 0.16);
-    float3 haloColor = float3(0.70, 0.53, 0.34);
-    float3 gateColor = lerp(float3(0.70, 0.62, 0.46), float3(0.92, 0.78, 0.50), saturate(sdfObject.state.x));
-    float3 seamColor = float3(0.06, 0.028, 0.020);
+    float isGate = parts.gate <= min(min(parts.core, parts.rail), parts.seam) ? 1.0 : 0.0;
+    float isRail = (1.0 - isGate) * (parts.rail <= min(parts.core, parts.seam) ? 1.0 : 0.0);
+    float isSeam = (1.0 - isGate) * (1.0 - isRail) * (parts.seam <= parts.core ? 1.0 : 0.0);
+    float isCore = (1.0 - isGate) * (1.0 - isRail) * (1.0 - isSeam);
+
+    float shimmer = 0.5 + 0.5 * sin(local.x * 2.3 - local.y * 1.7 + local.z * 2.9 + timeSeconds * 1.1);
+    float3 coreColor = lerp(float3(0.58, 0.31, 0.18), float3(0.88, 0.58, 0.34), shimmer);
+    float3 railColor = float3(0.86, 0.54, 0.20);
+    float3 gateColor = lerp(float3(0.78, 0.66, 0.42), float3(1.0, 0.82, 0.42), saturate(sdfObject.state.x));
+    float3 seamColor = float3(0.055, 0.025, 0.018);
 
     SdfSurface surface;
-    surface.baseColor = coreColor * isCore + railColor * isRail + haloColor * isHalo + gateColor * isGate + seamColor * isSeam;
-    surface.metallic = 0.0 * isCore + 0.65 * isRail + 0.82 * isHalo + 0.0 * isGate + 0.0 * isSeam;
-    surface.roughness = 0.42 * isCore + 0.26 * isRail + 0.22 * isHalo + 0.18 * isGate + 0.78 * isSeam;
+    surface.baseColor = coreColor * isCore + railColor * isRail + gateColor * isGate + seamColor * isSeam;
+    surface.metallic = 0.0 * isCore + 0.72 * isRail + 0.18 * isGate + 0.0 * isSeam;
+    surface.roughness = 0.42 * isCore + 0.24 * isRail + 0.18 * isGate + 0.80 * isSeam;
+
     float3 selfLight = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
-    surface.emission = selfLight * (isRail * 0.05 + isGate * 0.05)
-        + coreColor * isCore * 0.015
-        + railColor * isRail * 0.16
-        + haloColor * isHalo * 0.025
-        + gateColor * isGate * (0.10 + sdfObject.state.y * 0.06)
-        + seamColor * isSeam * 0.01;
+    surface.emission = selfLight * (isRail * 0.045 + isGate * 0.08)
+        + coreColor * isCore * 0.018
+        + railColor * isRail * 0.18
+        + gateColor * isGate * (0.22 + sdfObject.state.y * 0.08)
+        + seamColor * isSeam * 0.008;
     return surface;
 }
 

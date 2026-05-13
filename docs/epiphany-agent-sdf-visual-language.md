@@ -332,12 +332,13 @@ Role ids: `coordinator`, `epiphany.self`
 
 Purpose: routing, authority, checkpoint, run state, and review boundary.
 
-Appearance: a central routing heart made of a warm command sphere inside a
-fantasy orrery. Smooth torus arcs and tilted orbital rings cross around the
-core like authority rails, with small gate nodes riding the active arcs. The
-angelic reference is a vibe of overwhelming ordered complexity, not literal
-eyes: Self should feel radiant, watchful, and decisive without becoming a
-uniform glow cloud or a cluster of loose symbols.
+Appearance: a central routing heart made of a warm core sphere crossed by
+several smooth torus arcs. The arcs look like quiet rails orbiting a command
+seed, with small gate nodes at their intersections. Self should feel central
+and decisive, not busy. The orrery comparison is a motion metaphor: the routing
+rails should have nested orbital order and slow phase motion rather than
+static, intersecting hoops. The angelic read should come from overwhelming but
+coherent symmetry and radiance, not literal symbolic anatomy.
 
 Reasoning: Self is not a worker lane. It preserves agency by routing work,
 rejecting bad authority claims, and deciding which organ deserves the next
@@ -347,21 +348,25 @@ paths, one current routing decision.
 Math:
 
 - Exact sphere core with radius `1.0`.
-- Four torus arcs in tilted planes, clipped by angular masks.
-- Several thinner tilted orrery rings around the core.
-- Smooth union between the core and small gate-node spheres.
+- Four torus arc families in tilted planes, clipped or gated by a shared
+  orbital grammar so rails cohere instead of visibly colliding.
+- Smooth union between the core and small gate-node spheres at meaningful
+  routing intersections.
 - Thin emissive routing filaments as torus-segment SDFs with sinusoidal radius
   modulation along the arc.
 - Material regions: warm ceramic core, metallic gold/orichalcum routing rails,
-  dimmer orrery rings, pale gate bodies, bright current target accents, and
-  dark review seam. Emission is an accent on rails and active gates; it must
-  not wash out component boundaries.
+  bright current target gate, and dark review seam. Emission is an accent on
+  rails and active gates; it must not wash out component boundaries.
+- Implementation note: prefer a continuous spatial/topological grammar, such as
+  a log-spherical or spherical-coordinate field where shells, orbital rails,
+  gates, and seam bands are level sets of the same coordinate system. Do not
+  hand-place independent hoops when the form wants one coherent orbital space.
 
 Movement:
 
 - Slow center pulse from heartbeat phase.
-- Orbital rails and rings rotate at different slow phase rates so the orrery is
-  a motion metaphor, not static decoration.
+- Orbital rail families rotate at different slow phase rates so the orrery is a
+  motion metaphor, not static decoration.
 - `targetRole` resolves through `roleAnchor(targetRole)`. The active routing
   gate is the torus arc whose tangent points closest to `routeDirection`.
 - Selected target role lights that gate and sends a traveling pulse along the
