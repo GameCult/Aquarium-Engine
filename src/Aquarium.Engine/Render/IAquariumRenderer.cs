@@ -25,4 +25,6 @@ public interface IAquariumRenderer : IDisposable
     void ApplyGraphicsSettings(GraphicsSettings settings);
 
     void Render(AquariumFrame frame, int width, int height);
+
+    void SaveFramePng(string path);
 }

@@ -140,6 +140,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private float previousViewRadius = 0.001f;
     private float previousTimeSeconds;
     private D3D12HeightFieldBrushConstants heightFieldBrushConstants;
+    private Vector4 sceneVisualControls = Vector4.One;
     private GraphicsSettings settings = GraphicsSettings.Default;
     private double accumulatedFrameCpuMilliseconds;
     private double accumulatedRecordCpuMilliseconds;
@@ -484,7 +485,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             settings.SceneExposure,
             settings.BloomIntensity,
             settings.BloomVeilIntensity,
-            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y)));
+            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y),
+            sceneVisualControls));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
@@ -570,6 +572,75 @@ public sealed class D3D12Renderer : IAquariumRenderer
         hasPresentedReadyFrame = true;
         temporalFrameIndex++;
         frameIndex = (int)swapChain.CurrentBackBufferIndex;
+    }
+
+    public unsafe void SaveFramePng(string path)
+    {
+        if (!hasPresentedReadyFrame)
+        {
+            throw new InvalidOperationException("No completed frame is available to save.");
+        }
+
+        WaitForGpu();
+
+        var sourceIndex = (frameIndex + BackBufferCount - 1) % BackBufferCount;
+        var source = frames[sourceIndex].BackBuffer;
+        var rowBytes = checked(width * 4);
+        var rowPitch = AlignTo(rowBytes, D3D12.TextureDataPitchAlignment);
+        var bufferBytes = checked((long)rowPitch * height);
+        using var readback = device.CreateCommittedResource(
+            HeapType.Readback,
+            ResourceDescription.Buffer((ulong)bufferBytes),
+            ResourceStates.CopyDest,
+            null);
+        readback.Name = "Aquarium D3D12 Frame PNG Readback";
+
+        using var captureAllocator = device.CreateCommandAllocator(CommandListType.Direct);
+        using var captureList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, captureAllocator, null);
+        source.Transition(captureList, ResourceStates.CopySource);
+        var footprint = new PlacedSubresourceFootPrint
+        {
+            Offset = 0,
+            Footprint = new SubresourceFootPrint(
+                Format.B8G8R8A8_UNorm,
+                (uint)width,
+                (uint)height,
+                1,
+                (uint)rowPitch),
+        };
+        var destination = new TextureCopyLocation(readback, footprint);
+        var textureSource = new TextureCopyLocation(source.Resource, 0);
+        captureList.CopyTextureRegion(destination, 0, 0, 0, textureSource, null);
+        source.Transition(captureList, ResourceStates.Present);
+        captureList.Close();
+        commandQueue.ExecuteCommandList(captureList);
+        WaitForGpu();
+
+        var rgba = new byte[checked(rowBytes * height)];
+        var mapped = readback.Map<byte>(0);
+        try
+        {
+            for (var y = 0; y < height; y++)
+            {
+                var sourceRow = mapped + ((long)y * rowPitch);
+                var destinationRow = y * rowBytes;
+                for (var x = 0; x < width; x++)
+                {
+                    var sourcePixel = sourceRow + (x * 4);
+                    var destinationPixel = destinationRow + (x * 4);
+                    rgba[destinationPixel] = sourcePixel[2];
+                    rgba[destinationPixel + 1] = sourcePixel[1];
+                    rgba[destinationPixel + 2] = sourcePixel[0];
+                    rgba[destinationPixel + 3] = sourcePixel[3];
+                }
+            }
+        }
+        finally
+        {
+            readback.Unmap(0, null);
+        }
+
+        PngImageWriter.WriteRgba(path, width, height, rgba);
     }
 
     private static Vector2 TemporalJitterPixels(int index)
@@ -1315,6 +1386,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Array.Clear(sdfObjects);
         Array.Clear(sdfLights);
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
+        sceneVisualControls = new Vector4(
+            Math.Clamp(scene.VisualOptions.BackgroundIntensity, 0.0f, 4.0f),
+            Math.Clamp(scene.VisualOptions.SurfaceVisibility, 0.0f, 1.0f),
+            0.0f,
+            0.0f);
 
         var objectCount = Math.Min(scene.SdfObjects.Count, MaxSdfObjectCount);
         for (var index = 0; index < objectCount; index++)
@@ -1592,6 +1668,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         commandQueue.Signal(fence, signalValue).CheckError();
         fence.SetEventOnCompletion(signalValue, fenceEvent.SafeWaitHandle.DangerousGetHandle()).CheckError();
         fenceEvent.WaitOne();
+    }
+
+    private static int AlignTo(int value, int alignment)
+    {
+        return (value + alignment - 1) & ~(alignment - 1);
     }
 
     private static void ReportStartupProgress(Action<string>? startupProgress, string message)
@@ -1951,7 +2032,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float Exposure,
         float BloomIntensity,
         float BloomVeilIntensity,
-        Vector4 CursorWorlds);
+        Vector4 CursorWorlds,
+        Vector4 SceneVisualControls);
 
     private sealed record D3D12ShaderPaths(
         string HeightField,
