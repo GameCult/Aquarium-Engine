@@ -363,9 +363,11 @@ Math:
 - Smooth union is reserved for joining the core to lattice-derived rails,
   gates, inlays, and seam marks. Do not hand-place independent hoops or
   separate torus inventories when the form wants one coherent orbital grammar.
-- Material regions: warm ceramic core, metallic gold/orichalcum routing rails,
-  bright current target gate, and dark review seam. Emission is an accent on
-  rails and active gates; it must not wash out component boundaries.
+- Material regions: black void core, one gold core band, metallic
+  gold/orichalcum routing rails, bright current target gate, and dark review
+  seam. Rails should be readable bands rather than hairline emitters. Emission
+  belongs to active gate nodes and the core Fresnel rim; rails use PBR material
+  contrast so they do not turn into fireflies.
 - Implementation note: complexity should emerge from the coordinate
   abstraction. If the shader grows by adding more named hoop equations, stop and
   rebuild the field grammar instead.

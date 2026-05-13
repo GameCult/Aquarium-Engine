@@ -47,13 +47,13 @@ void selfShellField(float3 dir, float r, float shellIndex, float pressure, float
 {
     float shell = r - selfShellRadius(shellIndex, pressure);
     float3 bands = abs(selfLatticeCoordinates(dir, shellIndex, phase)) * r;
-    float thickness = lerp(0.010, 0.016, saturate(shellIndex * 0.5));
+    float thickness = lerp(0.020, 0.030, saturate(shellIndex * 0.5));
 
     float shellRail = length(float2(shell, min3(bands))) - thickness;
     float crossing = min(
         length(float2(bands.x, bands.y)),
         min(length(float2(bands.y, bands.z)), length(float2(bands.z, bands.x))));
-    float shellGate = length(float2(shell * 1.25, crossing * 0.72)) - (thickness * 1.9);
+    float shellGate = length(float2(shell * 1.25, crossing * 0.72)) - (thickness * 1.55);
 
     rail = min(rail, shellRail);
     gate = min(gate, shellGate);
@@ -127,10 +127,8 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.roughness = 1.0 * isCore + 0.20 * isInlay + 0.24 * isRail + 0.18 * isGate;
 
     float3 selfLight = primitiveEmissionRadiance(sdfFieldId(sdfIndex));
-    surface.emission = selfLight * (isRail * 0.045 + isGate * 0.08)
-        + inlayColor * isInlay * 0.30
-        + railColor * isRail * 0.18
-        + gateColor * isGate * (0.22 + sdfObject.state.y * 0.08);
+    surface.emission = selfLight * (isGate * 0.08)
+        + gateColor * isGate * (0.42 + sdfObject.state.y * 0.12);
     return surface;
 }
 
@@ -144,9 +142,10 @@ float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, 
     if (isCore)
     {
         float3 viewDirection = normalize(cameraPosition - p);
-        float rim = pow(1.0 - saturate(dot(normal, viewDirection)), 2.2);
+        float edge = 1.0 - saturate(dot(normal, viewDirection));
+        float rim = pow(edge, 4.0) * 8.0 + pow(edge, 11.0) * 18.0;
         float3 gold = float3(1.0, 0.62, 0.18);
-        return float3(0.001, 0.0006, 0.0) + gold * (rim * 1.35 + pow(rim, 4.0) * 3.0);
+        return float3(0.0007, 0.00035, 0.0) + gold * rim;
     }
 
     return shadeSdfPbr(p, normal, surface);
