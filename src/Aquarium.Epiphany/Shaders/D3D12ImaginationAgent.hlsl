@@ -34,45 +34,39 @@ float pairCenterSide(float u, float curl)
 
 float pairWidth(float u, float activity)
 {
-    return 0.018 + sin(saturate(u) * 3.14159) * (0.13 + activity * 0.035);
+    float blade = sin(saturate(u) * 3.14159);
+    return 0.012 + blade * blade * (0.17 + activity * 0.045);
 }
 
-float3 pairPoint(float angle, float u, float signedEdge, float activity, float curl)
+float pairThickness(float u)
 {
-    float2 radial = float2(cos(angle), sin(angle));
-    float2 tangent = float2(-radial.y, radial.x);
-    float side = pairCenterSide(u, curl) + signedEdge * pairWidth(u, activity);
-    float lift = -0.24 + 0.92 * u + 0.18 * sin(u * 3.14159);
-    return float3(radial * pairCenterOut(u, activity) + tangent * side, lift);
-}
-
-float sdSheetPairFilm(float3 local, float angle, float activity, float curl)
-{
-    float2 radial = float2(cos(angle), sin(angle));
-    float2 tangent = float2(-radial.y, radial.x);
-    float3 q = float3(dot(local.xy, radial), dot(local.xy, tangent), local.z);
-    float u = saturate((q.z + 0.24) / 0.92);
-    float sideCenter = pairCenterSide(u, curl);
-    float sheetOut = abs(q.x - pairCenterOut(u, activity)) - 0.020;
-    float sheetSide = abs(abs(q.y) - sideCenter) - pairWidth(u, activity);
-    float sheetRange = max(-u, u - 1.0) * 0.92;
-    return max(max(sheetOut, sheetSide), sheetRange);
-}
-
-float sdSheetPairRims(float3 local, float angle, float activity, float curl)
-{
-    float outerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, 1.0, activity, curl), pairPoint(angle, 1.00, 0.42, activity, curl), 0.028, 0.010);
-    float outerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.00, -1.0, activity, curl), pairPoint(angle, 1.00, -0.42, activity, curl), 0.028, 0.010);
-    float innerA = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.08, -0.44, activity, curl), pairPoint(angle, 0.94, -0.18, activity, curl), 0.020, 0.010);
-    float innerB = sdTaperedCapsuleSegment(local, pairPoint(angle, 0.08, 0.44, activity, curl), pairPoint(angle, 0.94, 0.18, activity, curl), 0.020, 0.010);
-    float root = sdTaperedCapsuleSegment(local, float3(0.0, 0.0, -0.20), pairPoint(angle, 0.14, 0.0, activity, curl), 0.036, 0.020);
-    return smoothUnion(min(min(outerA, outerB), min(innerA, innerB)), root, 0.035);
+    float blade = sin(saturate(u) * 3.14159);
+    return 0.010 + blade * blade * 0.012;
 }
 
 float sdSheetPair(float3 local, float angle, float activity, float curl, out float film, out float rim)
 {
-    film = sdSheetPairFilm(local, angle, activity, curl);
-    rim = sdSheetPairRims(local, angle, activity, curl);
+    float2 radial = float2(cos(angle), sin(angle));
+    float2 tangent = float2(-radial.y, radial.x);
+    float3 q = float3(dot(local.xy, radial), dot(local.xy, tangent), local.z);
+    float uRaw = (q.z + 0.25) / 1.04;
+    float u = saturate(uRaw);
+    float sideCenter = pairCenterSide(u, curl);
+    float centerOut = pairCenterOut(u, activity);
+    float width = pairWidth(u, activity);
+    float thickness = pairThickness(u);
+    float blade = sin(u * 3.14159);
+    float lipCurl = smoothstep(0.60, 1.0, u) * 0.10 * abs(q.y);
+    float outDistance = abs(q.x - centerOut + lipCurl) - thickness;
+    float sideDistance = abs(abs(q.y) - sideCenter) - width;
+    float endDistance = max(-uRaw, uRaw - 1.0) * 1.04;
+    film = max(max(outDistance, sideDistance), endDistance);
+
+    float edgeOffset = abs(q.y) - (sideCenter + width);
+    float edgeRadius = 0.018 + 0.010 * blade;
+    float edgeTube = length(float2(q.x - centerOut + lipCurl, edgeOffset)) - edgeRadius;
+    float rootFold = length(float2(q.x - 0.10, abs(q.y) - sideCenter)) - (0.030 + 0.014 * smoothstep(0.0, 0.18, u));
+    rim = max(min(edgeTube, rootFold), endDistance);
     return smoothUnion(film, rim, 0.018);
 }
 
