@@ -67,8 +67,9 @@ frame keeps color, metadata, and control history. Projection jitter uses a small
 Halton sequence, and final presentation blends validated history. SDF object
 highlights get a narrow hot-current history path so transient specular spikes
 can be damped without relaxing travel, field, or normal validation. Bloom is
-attenuated when the resolved scene has damped a much hotter current sample, so
-transient fireflies do not keep blooming through the current-frame bloom path.
+clamped at prefilter for unsupported single-pixel HDR spikes, then attenuated
+when the resolved scene has damped a much hotter current sample, so transient
+fireflies do not keep blooming through the current-frame bloom path.
 Dormant event lanes are not preserved without a producer and pass contract.
 
 Debug modes:

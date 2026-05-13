@@ -218,9 +218,42 @@ float3 presentColor(float3 scene, float2 uv, float bloomScale)
     return aces(exposedScene + bloom * bloomIntensity + luminance(bloom) * bloomVeilIntensity);
 }
 
+float3 clampBloomFirefly(float2 uv, float3 centerColor)
+{
+    float2 texel = 1.0 / resolution;
+    float centerLuma = luminance(centerColor);
+    float neighborMaxLuma = 0.0;
+    float neighborSumLuma = 0.0;
+
+    [unroll]
+    for (int y = -1; y <= 1; y++)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; x++)
+        {
+            if (x == 0 && y == 0)
+            {
+                continue;
+            }
+
+            float3 sampleColor = sourceTexture.SampleLevel(sourceSampler, uv + float2(x, y) * texel, 0.0).rgb;
+            float sampleLuma = luminance(sampleColor);
+            neighborMaxLuma = max(neighborMaxLuma, sampleLuma);
+            neighborSumLuma += sampleLuma;
+        }
+    }
+
+    float neighborAvgLuma = neighborSumLuma * 0.125;
+    float supportedLuma = max(neighborMaxLuma * 1.55, neighborAvgLuma * 2.75) + 1.25;
+    float spike = smoothstep(supportedLuma, supportedLuma * 2.5 + 2.0, centerLuma);
+    float clampedLuma = lerp(centerLuma, min(centerLuma, supportedLuma), spike);
+    return centerColor * (clampedLuma / max(centerLuma, 0.0001));
+}
+
 float4 D3D12BloomPrefilterPS(VertexOut input) : SV_Target0
 {
-    return float4(sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0).rgb * max(exposure, 0.001), 1.0);
+    float3 color = sourceTexture.SampleLevel(sourceSampler, input.uv, 0.0).rgb;
+    return float4(clampBloomFirefly(input.uv, color) * max(exposure, 0.001), 1.0);
 }
 
 float4 D3D12BloomDownsamplePS(VertexOut input) : SV_Target0

@@ -255,6 +255,9 @@ Current Gate 3L/3M implementation:
 - bloom presentation is attenuated when the resolved scene luminance is much
   lower than the raw current scene luminance, so current-frame fireflies do not
   keep blooming after temporal history has damped the underlying scene color
+- bloom prefilter clamps unsupported single-pixel HDR spikes against local
+  neighborhood luminance before downsample/blur, so one-frame fireflies do not
+  spread into neighboring pixels before the temporal resolve sees them
 - modes `2` through `4` show the sampled history, accepted history age, and
   history weight
 
