@@ -332,10 +332,11 @@ Role ids: `coordinator`, `epiphany.self`
 
 Purpose: routing, authority, checkpoint, run state, and review boundary.
 
-Appearance: a central routing heart made of a warm core sphere crossed by
-several smooth torus arcs. The arcs look like quiet rails orbiting a command
-seed, with small gate nodes at their intersections. Self should feel central
-and decisive, not busy.
+Appearance: a central routing heart made of a warm command sphere inside a
+fantasy orrery. Smooth torus arcs and tilted orbital rings cross around the
+core like authority rails, with small gate/eye nodes riding the orbits. It
+should carry a controlled many-eyed angelic read: radiant, watchful, and
+decisive, but not a uniform glow cloud.
 
 Reasoning: Self is not a worker lane. It preserves agency by routing work,
 rejecting bad authority claims, and deciding which organ deserves the next
@@ -346,11 +347,14 @@ Math:
 
 - Exact sphere core with radius `1.0`.
 - Four torus arcs in tilted planes, clipped by angular masks.
-- Smooth union between the core and small gate-node spheres.
+- Several thinner tilted orrery rings around the core.
+- Smooth union between the core, small gate-node spheres, and eye beads.
 - Thin emissive routing filaments as torus-segment SDFs with sinusoidal radius
   modulation along the arc.
-- Material regions: warm ceramic core, gold-orange routing rails, bright current
-  target gate, dark review seam.
+- Material regions: warm ceramic core, metallic gold/orichalcum routing rails,
+  dimmer orrery rings, pale gate/eye bodies, bright current target pupils, and
+  dark review seam. Emission is an accent on rails, pupils, and active gates;
+  it must not wash out component boundaries.
 
 Movement:
 
