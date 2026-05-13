@@ -332,18 +332,20 @@ Role ids: `coordinator`, `epiphany.self`
 
 Purpose: routing, authority, checkpoint, run state, and review boundary.
 
-Appearance: a central routing heart made of a warm core sphere crossed by
-several smooth torus arcs. The arcs look like quiet rails orbiting a command
-seed, with small gate nodes at their intersections. Self should feel central
-and decisive, not busy. The orrery comparison is a motion metaphor: the routing
-rails should have nested orbital order and slow phase motion rather than
-static, intersecting hoops. The angelic read should come from overwhelming but
-coherent symmetry and radiance, not literal symbolic anatomy.
+Appearance: a central routing heart made of a black void command sphere with a
+sharp golden Fresnel rim, one gold core band, and nested orichalcum rail bands.
+The rails form a compact orrery lattice around the void, with compact gate nodes
+at true triple-band crossings and narrow emissive strips along the inner rail
+faces. Self should feel central and decisive, not busy. The orrery comparison is
+a motion and topology metaphor: the routing rails should have nested orbital
+order and slow phase motion rather than static, intersecting hoops. The angelic
+read should come from overwhelming but coherent symmetry and radiance, not
+literal symbolic anatomy.
 
 Reasoning: Self is not a worker lane. It preserves agency by routing work,
 rejecting bad authority claims, and deciding which organ deserves the next
-move. A central core with orbit gates makes the idea visible: many possible
-paths, one current routing decision.
+move. A void core inside an ordered routing lattice makes the idea visible:
+many possible paths, one current routing authority.
 
 Math:
 
@@ -366,10 +368,11 @@ Math:
   gates, inlays, and seam marks. Do not hand-place independent hoops or
   separate torus inventories when the form wants one coherent orbital grammar.
 - Material regions: black void core, one gold core band, metallic
-  gold/orichalcum routing rails, bright current target gate, and dark review
-  seam. Rails should be readable bands rather than hairline emitters. Emission
-  belongs to active gate nodes and the core Fresnel rim; rails use PBR material
-  contrast so they do not turn into fireflies.
+  gold/orichalcum routing rails, inner rail emission strip, bright current
+  target gate, and dark review seam. Rails should be readable bands rather than
+  hairline emitters. Bloom-driving emission is controlled: core Fresnel, active
+  gates, and narrow inner rail strips; the broad rail body uses PBR material
+  contrast so it does not turn into fireflies.
 - Implementation note: complexity should emerge from the coordinate
   abstraction. If the shader grows by adding more named hoop equations, stop and
   rebuild the field grammar instead.
@@ -402,24 +405,45 @@ Role ids: `face`, `epiphany.face`
 
 Purpose: public expression, bubbles, drafts, posts, and room-native speech.
 
-Appearance: a lantern-mouth body: a rounded bell with a small expressive opening
-and soft bubble beads orbiting near the lip. It should look like a speaking
-surface, not a generic chat icon.
+Appearance: a speech anemone / phoneme lantern: a translucent bell with a
+continuous living mouth aperture, warm throat glow, and syllable pearls carried
+by a small flow around the lip. It should look like bounded speech becoming
+public, not a generic chat icon.
 
 Reasoning: Face translates hidden organ weather into public, bounded speech. A
-lantern form makes speech feel emitted and warm, while the mouth beads make
-output count and posting state visible without dumping private machinery.
+lantern form makes speech feel emitted and warm, while the mouth flow makes
+drafts, posts, and bubble count visible without dumping private machinery.
+Face is a public aperture: it shapes what leaves the system.
 
 Math:
 
-- Bell body from a superquadric dome with exponent `0.42`, clipped by a smooth
-  sinusoidal lower lip.
-- Mouth as a crescent cut formed by subtracting two offset torus segments.
-- Bubble beads as small spheres on phase-offset orbits.
-- Speech ribbon as a swept lemniscate tube around the mouth, with tube radius
-  modulated by heartbeat phase.
-- Material regions: translucent enamel bell, emissive inner mouth, glossy bubble
-  beads, muted draft beads.
+- Governing domain: local mouth-flow coordinates around the bell opening.
+  `u` is angle around the lip, `v` is depth through the throat, and `breath`
+  is driven by speech/activity state. The lip, throat glow, speech ribbon, and
+  beads derive from this one aperture field.
+- Bell body from a translucent superquadric dome with exponent `0.42`, softened
+  into a flared lower lip by the mouth-flow aperture instead of clipped by a
+  separate decorative cut.
+- Mouth aperture as a continuous signed field in `(u, v)`: closed silence is a
+  narrow crescent, speaking opens toward an oval, and uncertainty introduces a
+  small asymmetric curl without changing the bell's root topology.
+- Draft pearls occupy short inner streamlines inside the lip. Posted bubbles
+  escape to wider outer streamlines. Bead distance from the mouth carries state;
+  do not use arbitrary orbit count as the main read.
+- Speech ribbon is a swept lemniscate/current line around the mouth-flow field,
+  with radius and brightness modulated by heartbeat and public-output activity.
+- Material regions: translucent enamel bell, warm emissive throat, glossy
+  syllable pearls, muted draft pearls, brighter posted pearls.
+
+Topology invariants:
+
+- The mouth is an aperture field in the bell, not a pasted-on icon or two torus
+  cuts.
+- Drafts stay inside the bell; posts move outside the lip.
+- No speech surface may expose private machinery. Face shows public output
+  pressure, not internal chain-of-thought weather.
+- Forbidden shortcut: chat bubble logo, decorative orbit beads, or a generic
+  smiling blob.
 
 Movement:
 
@@ -540,24 +564,42 @@ Role ids: `research`, `epiphany.eyes`
 
 Purpose: evidence, prior art, graph query, artifacts, and outside-source sight.
 
-Appearance: a compact lens creature with rotating aperture blades and a small
-evidence sparkle field. It should read as perception and proof, not surveillance
-theater.
+Appearance: an evidence astrolabe: a compact black-glass lens held inside a
+rotating proof lattice, with aperture petals, meridian lines, and small cyan
+evidence sparks snapped to validated source directions. It should read as
+perception and proof, not surveillance theater.
 
 Reasoning: Eyes earns visual sparkle only when evidence exists. The aperture
-metaphor is useful because research narrows and widens attention; it does not
-claim ownership of the answer.
+metaphor is useful because research narrows and widens attention; the astrolabe
+read makes that narrowing feel like constraint by evidence, not answer-claiming
+or watching-for-its-own-sake.
 
 Math:
 
-- Lens from intersection of two spheres with high
-  specular material.
-- Aperture blades as repeated logarithmic-spiral wedges around the front normal.
-- Evidence sparks as small orbiting Kepler rosettes gated by artifact and
-  evidence count.
-- Scanning ring as a thin torus with animated angular mask.
-- Material regions: black glass lens, blue metal aperture, cyan evidence sparks,
-  pale scan ring.
+- Governing domain: a lens hemisphere facing `evidenceDirection`. Directions
+  are projected into tangent disk coordinates on the lens; aperture blades,
+  meridians, scan arcs, and evidence sparks share this domain.
+- Lens from an intersection of two spheres or a compact biconvex SDF with black
+  glass material and cyan edge caustics.
+- Aperture petals as logarithmic spiral shutters in the tangent disk. Unknowns
+  widen the aperture; confidence narrows and steadies it.
+- Proof lattice as a sparse set of meridian and latitude grooves over the lens
+  hemisphere. These are constraint lines, not decoration.
+- Evidence sparks occupy validated source directions on the hemisphere or their
+  nearest meridian positions. No evidence means no sparks.
+- Scanning ring is a pale arc in the same tangent disk, animated by query state
+  and masked by aperture openness.
+- Material regions: black glass lens, blue-metal aperture petals, pale proof
+  meridians, cyan evidence sparks, soft unfocused unknown halo.
+
+Topology invariants:
+
+- The first read is a dark lens constrained by an instrument lattice.
+- Evidence lights must attach to evidence-bearing directions or meridian lines;
+  random sparkle is a lie.
+- Unknowns soften and widen the optical field; confidence sharpens and narrows
+  it.
+- Forbidden shortcut: robot eye, camera iris icon, or generic sparkly orb.
 
 Movement:
 
@@ -585,28 +627,42 @@ Role ids: `modeling`, `epiphany.body`
 Purpose: architecture, graph anatomy, dataflow, checkpoint model, and structural
 fit.
 
-Appearance: a heavy plush geode: soft green mass with embedded graph ribs and
-small connective nodes. It should be adorable by weight and stability, not by
-making baby noises in shader form.
+Appearance: a living load-bearing graph stone: a heavy soft geode mass with
+embedded stress ribs, enamel graph veins, checkpoint pearls, and occasional dark
+fault seams. It should be adorable by weight and stability, not by making baby
+noises in shader form.
 
 Reasoning: Body models the machine's shape. It should feel structural,
-grounded, and tactile. The graph ribs make architecture visible, while the soft
-mass reminds us the model serves the living system rather than becoming a
-diagram shrine.
+grounded, and tactile. The graph ribs make architecture visible as load paths,
+while the soft mass reminds us the model serves the living system rather than
+becoming a diagram shrine.
 
 Math:
 
-- Superellipsoid geode core with exponent `0.72` and smooth-union support lobes.
-- Graph ribs as geodesic tube networks over the surface. First implementation uses
-  five deterministic Aquarium-owned ribs between fixed normalized surface points:
-  north-south, east-west, northwest-center-southeast,
-  northeast-center-southwest, and one equatorial ring segment. Semantic graph
-  size and frontier count may brighten and fill these ribs, but Epiphany graph nodes
-  do not define their world positions.
-- Node beads at rib intersections.
-- Subtle displacement from low-frequency sine waves for breathing mass.
-- Material regions: matte green body, glossy rib enamel, bright checkpoint nodes,
-  dark blocked fissures.
+- Governing domain: superellipsoid surface coordinates. `u` and `v` parameterize
+  the geode surface; ribs are geodesic, loxodrome, meridian, equator, or fault
+  curves in that domain, not tubes glued onto arbitrary world positions.
+- Superellipsoid/geode core with exponent `0.72`, soft flattened base, and
+  optional support lobes only when they are part of the same surface field.
+- Graph ribs as embedded enamel stress paths over the surface. First
+  implementation uses a small deterministic grammar: one meridian path, one
+  equator path, two diagonal loxodromes, and one fault-line family. Semantic
+  graph size and frontier count brighten, fill, or split these paths; Epiphany
+  graph nodes do not define their world positions.
+- Checkpoint pearls are embedded at rib intersections and fill in sequence.
+- Evidence gaps open dark fault seams between ribs. Blocked state widens faults
+  rather than spawning unrelated symbols.
+- Subtle displacement from low-frequency breathing mass must preserve the rib
+  domain so veins do not slide over the body.
+- Material regions: matte green-black soft stone, glossy rib enamel, bright
+  checkpoint pearls, dark blocked fissures, faint warm interior where ribs meet.
+
+Topology invariants:
+
+- The first read is heavy soft mass with structural load paths.
+- Ribs are surface-domain stress lines, not arbitrary graph overlays.
+- Checkpoint nodes are embedded pearls, not free-floating beads.
+- Forbidden shortcut: soft blob plus random graph lines.
 
 Movement:
 
@@ -635,9 +691,10 @@ Role ids: `implementation`, `epiphany.hands`
 Purpose: source changes, runnable work, changed files, and implementation
 artifacts.
 
-Appearance: a small kinetic tool-seed with two grippy lobes, a polished core,
-and quick tool-edge flashes. It should look ready to touch code, not like a
-floating wrench logo.
+Appearance: a compact code-working mandible tool: a polished dark tool-seed
+with three continuous gripper lobes, a warm enamel grip field, and a hot forward
+cutting seam. It should look ready to touch code, not like a floating wrench
+logo.
 
 Reasoning: Hands is the only lane allowed to touch the code body. The shape
 should feel tactile and precise, with motion that acknowledges work quickly and
@@ -645,14 +702,31 @@ then settles. No grand aura. Hands earns drama by producing diff.
 
 Math:
 
-- Superquadric tool core elongated along `workDirection`, exponent `0.58`,
-  with a small helical groove cut along its long axis.
-- Three gripper lobes as logarithmic-spiral tube claws around the core.
-- Tool edge as a thin triangular-prism ridge with high-metalness material and a
-  sine-notched cutting line.
-- Small impact sparks as short-lived bead SDFs near the leading edge.
-- Material regions: warm enamel grip, dark metal edge, hot action stripe,
-  dull blocked cap.
+- Governing domain: prolate tool coordinates aligned to `workDirection`.
+  Longitudinal coordinate `u` runs from rear grip to forward edge; angular
+  coordinate `theta` wraps the core; radial coordinate gives the gripper field.
+- Tool core is an elongated superquadric seed, exponent `0.58`, with a subtle
+  helical groove cut along the same prolate domain.
+- Three gripper lobes are phase lobes of one continuous tri-jaw chuck field
+  around the core. They open, retract, and twist through `theta`; do not build
+  disconnected claws unless a future measured constraint forces that cut.
+- Tool edge is a hot ridge on the forward side of the same field, not a separate
+  logo blade. Its cutting line may use a sine notch, but it remains locked to
+  `workDirection`.
+- Changed files and implementation artifacts appear as tiny metal filings or
+  sparks near the forward seam, then decay quickly.
+- Blocked state retracts jaws and adds a dull cap over the edge rather than
+  spawning an unrelated warning badge.
+- Material regions: warm enamel grip, dark polished core, high-metal edge, hot
+  action stripe, dull blocked cap, brief file-spark flecks.
+
+Topology invariants:
+
+- The first read is a precise working tool-seed with a continuous tri-jaw field.
+- All grasping geometry derives from `workDirection` and the prolate tool
+  domain.
+- Changed-file sparks are receipts, not decoration, and should fade.
+- Forbidden shortcut: wrench icon, floating detached claws, or generic sparks.
 
 Movement:
 
@@ -694,23 +768,41 @@ Role ids: `verification`, `epiphany.soul`
 
 Purpose: verification, confidence, risk, findings, invariants, and review.
 
-Appearance: a small faceted judgement crystal with a soft inner light and a
-thin red-blue risk seam. It should be severe but not hostile.
+Appearance: a verdict polyhedron / oath crystal: a compact faceted body with a
+soft white inner oath light, blue confidence edges, red risk faults, and engraved
+finding lines. It should be severe but not hostile.
 
 Reasoning: Soul protects promises. Facets communicate exactness and review,
 while the inner light keeps it from becoming a punishment object. The risk seam
-shows tension between confidence and unresolved danger.
+shows tension between confidence and unresolved danger; the form is constraint,
+not punishment.
 
 Math:
 
-- Rounded octahedron SDF using max-of-planes blended with radius `0.08`.
-- Inner core sphere visible through material contrast, not real transparency
-  dependency.
-- Risk seam as a thin torus ring around the crystal. Ring thickness is
-  `lerp(0.015, 0.09, risk)`.
-- Finding marks as tiny engraved line SDFs on facets.
-- Material regions: cool crystal facets, white inner core, red risk seam, blue
-  confidence edge, dark rejected mark.
+- Governing domain: a family of signed half-space planes. The body is the
+  rounded intersection of constraint planes; confidence, risk, and review state
+  adjust plane offsets, bevel radius, and fault intensity.
+- Rounded octahedron or small polyhedron SDF using max-of-planes blended with
+  radius `0.08`; higher confidence sharpens bevels, lower confidence softens
+  and clouds them.
+- Inner oath core is a small white sphere or glow visible through material
+  contrast, not a transparency dependency.
+- Risk seam is a red-blue great-circle fault chosen in the crystal's plane
+  domain. Ring thickness is `lerp(0.015, 0.09, risk)`, but it should follow
+  facet intersections when possible instead of reading as a decorative torus.
+- Finding marks are engraved grooves along facet intersections. Accepted
+  findings become clean blue lines; failed or blocked findings create short
+  jagged red fractures that can later heal.
+- Material regions: cool crystal facets, white oath core, blue confidence
+  edges, red risk faults, dark rejected marks.
+
+Topology invariants:
+
+- The first read is a faceted constraint object with an inner promise light.
+- Facets own the form. Seams, marks, and fractures are plane-domain features,
+  not decals floating on a gem.
+- Risk makes the crystal tenser; confidence makes it clearer and steadier.
+- Forbidden shortcut: generic gemstone with a random red ring.
 
 Movement:
 
@@ -739,22 +831,41 @@ Role ids: `reorientation`, `epiphany.life`
 Purpose: continuity, pressure, sleep, reorientation, resume posture, regather posture, and
 memory survival.
 
-Appearance: a teal seed-shell with a small ember inside and a trailing spiral
-of memory beads. It should feel like continuity surviving weather.
+Appearance: a memory nautilus seed: a teal protective shell wrapped around a
+small warm ember, with a logarithmic seam and memory beads traveling along the
+same spiral path. It should feel like continuity surviving weather.
 
 Reasoning: Life carries the thread through compaction, sleep, and rupture. A
-seed-shell is the right metaphor because it protects a candidate continuation, while the ember
-and bead trail show what context remains warm enough to carry forward.
+seed-shell is the right metaphor because it protects a candidate continuation,
+while the ember and bead trail show what context remains warm enough to carry
+forward. The spiral is continuity under pressure, not a decorative tail.
 
 Math:
 
-- Seed body from a revolved cardioid SDF with a flattened base.
-- Shell seam as a logarithmic-spiral groove carved along the seed.
-- Ember as small emissive inner sphere.
-- Memory beads along a logarithmic spiral behind the
-  seed.
-- Breathing field as radial sine displacement with low amplitude.
-- Material regions: teal shell, warm ember, pale memory beads, dark rupture scar.
+- Governing domain: a revolved seed/cardioid shell with logarithmic spiral
+  coordinates. The shell seam, memory bead trail, regather motion, and resume
+  release all use the same spiral grammar.
+- Seed body from a revolved cardioid SDF with a flattened base and protective
+  shell thickness. Pressure tightens the shell rather than scaling it randomly.
+- Spiral seam as a logarithmic groove carved along the seed. Regather opens this
+  groove; sleep narrows it while keeping the ember visible.
+- Ember as a small warm emissive sphere held inside the shell aperture.
+- Memory beads are samples along the same logarithmic spiral, trailing toward
+  `continuityAnchor`. Regather pulls bead phase inward toward the shell; resume
+  advances phase outward along the old path.
+- Breathing field as low-amplitude radial displacement locked to the shell
+  domain so the seam and beads remain coherent.
+- Rupture scar as a dark interruption in the seam, not a separate wound symbol.
+- Material regions: teal shell, warm ember, pale memory beads, dark rupture
+  scar, faint pearlescent seam edge.
+
+Topology invariants:
+
+- The first read is a protective seed-shell with a visible ember.
+- Seam and bead trail share one logarithmic spiral. If they disagree, continuity
+  has become decoration.
+- Pressure tightens protection; resume releases memory; sleep preserves ember.
+- Forbidden shortcut: seed plus unrelated orbiting dots.
 
 Movement:
 
