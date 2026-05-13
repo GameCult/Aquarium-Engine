@@ -175,7 +175,7 @@ float3 sdfLightRadianceAt(float3 p, SdfLight light, out float3 lightDirection, o
     return light.radianceFieldId.rgb;
 }
 
-float3 sdfLightPbrRadiance(float3 p, float3 normal, SdfSurface surface, float intensity)
+float3 sdfLightPbrRadiance(float3 p, float3 normal, SdfSurface surface, float intensity, float shadedFieldId)
 {
     static const float MinimumRoughness = 0.045;
 
@@ -202,7 +202,9 @@ float3 sdfLightPbrRadiance(float3 p, float3 normal, SdfSurface surface, float in
 
         float3 lightDirection;
         float attenuation;
-        float3 incidentRadiance = sdfLightRadianceAt(p, light, lightDirection, attenuation) * intensity;
+        float sameField = abs(light.radianceFieldId.w - shadedFieldId) < 0.25 ? 1.0 : 0.0;
+        float directScale = lerp(1.0, 0.08, sameField);
+        float3 incidentRadiance = sdfLightRadianceAt(p, light, lightDirection, attenuation) * (intensity * directScale);
         float3 irradiance = incidentRadiance * attenuation;
         float3 halfVector = normalize(lightDirection + viewDirection);
         float ndl = saturate(dot(normal, lightDirection));
@@ -253,7 +255,7 @@ float3 shadeSdfPbr(float3 p, float3 normal, SdfSurface surface)
     surface.roughness = saturate(surface.roughness);
 
     return surface.emission
-        + sdfLightPbrRadiance(p, normal, surface, 7.0)
+        + sdfLightPbrRadiance(p, normal, surface, 7.0, sdfFieldId(SDF_INDEX))
         + studioIrradianceDiffuseRadiance(p, normal, surface)
         + studioPmremSpecularRadiance(p, normal, surface);
 }
