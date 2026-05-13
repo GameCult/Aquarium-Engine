@@ -61,10 +61,16 @@ float sdSelfRailFamily(SelfOrbitSpace space, float pressure, float phase)
     float equatorRail = abs(space.z + 0.13 * sin(phase + space.spinA.x * 3.0));
     float meridianRail = abs(dot(space.spinA, normalize(float2(0.76, 0.65))));
     float spiralRail = abs(dot(float2(space.spinB.x, space.z), normalize(float2(0.62, 0.78))) + 0.22 * sin(space.shell + phase * 0.55));
+    float tiltedRailA = abs(dot(space.dir, normalize(float3(0.58, -0.36, 0.73))) + 0.16 * sin(space.shell * 1.30 - phase * 0.44));
+    float tiltedRailB = abs(dot(space.dir, normalize(float3(-0.42, 0.82, 0.39))) + 0.14 * sin(space.shell * 0.90 + phase * 0.37));
+    float crownRail = abs(dot(float2(space.spinA.y, space.z), normalize(float2(0.68, -0.74))) + 0.18 * sin(space.spinB.x * 2.4 + phase * 0.31));
     float shellRail = length(float2(shellRadius, equatorRail * space.scale)) - 0.018;
     float meridianTube = length(float2(shellRadius, meridianRail * space.scale)) - 0.014;
     float spiralTube = length(float2(shellRadius, spiralRail * space.scale)) - 0.012;
-    return min(shellRail, min(meridianTube, spiralTube));
+    float tiltedTubeA = length(float2(shellRadius, tiltedRailA * space.scale)) - 0.011;
+    float tiltedTubeB = length(float2(shellRadius, tiltedRailB * space.scale)) - 0.010;
+    float crownTube = length(float2(shellRadius, crownRail * space.scale)) - 0.010;
+    return min(min(shellRail, meridianTube), min(min(spiralTube, tiltedTubeA), min(tiltedTubeB, crownTube)));
 }
 
 float sdSelfGateFamily(SelfOrbitSpace space, float pressure, float phase)
@@ -73,9 +79,12 @@ float sdSelfGateFamily(SelfOrbitSpace space, float pressure, float phase)
     float equatorRail = abs(space.z + 0.13 * sin(phase + space.spinA.x * 3.0));
     float meridianRail = abs(dot(space.spinA, normalize(float2(0.76, 0.65))));
     float spiralRail = abs(dot(float2(space.spinB.x, space.z), normalize(float2(0.62, 0.78))) + 0.22 * sin(space.shell + phase * 0.55));
+    float tiltedRailA = abs(dot(space.dir, normalize(float3(0.58, -0.36, 0.73))) + 0.16 * sin(space.shell * 1.30 - phase * 0.44));
+    float tiltedRailB = abs(dot(space.dir, normalize(float3(-0.42, 0.82, 0.39))) + 0.14 * sin(space.shell * 0.90 + phase * 0.37));
     float gateA = length(float3(shellRadius * 1.35, equatorRail * space.scale, meridianRail * space.scale)) - 0.036;
     float gateB = length(float3(shellRadius * 1.35, equatorRail * space.scale, spiralRail * space.scale)) - 0.030;
-    return min(gateA, gateB);
+    float gateC = length(float3(shellRadius * 1.35, tiltedRailA * space.scale, tiltedRailB * space.scale)) - 0.026;
+    return min(min(gateA, gateB), gateC);
 }
 
 float sdSelfSeam(SelfOrbitSpace space, float activity)
