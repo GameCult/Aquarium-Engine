@@ -35,6 +35,12 @@ float soulVLine(float distanceToLine, float width)
     return saturate(1.0 - distanceToLine / max(width, 0.0001));
 }
 
+float3 soulFacetNormal(float3 local)
+{
+    float3 side = float3(local.x < 0.0 ? -1.0 : 1.0, local.y < 0.0 ? -1.0 : 1.0, local.z < 0.0 ? -1.0 : 1.0);
+    return normalize(side);
+}
+
 SoulDomain soulDomain(float3 local, SdfObject sdfObject)
 {
     float confidence = saturate(sdfObject.state.y);
@@ -61,10 +67,10 @@ SoulDomain soulDomain(float3 local, SdfObject sdfObject)
     float findingCut = soulVLine(findingEdge, lerp(0.006, 0.011, confidence));
     float riskCut = soulVLine(riskEdge, lerp(0.010, 0.024, risk)) * risk;
     float fractureCut = soulVLine(fracture, lerp(0.006, 0.014, risk)) * risk;
-    float lift = (0.004 + confidence * 0.007 + risk * 0.005) * equatorLift * panelLift;
-    float cut = findingCut * (0.008 + confidence * 0.006)
-        + riskCut * (0.020 + risk * 0.026)
-        + fractureCut * (0.014 + risk * 0.020);
+    float lift = (0.002 + confidence * 0.004 + risk * 0.003) * equatorLift * panelLift;
+    float cut = findingCut * (0.006 + confidence * 0.004)
+        + riskCut * (0.014 + risk * 0.018)
+        + fractureCut * (0.010 + risk * 0.014);
     float relief = surfaceBand * (lift - cut);
 
     SoulDomain domain;
@@ -108,7 +114,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float facetMask = saturate(1.0 - riskMask - fractureMask - findingMask - edgeMask);
 
     float frost = lerp(0.82, 1.14, 0.5 + 0.5 * domain.frost);
-    float3 facetColor = lerp(float3(0.045, 0.065, 0.105), float3(0.42, 0.58, 0.82), confidence) * frost;
+    float3 facetColor = lerp(float3(0.025, 0.038, 0.072), float3(0.22, 0.34, 0.56), confidence) * frost;
     float3 edgeColor = lerp(float3(0.16, 0.38, 0.70), float3(0.56, 0.84, 1.0), confidence);
     float3 findingColor = lerp(float3(0.08, 0.24, 0.62), float3(0.52, 0.82, 1.0), confidence);
     float3 riskColor = lerp(float3(0.28, 0.018, 0.030), float3(1.0, 0.055, 0.045), risk);
@@ -132,11 +138,18 @@ float3 soulCrystalShade(float3 p, float3 normal, int sdfIndex, SdfSurface surfac
     float confidence = saturate(sdfObject.state.y);
     float risk = saturate(sdfObject.state.z * 1.55 + (1.0 - confidence) * 0.35);
     SoulDomain domain = soulDomain(local, sdfObject);
+    float seamInfluence = saturate(
+        soulVLine(domain.outerEdge, 0.026)
+        + soulVLine(domain.findingEdge, 0.014)
+        + soulVLine(domain.riskEdge, 0.018) * risk
+        + soulVLine(domain.fracture, 0.010) * risk);
+    float3 facetNormal = soulFacetNormal(local);
+    float3 shadeNormal = normalize(lerp(facetNormal, normal, 0.10 + seamInfluence * 0.22));
 
     float3 viewDirection = normalize(cameraPosition - p);
-    float ndv = saturate(dot(normal, viewDirection));
-    float3 reflected = reflect(-viewDirection, normal);
-    float3 refracted = refract(-viewDirection, normal, 0.67);
+    float ndv = saturate(dot(shadeNormal, viewDirection));
+    float3 reflected = reflect(-viewDirection, shadeNormal);
+    float3 refracted = refract(-viewDirection, shadeNormal, 0.67);
     float refractionValid = dot(refracted, refracted) > 0.001 ? 1.0 : 0.0;
     float3 glassDirection = normalize(lerp(reflected, refracted, refractionValid));
     float3 envRefract = studioPmremSample(glassDirection, 0.24);
@@ -145,8 +158,8 @@ float3 soulCrystalShade(float3 p, float3 normal, int sdfIndex, SdfSurface surfac
     float fresnel = pow(1.0 - ndv, 4.8);
     float thickness = saturate((domain.scale - dot(domain.octant, float3(0.45, 0.45, 0.45))) * 1.8);
     float3 glassTint = lerp(float3(0.34, 0.50, 0.84), float3(0.78, 0.90, 1.0), confidence);
-    float3 transmission = envRefract * glassTint * (0.42 + thickness * 0.70);
-    float3 reflection = envReflect * (0.14 + fresnel * 0.55);
+    float3 transmission = envRefract * glassTint * (0.18 + thickness * 0.42);
+    float3 reflection = envReflect * (0.22 + fresnel * 0.72);
 
     float innerCore = exp(-dot(local, local) * 5.8);
     float chamberGlow = domain.chamber * domain.chamber * (0.35 + confidence * 0.85);
@@ -160,7 +173,7 @@ float3 soulCrystalShade(float3 p, float3 normal, int sdfIndex, SdfSurface surfac
     float3 blueCaustic = float3(0.36, 0.70, 1.0) * (edgeLine * 0.58 + findingLine * 0.72 + paneFlash * 0.22 + fresnel * 0.36) * (0.75 + confidence * 0.9);
     float3 redFault = float3(1.0, 0.075, 0.045) * (riskLine * 1.10 + fractureLine * 0.84);
 
-    return shadeSdfPbr(p, normal, surface) * 0.22
+    return shadeSdfPbr(p, shadeNormal, surface) * 0.18
         + transmission
         + reflection
         + oathLight
