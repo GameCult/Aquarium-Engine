@@ -18,7 +18,6 @@ cbuffer AquariumFrame : register(b0)
     float bloomIntensity;
     float bloomVeilIntensity;
     float4 cursorWorlds;
-    float4 sceneVisualControls;
 };
 
 Texture2D<float4> heightFieldTexture : register(t0);
@@ -210,7 +209,7 @@ float3 backgroundRadiance(float3 direction)
 RayMarchResult traverseRay(float3 origin, float3 direction)
 {
     RayMarchResult result;
-    result.color = backgroundRadiance(direction) * sceneVisualControls.x;
+    result.color = backgroundRadiance(direction);
     result.travel = farDistance + 1.0;
     result.fieldId = 0.0;
     result.normal = 0.0;
@@ -219,7 +218,7 @@ RayMarchResult traverseRay(float3 origin, float3 direction)
 
     float3 surfacePosition;
     float surfaceTravel;
-    bool surfaceHit = sceneVisualControls.y > 0.5 && traceHeightFieldSurfaceDirect(origin, direction, 0.0, farDistance, surfacePosition, surfaceTravel);
+    bool surfaceHit = traceHeightFieldSurfaceDirect(origin, direction, 0.0, farDistance, surfacePosition, surfaceTravel);
     if (surfaceHit)
     {
         float3 surfaceNormal;

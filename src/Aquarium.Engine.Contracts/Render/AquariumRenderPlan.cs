@@ -230,18 +230,9 @@ public sealed class AquariumSceneState
 {
     public static AquariumSceneState Empty { get; } = new();
 
-    public AquariumSceneVisualOptions VisualOptions { get; init; } = AquariumSceneVisualOptions.Default;
-
     public IReadOnlyList<AquariumHeightFieldBrush> HeightFieldBrushes { get; init; } = [];
 
     public IReadOnlyList<AquariumSdfObject> SdfObjects { get; init; } = [];
 
     public IReadOnlyList<AquariumSdfLight> SdfLights { get; init; } = [];
-}
-
-public readonly record struct AquariumSceneVisualOptions(
-    float BackgroundIntensity,
-    float SurfaceVisibility)
-{
-    public static AquariumSceneVisualOptions Default { get; } = new(1.0f, 1.0f);
 }

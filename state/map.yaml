@@ -85,7 +85,7 @@ renderer_state:
     - Aquarium exposes an optional synth/audio hosting boundary through AquariumSynthDocument; Aquarium consumes AquariumSynth.Dsl as a pinned repo-local NuGet package so synth-agent construction cannot break Aquarium builds until the package is intentionally updated.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
-    - Isolated Epiphany agent preview renders run through the real D3D12 renderer from src/Aquarium.Epiphany.AgentPreview; the engine exposes only generic scene visual controls and final-frame PNG capture.
+    - Isolated Epiphany agent preview renders run through the real D3D12 renderer from src/Aquarium.Epiphany.AgentPreview; preview isolation is owned by a preview-only scene shader, while the engine exposes only final-frame PNG capture.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
     - D3D11 scene renderer, runtime volumetrics, cloud/fog research, medium/froxel render targets, and the SDF-field renderer plan are shelved and removed from live repo state.
   next:

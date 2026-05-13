@@ -29,7 +29,7 @@ using var renderer = new D3D12Renderer(
     options.Width,
     options.Height,
     shaderPath,
-    EpiphanyRenderPlan.Create(),
+    CreatePreviewRenderPlan(),
     new GraphicsSettings(0, options.Exposure, options.BloomIntensity, options.BloomVeilIntensity));
 renderer.DebugUiVisible = false;
 
@@ -97,11 +97,17 @@ static AquariumFrame CreateFrame(PreviewSubject subject, PreviewView view, float
     };
     var scene = new AquariumSceneState
     {
-        VisualOptions = new AquariumSceneVisualOptions(0.0f, 0.0f),
         SdfObjects = objects,
         SdfLights = lights,
     };
     return new AquariumFrame(new ViewFrame(Vector2.Zero, 20.0f), view.CameraPosition, timeSeconds, Vector2.Zero, scene);
+}
+
+static AquariumRenderPlan CreatePreviewRenderPlan()
+{
+    var plan = EpiphanyRenderPlan.Create();
+    plan.Shaders.Scene("D3D12AgentPreviewScene.hlsl");
+    return plan;
 }
 
 static AquariumSdfObject InactiveObject(int index)
@@ -132,7 +138,7 @@ sealed record PreviewOptions(
             IntValueAfter(args, "--width", 768),
             IntValueAfter(args, "--height", 768),
             IntValueAfter(args, "--frames", 18),
-            IntValueAfter(args, "--warmup-limit", 900),
+            IntValueAfter(args, "--warmup-limit", 3600),
             FloatValueAfter(args, "--time", 18.0f),
             FloatValueAfter(args, "--exposure", 0.24f),
             FloatValueAfter(args, "--bloom", 0.12f),

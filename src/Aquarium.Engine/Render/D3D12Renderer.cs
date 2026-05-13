@@ -140,7 +140,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private float previousViewRadius = 0.001f;
     private float previousTimeSeconds;
     private D3D12HeightFieldBrushConstants heightFieldBrushConstants;
-    private Vector4 sceneVisualControls = Vector4.One;
     private GraphicsSettings settings = GraphicsSettings.Default;
     private double accumulatedFrameCpuMilliseconds;
     private double accumulatedRecordCpuMilliseconds;
@@ -485,8 +484,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             settings.SceneExposure,
             settings.BloomIntensity,
             settings.BloomVeilIntensity,
-            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y),
-            sceneVisualControls));
+            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
@@ -1386,11 +1384,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Array.Clear(sdfObjects);
         Array.Clear(sdfLights);
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
-        sceneVisualControls = new Vector4(
-            Math.Clamp(scene.VisualOptions.BackgroundIntensity, 0.0f, 4.0f),
-            Math.Clamp(scene.VisualOptions.SurfaceVisibility, 0.0f, 1.0f),
-            0.0f,
-            0.0f);
 
         var objectCount = Math.Min(scene.SdfObjects.Count, MaxSdfObjectCount);
         for (var index = 0; index < objectCount; index++)
@@ -2032,8 +2025,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float Exposure,
         float BloomIntensity,
         float BloomVeilIntensity,
-        Vector4 CursorWorlds,
-        Vector4 SceneVisualControls);
+        Vector4 CursorWorlds);
 
     private sealed record D3D12ShaderPaths(
         string HeightField,

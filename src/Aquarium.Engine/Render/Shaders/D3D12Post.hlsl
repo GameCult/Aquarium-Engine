@@ -18,7 +18,6 @@ cbuffer AquariumFrame : register(b0)
     float bloomIntensity;
     float bloomVeilIntensity;
     float4 cursorWorlds;
-    float4 sceneVisualControls;
 };
 
 Texture2D<float4> sourceTexture : register(t0);

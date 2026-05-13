@@ -18,7 +18,6 @@ cbuffer AquariumFrame : register(b0)
     float bloomIntensity;
     float bloomVeilIntensity;
     float4 cursorWorlds;
-    float4 sceneVisualControls;
 };
 
 cbuffer HeightFieldBrushes : register(b1)
