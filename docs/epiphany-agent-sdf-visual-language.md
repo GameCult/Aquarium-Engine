@@ -347,20 +347,20 @@ paths, one current routing decision.
 
 Math:
 
-- Exact sphere core with radius `1.0`.
-- Four torus arc families in tilted planes, clipped or gated by a shared
-  orbital grammar so rails cohere instead of visibly colliding.
-- Smooth union between the core and small gate-node spheres at meaningful
-  routing intersections.
-- Thin emissive routing filaments as torus-segment SDFs with sinusoidal radius
-  modulation along the arc.
+- Exact sphere core with continuous inlay/vein fields on its surface.
+- A compact log-spherical lattice maps local direction and logarithmic radius
+  into nested shell waves. Orbital rails are level sets where radial shell bands
+  cross angular harmonic bands; gate nodes are the crossing points between
+  multiple bands in that same lattice.
+- Smooth union is reserved for joining the core to lattice-derived rails,
+  gates, inlays, and seam marks. Do not hand-place independent hoops or
+  separate torus inventories when the form wants one coherent orbital grammar.
 - Material regions: warm ceramic core, metallic gold/orichalcum routing rails,
   bright current target gate, and dark review seam. Emission is an accent on
   rails and active gates; it must not wash out component boundaries.
-- Implementation note: prefer a continuous spatial/topological grammar, such as
-  a log-spherical or spherical-coordinate field where shells, orbital rails,
-  gates, and seam bands are level sets of the same coordinate system. Do not
-  hand-place independent hoops when the form wants one coherent orbital space.
+- Implementation note: complexity should emerge from the coordinate
+  abstraction. If the shader grows by adding more named hoop equations, stop and
+  rebuild the field grammar instead.
 
 Movement:
 
