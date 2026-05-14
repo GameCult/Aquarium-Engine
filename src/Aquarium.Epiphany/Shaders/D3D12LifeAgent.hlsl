@@ -6,136 +6,82 @@ static const int SDF_INDEX = 7;
 struct LifeDomain
 {
     float body;
-    float shell;
-    float rib;
-    float rim;
-    float cup;
-    float bead;
-    float crack;
     float whorl;
+    float lip;
+    float bead;
+    float rib;
+    float crack;
     float chamber;
     float2 uv;
 };
 
-float lifeSpiralPhase(float2 uv)
+float lifePhase(float2 uv)
 {
-    float r = max(length(uv), 0.025);
-    return atan2(uv.y, uv.x) - 1.52 * log(r + 0.052) + 0.22;
+    float r = max(length(uv), 0.030);
+    return atan2(uv.y, uv.x) - 1.38 * log(r + 0.060) + 0.55;
 }
 
-float lifeShellEnvelope(float2 uv)
+float lifeWhorlDistance(float3 local, out float2 uv, out float phase, out float growth)
 {
+    uv = float2(local.x + 0.060, local.z - 0.020);
     float r = length(uv);
-    float theta = atan2(uv.y, uv.x);
-    float d = lifeSpiralPhase(uv);
-    float spiralDistance = abs(sin(d)) * r;
-    float radius = 0.47 + 0.18 * cos(theta - 0.10) + 0.070 * cos(theta * 2.0 + 0.58);
-    float whorlLift = smoothstep(0.040, 0.0, spiralDistance) * (0.012 + 0.018 * smoothstep(0.12, 0.64, r));
-    return r - radius - whorlLift;
+    phase = lifePhase(uv);
+    growth = smoothstep(0.035, 0.72, r);
+
+    float spiralSeparation = abs(sin(phase)) * max(r, 0.035);
+    float tube = 0.145 + 0.245 * growth;
+    float shell = length(float2(spiralSeparation * 0.78, local.y * 0.74)) - tube;
+    float outer = r - (0.72 + 0.028 * sin(atan2(uv.y, uv.x) * 2.0 + 0.4));
+    return max(shell, outer);
 }
 
-float lifeShell(float3 local, float pressure, out float whorl, out float chamber)
+float lifeApertureLip(float3 local)
 {
-    float2 uv = float2(local.x + 0.045, local.z - 0.010);
-    whorl = lifeShellEnvelope(uv);
-
-    float convex = pow(saturate(-whorl / 0.34), 0.42);
-    float halfDepth = (0.050 + 0.285 * convex) * lerp(1.0, 0.90, pressure);
-    float side = abs(local.y) - halfDepth;
-
-    float3 mouthCenter = float3(-0.415, -0.060, 0.065);
-    float mouth = sdEllipsoid(local - mouthCenter, float3(0.34, 0.30, 0.44));
-    float mouthGate = dot(normalize(float3(-0.92, -0.18, 0.12)), local - mouthCenter) + 0.25;
-    chamber = max(mouth, -mouthGate);
-
-    return max(max(whorl, side), -chamber);
-}
-
-float lifeSurfaceBand(float shellDistance, float offset, float halfWidth)
-{
-    return abs(shellDistance + offset) - halfWidth;
-}
-
-float lifeRib(float3 local, float shellDistance)
-{
-    float2 uv = float2(local.x + 0.045, local.z - 0.010);
-    float r = max(length(uv), 0.030);
-    float phase = lifeSpiralPhase(uv);
-    float chamberRibs = abs(sin(phase * 13.0 + r * 3.4)) * r - 0.010;
-    return max(lifeSurfaceBand(shellDistance, 0.018, 0.028), chamberRibs);
-}
-
-float lifeRim(float3 local, float shellDistance, float whorl, out float seamLine)
-{
-    float2 uv = float2(local.x + 0.045, local.z - 0.010);
-    float r = max(length(uv), 0.030);
-    seamLine = abs(sin(lifeSpiralPhase(uv))) * r;
-    float seam = max(lifeSurfaceBand(shellDistance, 0.010, 0.022), seamLine - 0.020);
-    float aperture = abs(length((local.xz - float2(-0.395, 0.065)) / float2(0.34, 0.44)) - 1.0) * 0.10;
-    float lip = max(abs(local.y + 0.204) - 0.022, aperture - 0.011);
-    return min(seam, lip);
-}
-
-float lifeBeads(float3 local)
-{
-    float2 q = (local.xz - float2(-0.395, 0.065)) / float2(0.34, 0.44);
+    float2 q = (local.xz - float2(-0.365, 0.040)) / float2(0.36, 0.44);
     float angle = atan2(q.y, q.x);
-    float arcGate = max(angle - 0.28, -2.72 - angle);
-    float rimDistance = abs(length(q) - 1.0) * 0.075 - 0.005;
-    float side = abs(local.y + 0.210) - 0.020;
-    float beadPeriod = abs(sin((angle + 2.72) * 13.5)) - 0.30;
-    return max(max(rimDistance, side), max(arcGate * 0.05, beadPeriod * 0.030));
+    float aperture = abs(length(q) - 1.0) * 0.11;
+    float openSide = max(angle - 1.58, -2.72 - angle);
+    return max(max(aperture - 0.017, abs(local.y + 0.205) - 0.033), openSide * 0.055);
 }
 
-float lifeCup(float3 local)
+float lifeEmbeddedPearls(float3 local)
 {
-    float2 q = (local.xz - float2(-0.345, 0.060)) / float2(0.355, 0.450);
-    float footprint = (length(q) - 1.0) * 0.35;
-    float dish = saturate(1.0 - dot(q, q));
-    float shellY = -0.245 + dish * 0.110;
-    float sheet = abs(local.y - shellY) - 0.018;
-    return max(footprint, sheet);
-}
-
-float lifeCrack(float3 local, float shellDistance)
-{
-    float2 uv = float2(local.x + 0.045, local.z - 0.010);
-    float r = max(length(uv), 0.030);
-    float phase = lifeSpiralPhase(uv);
-    float fine = abs(sin(phase * 23.0 + r * 21.0 + sin(phase * 3.0))) * r - 0.004;
-    return max(lifeSurfaceBand(shellDistance, 0.004, 0.012), fine);
+    float2 q = (local.xz - float2(-0.365, 0.040)) / float2(0.36, 0.44);
+    float angle = atan2(q.y, q.x);
+    float arc = saturate((angle + 2.72) / 4.30);
+    float aperture = abs(length(q) - 1.0) * 0.11;
+    float beadWave = abs(sin(arc * 17.0 * PI)) - 0.42;
+    float arcGate = max(angle - 1.58, -2.72 - angle);
+    return max(max(aperture - 0.006, abs(local.y + 0.208) - 0.022), max(beadWave * 0.026, arcGate * 0.055));
 }
 
 LifeDomain lifeDomain(float3 local, SdfObject sdfObject)
 {
-    float pressure = saturate(sdfObject.state.z + (1.0 - sdfObject.state.y) * 0.14);
+    float2 uv;
+    float phase;
+    float growth;
+    float whorl = lifeWhorlDistance(local, uv, phase, growth);
+    float lip = lifeApertureLip(local);
+    float bead = lifeEmbeddedPearls(local);
+    float shellBand = abs(whorl + 0.018) - 0.022;
+    float rib = max(abs(sin(phase * 10.0 + growth * 2.2)) * max(length(uv), 0.035) - 0.014, shellBand);
+    float crack = max(abs(sin(phase * 31.0 + growth * 18.0)) * max(length(uv), 0.035) - 0.004, abs(whorl + 0.004) - 0.011);
+    float chamber = smoothstep(0.11, 0.0, length((local.xz - float2(-0.330, 0.055)) / float2(0.36, 0.42)) - 0.78)
+        * smoothstep(0.060, -0.030, local.y + 0.155);
 
-    float whorl;
-    float chamber;
-    float shell = lifeShell(local, pressure, whorl, chamber);
-    float rib = lifeRib(local, shell);
-
-    float seamLine;
-    float rim = lifeRim(local, shell, whorl, seamLine);
-    float bead = lifeBeads(local);
-    float cup = lifeCup(local);
-    float crack = lifeCrack(local, shell);
-    float ribLift = (1.0 - smoothstep(0.0, 0.020, rib)) * 0.010;
-    float rimLift = (1.0 - smoothstep(0.0, 0.018, rim)) * 0.016;
-    float beadLift = (1.0 - smoothstep(0.0, 0.014, bead)) * 0.018;
-    float crackedShell = shell - ribLift - rimLift;
+    float ribLift = (1.0 - smoothstep(0.0, 0.020, rib)) * 0.012;
+    float lipLift = (1.0 - smoothstep(0.0, 0.020, lip)) * 0.026;
+    float beadLift = (1.0 - smoothstep(0.0, 0.014, bead)) * 0.020;
 
     LifeDomain domain;
-    domain.body = smoothUnion(crackedShell - beadLift, cup, 0.035);
-    domain.shell = crackedShell;
-    domain.rib = rib;
-    domain.rim = rim;
-    domain.cup = cup;
-    domain.bead = bead;
-    domain.crack = crack;
+    domain.body = whorl - ribLift - lipLift - beadLift;
     domain.whorl = whorl;
+    domain.lip = lip;
+    domain.bead = bead;
+    domain.rib = rib;
+    domain.crack = crack;
     domain.chamber = chamber;
-    domain.uv = float2(local.x + 0.045, local.z - 0.010);
+    domain.uv = uv;
     return domain;
 }
 
@@ -153,41 +99,36 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float radius = max(sdfObject.centerRadius.w, 0.001);
     float3 local = (p - sdfObject.centerRadius.xyz) / radius;
     LifeDomain domain = lifeDomain(local, sdfObject);
-    float activity = saturate(sdfObject.state.x);
     float heartbeat = saturate(sdfObject.state.y);
     float pressure = saturate(sdfObject.state.z + (1.0 - heartbeat) * 0.14);
 
-    float isBead = 1.0 - smoothstep(0.000, 0.014, domain.bead);
-    float isRim = (1.0 - isBead) * (1.0 - smoothstep(0.000, 0.020, domain.rim));
-    float isCup = (1.0 - isBead) * (1.0 - isRim) * (domain.cup <= domain.shell ? 1.0 : 0.0);
-    float isRib = (1.0 - isBead) * (1.0 - isRim) * (1.0 - isCup) * (1.0 - smoothstep(0.000, 0.022, domain.rib));
-    float isShell = (1.0 - isBead) * (1.0 - isRim) * (1.0 - isCup) * (1.0 - isRib);
+    float lip = 1.0 - smoothstep(0.000, 0.021, domain.lip);
+    float bead = (1.0 - lip * 0.45) * (1.0 - smoothstep(0.000, 0.014, domain.bead));
+    float rib = (1.0 - lip) * (1.0 - bead) * (1.0 - smoothstep(0.000, 0.021, domain.rib));
+    float shell = saturate(1.0 - lip - bead - rib);
+    float chamber = shell * domain.chamber;
+    float crack = shell * (1.0 - chamber) * (1.0 - smoothstep(0.000, 0.010, domain.crack));
+    float phase = lifePhase(domain.uv);
+    float nacre = 0.5 + 0.5 * sin(phase * 6.0 + local.y * 7.0 + timeSeconds * 0.12);
 
-    float insideChamber = saturate(isCup + isShell * (1.0 - smoothstep(0.000, 0.055, abs(domain.chamber))));
-    float crackMask = isShell * (1.0 - insideChamber) * (1.0 - smoothstep(0.000, 0.012, domain.crack));
-    float nacre = 0.5 + 0.5 * sin(lifeSpiralPhase(domain.uv) * 7.0 + local.y * 9.0 + timeSeconds * 0.15);
-
-    float3 teal = lerp(float3(0.020, 0.30, 0.34), float3(0.09, 0.58, 0.62), nacre);
-    float3 gold = lerp(float3(0.88, 0.48, 0.10), float3(1.0, 0.80, 0.30), nacre);
-    float3 nacreGold = float3(1.0, 0.86, 0.58);
-    float3 pearl = lerp(float3(0.82, 0.75, 0.62), float3(1.0, 0.96, 0.84), nacre);
-    float3 ember = float3(1.0, 0.46, 0.06);
+    float3 teal = lerp(float3(0.018, 0.30, 0.34), float3(0.085, 0.58, 0.62), nacre);
+    float3 gold = lerp(float3(0.90, 0.48, 0.10), float3(1.0, 0.78, 0.28), nacre);
+    float3 nacreLip = float3(1.0, 0.88, 0.60);
+    float3 pearl = lerp(float3(0.78, 0.72, 0.58), float3(1.0, 0.96, 0.82), nacre);
 
     SdfSurface surface;
-    surface.baseColor = teal * isShell * (1.0 - insideChamber)
-        + gold * insideChamber
-        + nacreGold * saturate(isRim + isRib)
-        + pearl * isBead
-        + ember * 0.0;
-    surface.baseColor = lerp(surface.baseColor, gold, crackMask * 0.58);
-    surface.metallic = 0.0 * isShell + 0.34 * saturate(isRim + isRib);
-    surface.roughness = 0.22 * isShell + 0.14 * insideChamber + 0.11 * saturate(isRim + isRib) + 0.10 * isBead;
+    surface.baseColor = teal * shell * (1.0 - chamber)
+        + gold * chamber
+        + nacreLip * saturate(lip + rib)
+        + pearl * bead;
+    surface.baseColor = lerp(surface.baseColor, gold, crack * 0.55);
+    surface.metallic = 0.32 * saturate(lip + rib);
+    surface.roughness = 0.22 * shell + 0.13 * chamber + 0.10 * saturate(lip + rib) + 0.09 * bead;
     surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex)) * 0.03
-        + teal * isShell * 0.020
-        + gold * insideChamber * (0.42 + heartbeat * 0.36)
-        + nacreGold * isRim * (0.30 + activity * 0.22)
-        + pearl * isBead * (0.22 + heartbeat * 0.18)
-        + gold * crackMask * (0.06 + pressure * 0.16);
+        + gold * chamber * (0.52 + heartbeat * 0.34)
+        + nacreLip * lip * 0.16
+        + pearl * bead * 0.14
+        + gold * crack * (0.05 + pressure * 0.14);
     return surface;
 }
 
@@ -200,13 +141,12 @@ float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, 
     float3 shaded = shadeSdfPbr(p, normal, surface);
 
     float3 viewDirection = normalize(cameraPosition - p);
-    float edge = pow(1.0 - saturate(dot(normal, viewDirection)), 3.2);
-    float core = exp(-dot(local - float3(-0.160, -0.160, 0.040), local - float3(-0.160, -0.160, 0.040)) * 10.0);
-    float seam = 1.0 - smoothstep(0.0, 0.026, min(domain.rim, abs(sin(lifeSpiralPhase(domain.uv))) * max(length(domain.uv), 0.03)));
+    float edge = pow(1.0 - saturate(dot(normal, viewDirection)), 3.0);
+    float core = exp(-dot(local - float3(-0.16, -0.14, 0.04), local - float3(-0.16, -0.14, 0.04)) * 9.0);
     return shaded
-        + float3(1.0, 0.48, 0.08) * core * 0.45
-        + float3(0.90, 0.70, 0.34) * seam * 0.075
-        + float3(0.12, 0.65, 0.70) * edge * 0.10;
+        + float3(1.0, 0.50, 0.08) * core * 0.35
+        + float3(0.12, 0.62, 0.70) * edge * 0.10
+        + float3(0.95, 0.70, 0.30) * domain.chamber * 0.12;
 }
 
 #define SDF_TRACE_STEP_SCALE 0.15
