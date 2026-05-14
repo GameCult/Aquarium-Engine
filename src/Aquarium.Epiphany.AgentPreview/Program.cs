@@ -207,7 +207,9 @@ sealed record PreviewView(string Key, Vector3 CameraPosition)
         [
             new("front", new Vector3(0.0f, -distance, distance * 0.36f)),
             new("front-high", new Vector3(0.0f, -distance * 0.82f, distance * 0.86f)),
+            new("mouth-oblique", new Vector3(-distance * 0.48f, -distance * 0.92f, distance * 0.34f)),
             new("right", new Vector3(distance, 0.0f, distance * 0.36f)),
+            new("right-low", new Vector3(distance, 0.0f, distance * 0.14f)),
             new("left", new Vector3(-distance, 0.0f, distance * 0.36f)),
             new("three-quarter", new Vector3(distance * 0.72f, -distance * 0.72f, distance * 0.52f)),
             new("top-oblique", new Vector3(distance * 0.22f, -distance * 0.32f, distance * 1.16f)),

@@ -5,12 +5,13 @@ Reference: `artifacts/ig_0b80263584b1a81e016a051475aeac8191acb0ced03b9a3e7e.png`
 Working model:
 
 - The readable form is a memory nautilus, not a generic seed.
-- A rounded ellipsoid owns the volume; an attempted extruded cardioid disk made side views look cylindrical.
-- The logarithmic shell domain owns spiral ribs, seam glow, crack veins, aperture grain, and bead placement.
-- The aperture needs a warm inner bowl or it collapses into empty black background in isolated previews.
-- Beads are allowed to be discrete samples because the spec calls them beads, but their positions should still be samples of the shell spiral instead of arbitrary orbit dots.
+- The log-polar shell footprint owns the front silhouette; an ellipsoid silhouette with spiral material masks reads as wallpaper and fails the reference.
+- The 3D body is a rounded extrusion of that footprint, not a raw spiral-band volume. Making the whorl field directly own all occupied space tore the shell into exposed strips and produced an hourglass side view.
+- The logarithmic shell domain owns spiral ribs, seam glow, crack veins, and shell relief.
+- The aperture needs a solid warm inner bowl or it collapses into empty black background in isolated previews.
+- Detached pearl spheres and ember geometry are wrong for this form. Pearls, if present, must be relief/material on the aperture lip field; the ember should read as inner chamber light, not as a separate object.
 
 Latest preview used for judgment:
 
-- `artifacts/agent-previews/Life/20260514-014531/life-front.png`
-- `artifacts/agent-previews/Life/20260514-014531/life-three-quarter.png`
+- `artifacts/agent-previews/Life/20260514-025212/life-front.png`
+- `artifacts/agent-previews/Life/20260514-025212/life-mouth-oblique.png`
