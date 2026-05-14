@@ -9,6 +9,7 @@ struct LifeDomain
     float shell;
     float rib;
     float rim;
+    float cup;
     float bead;
     float crack;
     float whorl;
@@ -86,6 +87,16 @@ float lifeBeads(float3 local)
     return max(max(rimDistance, side), max(arcGate * 0.05, beadPeriod * 0.030));
 }
 
+float lifeCup(float3 local)
+{
+    float2 q = (local.xz - float2(-0.345, 0.060)) / float2(0.355, 0.450);
+    float footprint = (length(q) - 1.0) * 0.35;
+    float dish = saturate(1.0 - dot(q, q));
+    float shellY = -0.245 + dish * 0.110;
+    float sheet = abs(local.y - shellY) - 0.018;
+    return max(footprint, sheet);
+}
+
 float lifeCrack(float3 local, float shellDistance)
 {
     float2 uv = float2(local.x + 0.045, local.z - 0.010);
@@ -107,6 +118,7 @@ LifeDomain lifeDomain(float3 local, SdfObject sdfObject)
     float seamLine;
     float rim = lifeRim(local, shell, whorl, seamLine);
     float bead = lifeBeads(local);
+    float cup = lifeCup(local);
     float crack = lifeCrack(local, shell);
     float ribLift = (1.0 - smoothstep(0.0, 0.020, rib)) * 0.010;
     float rimLift = (1.0 - smoothstep(0.0, 0.018, rim)) * 0.016;
@@ -114,10 +126,11 @@ LifeDomain lifeDomain(float3 local, SdfObject sdfObject)
     float crackedShell = shell - ribLift - rimLift;
 
     LifeDomain domain;
-    domain.body = crackedShell - beadLift;
+    domain.body = smoothUnion(crackedShell - beadLift, cup, 0.035);
     domain.shell = crackedShell;
     domain.rib = rib;
     domain.rim = rim;
+    domain.cup = cup;
     domain.bead = bead;
     domain.crack = crack;
     domain.whorl = whorl;
@@ -145,11 +158,12 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float pressure = saturate(sdfObject.state.z + (1.0 - heartbeat) * 0.14);
 
     float isBead = 1.0 - smoothstep(0.000, 0.014, domain.bead);
-    float isRim = (1.0 - isBead) * (1.0 - smoothstep(0.000, 0.018, domain.rim));
-    float isRib = (1.0 - isBead) * (1.0 - isRim) * (1.0 - smoothstep(0.000, 0.022, domain.rib));
-    float isShell = (1.0 - isBead) * (1.0 - isRim) * (1.0 - isRib);
+    float isRim = (1.0 - isBead) * (1.0 - smoothstep(0.000, 0.020, domain.rim));
+    float isCup = (1.0 - isBead) * (1.0 - isRim) * (domain.cup <= domain.shell ? 1.0 : 0.0);
+    float isRib = (1.0 - isBead) * (1.0 - isRim) * (1.0 - isCup) * (1.0 - smoothstep(0.000, 0.022, domain.rib));
+    float isShell = (1.0 - isBead) * (1.0 - isRim) * (1.0 - isCup) * (1.0 - isRib);
 
-    float insideChamber = isShell * (1.0 - smoothstep(0.000, 0.055, abs(domain.chamber)));
+    float insideChamber = saturate(isCup + isShell * (1.0 - smoothstep(0.000, 0.055, abs(domain.chamber))));
     float crackMask = isShell * (1.0 - insideChamber) * (1.0 - smoothstep(0.000, 0.012, domain.crack));
     float nacre = 0.5 + 0.5 * sin(lifeSpiralPhase(domain.uv) * 7.0 + local.y * 9.0 + timeSeconds * 0.15);
 
@@ -167,7 +181,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + ember * 0.0;
     surface.baseColor = lerp(surface.baseColor, gold, crackMask * 0.58);
     surface.metallic = 0.0 * isShell + 0.34 * saturate(isRim + isRib);
-    surface.roughness = 0.22 * isShell + 0.16 * insideChamber + 0.11 * saturate(isRim + isRib) + 0.10 * isBead;
+    surface.roughness = 0.22 * isShell + 0.14 * insideChamber + 0.11 * saturate(isRim + isRib) + 0.10 * isBead;
     surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex)) * 0.03
         + teal * isShell * 0.020
         + gold * insideChamber * (0.42 + heartbeat * 0.36)

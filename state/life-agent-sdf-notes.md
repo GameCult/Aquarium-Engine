@@ -10,8 +10,9 @@ Working model:
 - The logarithmic shell domain owns spiral ribs, seam glow, crack veins, and shell relief.
 - The aperture needs a solid warm inner bowl or it collapses into empty black background in isolated previews.
 - Detached pearl spheres and ember geometry are wrong for this form. Pearls, if present, must be relief/material on the aperture lip field; the ember should read as inner chamber light, not as a separate object.
+- The aperture chamber must render as an integrated concave inner shell surface behind the lip. If the chamber material paints over the lip, the form turns into a flat golden cut face.
 
 Latest preview used for judgment:
 
-- `artifacts/agent-previews/Life/20260514-025212/life-front.png`
-- `artifacts/agent-previews/Life/20260514-025212/life-mouth-oblique.png`
+- `artifacts/agent-previews/Life/20260514-040851/life-front.png`
+- `artifacts/agent-previews/Life/20260514-040851/life-mouth-oblique.png`
