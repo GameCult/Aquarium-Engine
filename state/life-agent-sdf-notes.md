@@ -13,8 +13,12 @@ Working model:
 - Do not recreate the Shadertoy Nautilus. Its durable lesson is spatial-domain mapping, not the Life silhouette.
 - The spec authority is a protective revolved seed/cardioid shell around a visible ember. The Nautilus spiral math should only coordinate seam, bead trail, aperture logic, and surface breathing.
 - Lip, pearls, ribs, cracks, and chamber light are fields on the same shell/spiral coordinates, not separate child objects.
+- Current failure as of `20260514-141015`: the render is less egg-shaped, but the center reads as a mechanical mouth because the spiral/seam field owns too much material authority and the aperture is a bite. The next model must make the shell mass first, then use spiral coordinates for raised pale ribs and bead trail only.
+- Concept target: front view should show a heavy teal shell mass with a round outer whorl, a gold inner aperture bowl on the left, a visible ember near the inner spiral, pale raised ribs arcing from the center to the outer shell, and memory beads along the spiral lip. Oblique views may reveal thickness, but must not expose detached ornaments or a hollow ring.
+- Accepted direction as of `20260514-143806`: filled directional shell mass owns the silhouette, aperture carves a smooth golden bowl, ember remains visible, log-spiral relief produces pale raised ribs and rounder bead samples, and scar/groove material is subordinate. The spiral organizes the shell; it is not the shell body.
 
 Latest preview used for judgment:
 
-- `artifacts/agent-previews/Life/20260514-134914/life-front.png`
-- `artifacts/agent-previews/Life/20260514-134914/life-mouth-oblique.png`
+- `artifacts/agent-previews/Life/20260514-143806/life-front.png`
+- `artifacts/agent-previews/Life/20260514-143806/life-mouth-oblique.png`
+- `artifacts/agent-previews/Life/20260514-143806/life-three-quarter.png`
