@@ -79,6 +79,7 @@ renderer_state:
     - Epiphany's cursor is a luminous five-petal hibiscus SDF centered one cursor radius above the XY plane so its contact tip reaches Grid z=0 without projecting to the Grid surface.
     - SDF/analytic Epiphany role visuals upload current centers, previous centers, and state scalars through the public `AquariumSdfObject` contract.
     - Agent SDF visual language is documented against Epiphany's published CultNet surfaces: identity from agent memory, motion from heartbeat, posture from role/coordinator/result surfaces, pressure from reorient/pressure surfaces, and expression through bounded orbit wandering plus CPU-visible gravity-well pulses.
+    - Life is a memory-nautilus SDF owned by a logarithmic shell domain: rounded teal shell volume, shared spiral ribs/seam/crack masks, warm aperture bowl, ember, and memory beads all derive from the same local shell coordinates rather than a fallback primitive.
     - SDF light buffer feeds Self emission and direct object lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D unified debug panel with tabs for Aquarium renderer controls, client-declared debug panels, terminal commands, and engine/client tooling surfaces.
