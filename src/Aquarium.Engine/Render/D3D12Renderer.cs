@@ -35,8 +35,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const float SurfaceTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
     private const Format SceneHdrFormat = Format.R16G16B16A16_Float;
-    private const string StudioPmremRelativePath = "Assets/Textures/studio2_pmrem.dds";
-    private const string StudioIrradianceRelativePath = "Assets/Textures/studio2_irradiance.dds";
+    private const string StudioPmremRelativePath = "Assets/Textures/studio3_pmrem.dds";
+    private const string StudioIrradianceRelativePath = "Assets/Textures/studio3_irradiance.dds";
     private const int RootFrameConstants = 0;
     private const int RootSourceTexture = 1;
     private const int RootHeightFieldBrushes = 2;
