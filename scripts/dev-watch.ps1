@@ -19,6 +19,8 @@ $watchLogPath = Join-Path $repoRoot "artifacts\dev-reload\watch.log"
 $liveSlotRoot = Join-Path $repoRoot "artifacts\dev-reload\live-slots"
 $liveReloadPointerPath = Join-Path $repoRoot "artifacts\dev-reload\live-current.txt"
 $shaderPath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
+$engineShaderRoot = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders"
+$clientShaderRoot = Join-Path $repoRoot "src\Aquarium.Epiphany\Shaders"
 $visibleStatePath = Join-Path $repoRoot "artifacts\dev-reload\state.clixml"
 $headlessStatePath = Join-Path $repoRoot "artifacts\dev-reload\headless-state.clixml"
 $ownedProcessStatePath = if ($Headless) { $headlessStatePath } else { $visibleStatePath }
@@ -65,6 +67,17 @@ function Get-SourceFiles {
                     $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Engine\Assets\*")
                 )
             }
+    }
+}
+
+function Get-ShaderFiles {
+    foreach ($root in @($engineShaderRoot, $clientShaderRoot)) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+
+        Get-ChildItem -LiteralPath $root -Recurse -File |
+            Where-Object { $_.Extension -in @(".hlsl", ".hlsli") }
     }
 }
 
@@ -134,6 +147,16 @@ function Get-SourceFingerprint {
     Get-Hash "$fileFingerprint`nAquariumFrame:$contractFingerprint"
 }
 
+function Get-ShaderFingerprint {
+    Get-Fingerprint (Get-ShaderFiles)
+}
+
+function Get-AllFingerprint {
+    $sourceFingerprint = Get-SourceFingerprint
+    $shaderFingerprint = Get-ShaderFingerprint
+    Get-Hash "$sourceFingerprint`nShaders:$shaderFingerprint"
+}
+
 function Get-LiveFingerprint {
     Get-Fingerprint (Get-LiveFiles)
 }
@@ -146,24 +169,27 @@ function Get-RestartFingerprint {
 
 function Wait-StableFingerprints {
     $first = @{
-        all = Get-SourceFingerprint
+        all = Get-AllFingerprint
         live = Get-LiveFingerprint
         restart = Get-RestartFingerprint
+        shaders = Get-ShaderFingerprint
     }
     Start-Sleep -Milliseconds $DebounceMilliseconds
     $second = @{
-        all = Get-SourceFingerprint
+        all = Get-AllFingerprint
         live = Get-LiveFingerprint
         restart = Get-RestartFingerprint
+        shaders = Get-ShaderFingerprint
     }
 
     while ($first.all -ne $second.all) {
         $first = $second
         Start-Sleep -Milliseconds $DebounceMilliseconds
         $second = @{
-            all = Get-SourceFingerprint
+            all = Get-AllFingerprint
             live = Get-LiveFingerprint
             restart = Get-RestartFingerprint
+            shaders = Get-ShaderFingerprint
         }
     }
 
@@ -296,6 +322,116 @@ function Invoke-LiveReload {
     Wait-LiveReloadAcknowledged $liveAssemblyPath
 }
 
+function Copy-ShaderTree {
+    param(
+        [string]$SourceRoot,
+        [string]$DestinationRoot
+    )
+
+    if (-not (Test-Path $SourceRoot)) {
+        return
+    }
+
+    Get-ChildItem -LiteralPath $SourceRoot -Recurse -File |
+        Where-Object { $_.Extension -in @(".hlsl", ".hlsli") } |
+        ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($SourceRoot, $_.FullName)
+            $destinationPath = Join-Path $DestinationRoot $relativePath
+            $destinationDirectory = Split-Path $destinationPath
+            New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
+            Copy-Item -LiteralPath $_.FullName -Destination $destinationPath -Force
+        }
+}
+
+function Read-LogTextAfterLength {
+    param(
+        [string]$Path,
+        [long]$StartLength
+    )
+
+    if (-not (Test-Path $Path)) {
+        return ""
+    }
+
+    $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    try {
+        if ($StartLength -gt 0 -and $StartLength -lt $stream.Length) {
+            $stream.Seek($StartLength, [System.IO.SeekOrigin]::Begin) | Out-Null
+        }
+        elseif ($StartLength -ge $stream.Length) {
+            return ""
+        }
+
+        $reader = [System.IO.StreamReader]::new($stream)
+        try {
+            return $reader.ReadToEnd()
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Wait-ShaderHotReloadAcknowledged {
+    param(
+        [string]$StdoutLog,
+        [string]$StderrLog,
+        [long]$StdoutStartLength,
+        [long]$StderrStartLength
+    )
+
+    $deadline = (Get-Date).AddSeconds([Math]::Max(1, $LiveReloadAckTimeoutSeconds))
+    while ((Get-Date) -lt $deadline) {
+        $stdoutText = Read-LogTextAfterLength -Path $StdoutLog -StartLength $StdoutStartLength
+        if ($stdoutText -match "D3D12 shader hot reload applied") {
+            Write-WatchLog "Shader hot reload acknowledged by renderer."
+            return
+        }
+
+        $stderrText = Read-LogTextAfterLength -Path $StderrLog -StartLength $StderrStartLength
+        if ($stderrText -match "D3D12 shader hot reload failed") {
+            throw "renderer reported shader hot reload failure. See $StderrLog"
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "shader files were copied, but renderer did not acknowledge hot reload within $LiveReloadAckTimeoutSeconds seconds. Check $StdoutLog and $StderrLog."
+}
+
+function Invoke-ShaderHotReload {
+    param([string]$reason)
+
+    Write-WatchLog "Shader hot reload requested: $reason"
+
+    $state = Get-OwnedProcessState
+    if (-not $state -or -not $state.slot) {
+        throw "no script-owned process slot is recorded for shader hot reload."
+    }
+
+    if (-not (Test-RecordedProcessRunning)) {
+        throw "no script-owned process is running to receive shader hot reload."
+    }
+
+    $slotPath = [string]$state.slot
+    $shaderDestinationRoot = Join-Path $slotPath "Render\Shaders"
+    New-Item -ItemType Directory -Force -Path $shaderDestinationRoot | Out-Null
+
+    $stdoutLog = if ($state.PSObject.Properties.Name -contains "stdoutLog" -and $state.stdoutLog) { [string]$state.stdoutLog } else { $stdoutLogPath }
+    $stderrLog = if ($state.PSObject.Properties.Name -contains "stderrLog" -and $state.stderrLog) { [string]$state.stderrLog } else { $stderrLogPath }
+    $stdoutStartLength = if (Test-Path $stdoutLog) { (Get-Item -LiteralPath $stdoutLog).Length } else { 0 }
+    $stderrStartLength = if (Test-Path $stderrLog) { (Get-Item -LiteralPath $stderrLog).Length } else { 0 }
+
+    Copy-ShaderTree -SourceRoot $engineShaderRoot -DestinationRoot $shaderDestinationRoot
+    Copy-ShaderTree -SourceRoot $clientShaderRoot -DestinationRoot $shaderDestinationRoot
+    Write-WatchLog "Shader files copied into running slot: $shaderDestinationRoot"
+
+    Wait-ShaderHotReloadAcknowledged -StdoutLog $stdoutLog -StderrLog $stderrLog -StdoutStartLength $stdoutStartLength -StderrStartLength $stderrStartLength
+}
+
 function Wait-LiveReloadAcknowledged {
     param([string]$liveAssemblyPath)
 
@@ -390,8 +526,16 @@ do {
     }
 
     try {
-        if ($currentFingerprint.restart -eq $lastGoodFingerprint.restart -and $currentFingerprint.live -ne $lastGoodFingerprint.live) {
+        if ($currentFingerprint.restart -eq $lastGoodFingerprint.restart -and
+            $currentFingerprint.live -eq $lastGoodFingerprint.live -and
+            $currentFingerprint.shaders -ne $lastGoodFingerprint.shaders) {
+            Invoke-ShaderHotReload "shader source change"
+        }
+        elseif ($currentFingerprint.restart -eq $lastGoodFingerprint.restart -and $currentFingerprint.live -ne $lastGoodFingerprint.live) {
             Invoke-LiveReload "live source change"
+            if ($currentFingerprint.shaders -ne $lastGoodFingerprint.shaders) {
+                Invoke-ShaderHotReload "shader source change accompanying live reload"
+            }
         }
         else {
             Invoke-Reload "host/core/content source change"
