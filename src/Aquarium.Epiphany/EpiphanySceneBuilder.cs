@@ -154,7 +154,7 @@ public static class EpiphanySceneBuilder
         [
             new AquariumSdfLight(
                 new Vector4(selfCenter, SunRadius),
-                new Vector4(10.0f, 8.7f, 4.2f, SdfFieldId(EpiphanyRenderPlan.SelfVisualIndex)))
+                new Vector4(9.2f, 9.1f, 6.8f, SdfFieldId(EpiphanyRenderPlan.SelfVisualIndex)))
         ];
     }
 
