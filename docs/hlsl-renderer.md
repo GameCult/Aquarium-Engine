@@ -5,15 +5,16 @@ explicit frame graph.
 
 ## Current Path
 
-1. Engine-owned `D3D12Grid.hlsl` renders a 128x128 scalar Grid height target.
+1. Engine-owned `D3D12HeightField.hlsl` renders a 128x128 scalar height-field
+   target from client-authored brush data.
 2. Engine-owned `D3D12Scene.hlsl` traces the background and Grid into
    scene-linear HDR targets.
 3. Epiphany-owned body shaders each get their own proxy pipeline:
    `D3D12FaceAgent.hlsl`, `D3D12ImaginationAgent.hlsl`,
    `D3D12EyesAgent.hlsl`, `D3D12BodyAgent.hlsl`, `D3D12HandsAgent.hlsl`,
    `D3D12SoulAgent.hlsl`, `D3D12LifeAgent.hlsl`, `D3D12SelfBody.hlsl`, and
-   `D3D12CursorBody.hlsl`. Shared proxy mechanics live in
-   `D3D12BodyCommon.hlsli` and `D3D12BodyProxy.hlsli`.
+   `D3D12CursorBody.hlsl`. Shared proxy mechanics live in the engine includes
+   `D3D12SdfCommon.hlsli`, `D3D12SdfProxy.hlsli`, and `D3D12SdfMath.hlsli`.
 4. Engine-owned `D3D12Post.hlsl` builds bloom, resolves diagnostics/history, applies
    exposure and ACES, then presents.
 5. `DirectWriteOverlay` draws crisp final-pixel debug UI after scene rendering.
@@ -46,7 +47,7 @@ visibility through the depth target.
 ## Solids
 
 Epiphany uploads Self, Face, Imagination, Eyes, Body, Hands, Soul, Life, and the
-cursor through the engine `AquariumBodyVisual` buffer, including current center,
+cursor through the engine `AquariumSdfObject` buffer, including current center,
 previous center, and state scalars. Aquarium owns the D3D12 upload, proxy draw,
 depth, and presentation machinery; Epiphany owns which bodies exist, where they
 are, and which shader files describe them.

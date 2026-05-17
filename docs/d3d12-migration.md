@@ -9,14 +9,14 @@ DirectWrite/Direct2D overlay text.
 - D3D12 owns the device, command queue, flip-discard swapchain, RTV heap,
   per-backbuffer command allocators, command list, fence-backed present loop,
   static and transient shader-visible descriptor arenas, upload buffers,
-  renderer-owned Grid height, HDR scene, bloom, temporal diagnostic targets,
+  renderer-owned height-field, HDR scene, bloom, temporal diagnostic targets,
   named objects, command-list events, and explicit tracked transitions.
-- The Grid height pass uploads Aquarium frame constants plus a fixed body brush
-  table, renders a base Grid field, then draws one additive up-facing gravity
-  quad per body into a 128x128 scalar `R16_Float` target.
-- The scene pass traces Self, planets, the cursor locator, and a separate Grid
-  event lane. Grid line transparency is direct-traced against the height sheet
-  before the nearest solid and emitted as premultiplied event radiance.
+- The height-field pass uploads Aquarium frame constants plus client-authored
+  brush data, renders a base field, then draws additive brush quads into a
+  128x128 scalar `R16_Float` target.
+- The fullscreen scene pass traces the background and height-field surface.
+  Epiphany bodies render afterward through client-declared SDF proxy pipelines
+  that share engine-owned proxy mechanics and write into the same scene targets.
 - Presentation is scene-linear until the post pass. The scene renders to
   `R16G16B16A16_Float`, a three-level bloom pyramid performs firefly-safe
   downsample plus separable blur, and final presentation applies exposure,
@@ -30,10 +30,10 @@ DirectWrite/Direct2D overlay text.
   draws debug UI, releases it to Present, and never participates in world
   rendering.
 - Shader and PSO creation runs off the main thread. Startup holds the splash
-  until the first pipeline set is ready. Runtime shader edits to
-  `D3D12Grid.hlsl`, `D3D12Scene.hlsl`, or `D3D12Post.hlsl` trigger a background
-  rebuild; successful builds swap in after a GPU wait and failures keep the
-  previous pipeline set.
+  until the first pipeline set is ready. Runtime shader edits under the engine
+  or Epiphany shader roots are copied into the running apphost slot and trigger a
+  background rebuild; successful builds swap in after a GPU wait and failures
+  keep the previous pipeline set.
 - Resize waits for the GPU, releases swapchain-dependent resources, rebuilds
   descriptor arenas, and recreates backbuffer views plus dependent render
   targets.

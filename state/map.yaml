@@ -3,10 +3,12 @@ project:
   root: E:\Projects\Aquarium-Engine
   upstream: https://github.com/GameCult/Aquarium-Engine
   purpose: >
-    Native C# engine core for the Epiphany Aquarium client. The engine owns the
-    Win32 host, D3D12 renderer, input loop, client reload boundary, and future
-    render graph abstractions. The Epiphany client owns frontend intent and
-    configures those engine abstractions.
+    Native C# runtime and renderer core for Aquarium clients. The engine owns
+    the Win32 host, D3D12 renderer, input loop, client reload boundary, debug UI,
+    audio host, persistent-state transport, and future render graph
+    abstractions. Epiphany is the current first-party client: it owns frontend
+    intent, agent visuals, CultCache/CultNet semantics, and render-plan
+    configuration through the engine contracts.
 
 current_model:
   host:
@@ -109,3 +111,4 @@ next_actions:
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.
+  - Keep Aquarium and Epiphany in one repo until the contracts and graph API are stable enough for Epiphany to move out without carrying engine policy or reload folklore with it.

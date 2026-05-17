@@ -398,7 +398,7 @@ app.Features.ImageBasedLighting("studio")
 ```csharp
 app.Features.SdfBodies("agents")
     .Buffer<AgentVisualGpu>("AgentVisuals", maxCount: 64)
-    .SharedInclude("Shaders/D3D12BodyProxy.hlsli")
+    .SharedInclude("Shaders/D3D12SdfProxy.hlsli")
     .Role("Self", "Shaders/SelfBody.hlsl")
     .Role("Imagination", "Shaders/ImaginationBody.hlsl")
     .DepthAgainst(scene.Depth)

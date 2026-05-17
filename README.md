@@ -4,32 +4,61 @@
   <img src="Aquarium-Engine-Icon.png" alt="Aquarium Engine icon" width="260" />
 </p>
 
-C# engine core for Aquarium: a native, owned renderer and interaction runtime
-for a living Epiphany client.
+C# native runtime for Aquarium clients: windowing, D3D12 rendering, input,
+reload, persistent state, debug UI, and packageable engine machinery.
+
+Epiphany is the first serious client in this repo. It is not the engine's
+identity.
 
 ## Intent
 
-- C# host with renderer architecture kept legible in Rider.
-- Vortice/D3D12 renderer spine with the native boundary kept explicit.
+- Native C# host with a legible renderer spine and explicit ownership.
+- Vortice/D3D12 backend with graphics API details contained inside the engine.
+- `Aquarium.Engine.Contracts` as the client-facing boundary.
+- `Aquarium.Epiphany` as the current Epiphany Aquarium client.
+- `Aquarium.Sample.Minimal` as a small non-Epiphany boundary proof.
 - DirectWrite/Direct2D overlay text after the scene pass for crisp debug and UI
   typography.
-- Grid-centered camera and world-space interaction invariants as first-class
-  engine contracts.
-- Diegetic UI surfaces driven by Aquarium objects instead of admin chrome.
-- CultNet for Epiphany communication.
-- CultCache for settings, persistent client state, and reload recovery.
+- Diegetic scene/UI surfaces driven by client objects instead of admin chrome.
+- CultCache for typed settings, persistent client state, and reload recovery.
+- CultNet-ready runtime identity for clients that need Epiphany communication.
 - Procedural audio and visual state treated as coupled signals.
 
 ## Current Shape
 
-The engine opens a Win32 window, owns a D3D12 swapchain, renders the visible
-Aquarium world in HLSL, and draws crisp overlay text through DirectWrite. The
-camera target is the Grid center. Grid radius follows zoom distance. Body anchors
-remain world-space.
+The engine opens a Win32 window, owns a D3D12 swapchain, compiles and hot-reloads
+HLSL, allocates render targets, preserves last-good shader/runtime state across
+failed reloads, hosts the debug overlay, and presents scene-linear HDR through
+the current post stack.
 
-The Epiphany client is split behind `Aquarium.Engine.Contracts`, so client code
-can reload while the engine host, window, renderer, and D3D device stay alive.
-Runtime state is banked through CultCache MessagePack documents instead of loose JSON.
+Client code is loaded behind `Aquarium.Engine.Contracts`, so a client can reload
+while the engine host, window, renderer, and D3D device stay alive. Runtime state
+is banked through CultCache MessagePack documents instead of loose JSON.
+
+`Aquarium.Epiphany` currently supplies the Grid-centered camera policy, Epiphany
+agent SDF shaders, body placement, CultCache documents, and future CultNet
+interpretation. Those are client semantics. The engine consumes them as generic
+rendering and runtime data.
+
+## Repository Shape
+
+This repository intentionally contains both the reusable Aquarium engine and the
+Epiphany client while the client API is still being carved into its final shape:
+
+- `src/Aquarium.Engine.Contracts`: Vortice-free client API and shared data
+  contracts.
+- `src/Aquarium.Engine`: Win32 host, D3D12 backend, reload transport, debug UI,
+  audio host, and engine-owned assets.
+- `src/Aquarium.Epiphany`: Epiphany Aquarium runtime, state interpretation,
+  render-plan configuration, and agent shaders.
+- `src/Aquarium.Sample.Minimal`: tiny non-Epiphany client that proves the host
+  can run something other than Epiphany.
+
+Splitting Aquarium and Epiphany into separate repos is plausible, but not owed
+yet. The cut becomes clean when the contracts are stable enough that Epiphany can
+move out without taking renderer policy, shader include plumbing, or reload
+folklore with it. Until then, the repo split would mostly create paperwork and a
+new place for confusion to hide.
 
 ## Run
 
@@ -53,8 +82,8 @@ dotnet build Aquarium.Engine.sln
 dotnet run --project src\Aquarium.Engine\Aquarium.Engine.csproj -- --client-assembly src\Aquarium.Epiphany\bin\Debug\net10.0\Aquarium.Epiphany.dll
 ```
 
-Open `Aquarium.Engine.sln` in Rider or build it from the CLI. It is the
-single solution inventory for the repo.
+Open or build `Aquarium.Engine.sln`. It is the single solution inventory for the
+repo.
 
 `src\Aquarium.Sample.Minimal` is a tiny non-Epiphany client used to keep the
 engine boundary honest. It references only `Aquarium.Engine.Contracts`, declares
@@ -105,12 +134,11 @@ run the watcher with:
 .\scripts\dev-watch.ps1 -ReopenWhenClosed
 ```
 
-Shader edits do not restart the process. The dev reload runner passes the
-shader source directory into the live app, and the renderer polls
-`D3D12Grid.hlsl`, `D3D12Scene.hlsl`, and `D3D12Post.hlsl`, compiles changed
-shaders in the running process, then swaps the D3D shader objects only after
-compilation succeeds. A bad shader edit leaves the previous working shaders
-bound and writes the compiler failure to stderr.
+Shader edits do not restart the process. The dev watcher fingerprints
+`.hlsl`/`.hlsli` files under both the engine and Epiphany shader roots, copies
+them into the running apphost slot, and lets the renderer rebuild the active
+D3D12 pipelines from its current shader source root. A bad shader edit leaves
+the previous working shaders bound and writes the compiler failure to stderr.
 
 Epiphany client/runtime code is split into `Aquarium.Epiphany` behind
 `Aquarium.Engine.Contracts`. The host loads that client DLL through a collectible

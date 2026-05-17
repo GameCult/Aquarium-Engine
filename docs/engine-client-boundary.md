@@ -7,10 +7,18 @@ state, swapchain presentation, resource lifetime, shader compilation, reload
 transport, input translation, render target allocation, and future render graph
 execution.
 
+`Aquarium.Engine.Contracts` owns the Vortice-free public boundary clients use to
+describe runtime state, render intent, UI, audio patches, and persistent
+settings. Contracts may name reusable engine concepts. They may not smuggle
+Epiphany policy into the host under a nicer namespace.
+
 `Aquarium.Epiphany` owns the client meaning: CultCache runtime state, CultNet
 interpretation, camera intent, cursor semantics, agent visual state, diegetic
 layout rules, and the render graph configuration that turns Epiphany state into
 world pixels.
+
+`Aquarium.Sample.Minimal` exists to keep the split honest. If a feature cannot
+be explained without Epiphany, it is not engine API yet.
 
 ## Hard Rules
 
@@ -50,3 +58,24 @@ Do not build this by piling adapters around the current monolith. First expose
 the smallest real engine abstraction that lets `Aquarium.Epiphany` describe one
 pass without D3D12 details. Then move one client-owned concept through it. Then
 repeat.
+
+## Repository Split Line
+
+Aquarium should eventually be usable without carrying the Epiphany client in the
+same repository. That does not mean the repo should be split before the boundary
+is mechanically clean.
+
+Keep both in this repo while the public contracts, graph declarations, shader
+include layout, reload transport, and sample-client path are still changing
+together. Split Epiphany out only when:
+
+- `Aquarium.Engine` and `Aquarium.Engine.Contracts` contain no Epiphany role,
+  CultNet-surface, Grid-policy, or agent-layout semantics.
+- A non-Epiphany client can declare cameras, targets, shaders, UI, and
+  presentation without referencing `Aquarium.Epiphany`.
+- Epiphany shaders, state documents, and visual grammar live entirely on the
+  client side of the contracts.
+- The host can load an external client assembly without repo-local path lore.
+
+Until those are true, a repo split would not simplify ownership. It would just
+make the same leak harder to see.

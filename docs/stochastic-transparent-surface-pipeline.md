@@ -13,7 +13,7 @@ self-occlusion, false depth rejection, and temporal history murder.
 
 ### Opaque Solids
 
-Examples: Self, planets, later solid SDF bodies.
+Examples: Epiphany agent bodies, cursor bodies, and future solid SDF objects.
 
 Output:
 

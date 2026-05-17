@@ -15,18 +15,19 @@ Aquarium starts from a thin native spine:
 
 Vortice gives direct access to D3D/DXGI without forcing an engine protocol on
 top. It is low ceremony enough to build the renderer Aquarium needs while
-keeping C# and Rider as the everyday working environment.
+keeping C# as the everyday working environment.
 
 ## Current Renderer
 
 The renderer owns the visible Aquarium frame:
 
 1. Camera and Grid constants come from the client runtime.
-2. A Grid-space height pass renders the gravity/terrain height target.
-3. A fullscreen D3D12 HLSL pass traces Self, planets, cursor, and the Grid event
-   lane.
-4. HDR bloom and presentation run before the swapchain is handed to the overlay.
-5. DirectWrite overlay text and debug UI draw after the scene pass.
+2. A height-field pass renders the scalar field target from client brush data.
+3. A fullscreen D3D12 HLSL pass traces the background and height-field surface.
+4. Client-declared SDF proxy pipelines render Epiphany bodies into the shared
+   scene targets.
+5. HDR bloom and presentation run before the swapchain is handed to the overlay.
+6. DirectWrite overlay text and debug UI draw after the scene pass.
 
 No framework-owned deferred path or ambient light is hiding under the floor.
 When richer lighting returns, it enters through an Aquarium-owned renderer

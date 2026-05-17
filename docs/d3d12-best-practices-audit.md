@@ -24,9 +24,10 @@ targets, async shader pipeline builds, and a narrow DirectWrite overlay bridge.
   arenas. Transient arenas reset only after the owning frame fence clears.
 - D3D12 resources are registered by name, and capacity diagnostics report upload,
   transient descriptor, static descriptor, and RTV usage.
-- The Grid height target is a proper brush pass into scalar `R16_Float`.
-- The Grid event lane is direct-traced and temporally inspectable; it is not
-  alpha-blended over the final frame or allowed to own canonical scene depth.
+- The height-field target is a proper brush pass into scalar `R16_Float`.
+- Transparent event lanes are not preserved as dormant scaffolding. When Grid
+  linework, particles, glyph motes, or other coverage events return, they need a
+  live producer/consumer contract instead of alpha-blended final-frame hacks.
 - HDR bloom is pre-tonemap, multi-level, and separable.
 - The D3D11On12 bridge is overlay-only, keeping native hinted text without
   mixing overlay UI into scene rendering.
