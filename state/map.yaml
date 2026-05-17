@@ -44,8 +44,8 @@ current_model:
   dependencies:
     cult_math: E:\Projects\CultMath
     cult_lib: E:\Projects\CultLib
-    aqua_synth_faust: NuGet package AquaSynth.Faust 0.1.0-aquasynth.1 from repo-local packages feed
-    aqua_synth_core: transitive NuGet package AquaSynth.Core 0.1.0-aquasynth.1 from repo-local packages feed
+    aqua_synth_faust: NuGet package AquaSynth.Faust 0.1.0-aquasynth.2 from repo-local packages feed
+    aqua_synth_core: transitive NuGet package AquaSynth.Core 0.1.0-aquasynth.2 from repo-local packages feed
   docs:
     doctrine: docs/aquarium-engine-doctrine.md
     engine_client_boundary: docs/engine-client-boundary.md

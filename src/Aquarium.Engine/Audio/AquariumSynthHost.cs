@@ -8,15 +8,8 @@ internal sealed class AquariumSynthHost : IDisposable
 
     private readonly Dictionary<string, PatchRuntime> patches = new(StringComparer.Ordinal);
     private readonly WasapiAudioDevice audioDevice = new();
-    private AquaSynthNativeCompiler? compiler;
-    private string? faustLoadError;
+    private readonly AquaSynthRenderSession renderSession = new(new AquaSynthNativeOptions(DspSourceDirectory: Path.Combine(AppContext.BaseDirectory, "Synth")));
     private float timeSeconds;
-
-    internal static bool TryRenderScriptWithNativeFaust(string name, string script, float gain, out float[] samples, out string? error)
-    {
-        var options = new AquaSynthNativeOptions(DspSourceDirectory: Path.Combine(AppContext.BaseDirectory, "Synth"));
-        return AquaSynthNativeCompiler.TryRenderScript(name, script, gain, out samples, out error, options);
-    }
 
     public void Update(AquariumSynthDocument synth, float deltaSeconds)
     {
@@ -26,7 +19,6 @@ internal sealed class AquariumSynthHost : IDisposable
             return;
         }
 
-        EnsureFaustLoaded();
         foreach (var patch in synth.Patches)
         {
             var runtime = GetRuntime(patch);
@@ -91,22 +83,14 @@ internal sealed class AquariumSynthHost : IDisposable
             return;
         }
 
-        if (compiler is null)
-        {
-            runtime.FailedKey = desiredKey;
-            SetStatus(runtime, AquariumSynthPatchCompileState.Failed, faustLoadError ?? "AquaSynth Faust toolchain not found", patch.FaustCompileRevision);
-            return;
-        }
-
-        StartCompile(runtime, patch, identity, desiredKey, compiler);
+        StartCompile(runtime, patch, identity, desiredKey);
     }
 
     private void StartCompile(
         PatchRuntime runtime,
         AquariumSynthPatch patch,
         AquaSynthCompileIdentity identity,
-        string compileKey,
-        AquaSynthNativeCompiler activeCompiler)
+        string compileKey)
     {
         SetStatus(runtime, AquariumSynthPatchCompileState.Compiling, "compiling AquaSynth DSP", patch.FaustCompileRevision);
         var patchId = patch.Id;
@@ -116,7 +100,23 @@ internal sealed class AquariumSynthHost : IDisposable
         {
             try
             {
-                var compiled = activeCompiler.CompileScript(identity);
+                if (!renderSession.TryCompileScript(identity, out var compiled, out var error))
+                {
+                    lock (runtime.Sync)
+                    {
+                        runtime.Compiled?.Dispose();
+                        runtime.Compiled = null;
+                        runtime.ReadyKey = "";
+                        runtime.FailedKey = compileKey;
+                        runtime.SoundCache.Clear();
+                        runtime.CompileTask = null;
+                        runtime.SetStatus(AquariumSynthPatchCompileState.Failed, error ?? "AquaSynth render session unavailable", revision, timeSeconds);
+                    }
+
+                    Console.WriteLine($"Aquarium synth patch `{patchId}` AquaSynth compile failed: {error}");
+                    return;
+                }
+
                 lock (runtime.Sync)
                 {
                     runtime.Compiled?.Dispose();
@@ -125,10 +125,10 @@ internal sealed class AquariumSynthHost : IDisposable
                     runtime.FailedKey = "";
                     runtime.SoundCache.Clear();
                     runtime.CompileTask = null;
-                    runtime.SetStatus(AquariumSynthPatchCompileState.Ready, $"ready in {compiled.Manifest.CompileMilliseconds:0} ms", revision, timeSeconds);
+                    runtime.SetStatus(AquariumSynthPatchCompileState.Ready, $"ready in {compiled!.Manifest.CompileMilliseconds:0} ms", revision, timeSeconds);
                 }
 
-                Console.WriteLine($"Aquarium synth patch `{patchId}` compiled by AquaSynth in {compiled.Manifest.CompileMilliseconds:0} ms.");
+                Console.WriteLine($"Aquarium synth patch `{patchId}` compiled by AquaSynth in {compiled!.Manifest.CompileMilliseconds:0} ms.");
             }
             catch (Exception ex)
             {
@@ -176,26 +176,6 @@ internal sealed class AquariumSynthHost : IDisposable
         }
 
         audioDevice.Play(sound.Samples, sampleRate);
-    }
-
-    private void EnsureFaustLoaded()
-    {
-        if (compiler is not null || faustLoadError is not null)
-        {
-            return;
-        }
-
-        var options = new AquaSynthNativeOptions(DspSourceDirectory: Path.Combine(AppContext.BaseDirectory, "Synth"));
-        if (AquaSynthNativeCompiler.TryLoad(out var loaded, out var error, options))
-        {
-            compiler = loaded;
-            Console.WriteLine($"Aquarium AquaSynth Faust toolchain loaded: {loaded!.FaustVersion}");
-        }
-        else
-        {
-            faustLoadError = error;
-            Console.WriteLine($"Aquarium AquaSynth Faust toolchain unavailable: {error}");
-        }
     }
 
     private void PublishStatus(PatchRuntime runtime, AquariumSynthPatch patch)
@@ -257,7 +237,7 @@ internal sealed class AquariumSynthHost : IDisposable
         }
 
         audioDevice.Dispose();
-        compiler?.Dispose();
+        renderSession.Dispose();
     }
 
     private sealed class PatchRuntime(string id)
