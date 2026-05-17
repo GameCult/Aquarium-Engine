@@ -45,6 +45,9 @@ with two legible continental systems:
 - the working vault baseline gives Umbros a very large apparent diameter
   (roughly 10-13 degrees for the current 8-10 Earth-radii separation candidates)
   and daily central eclipses around an hour near the relevant equatorial track;
+- the biosphere is founded on mutable cellular memory exchange, so sentience and
+  eusocial contracts exist across cellular, organismal, social, and ecological
+  scales instead of being reserved for a few special species;
 
 - the Airawa home continent, where living memory networks, mother trees,
   disconnected networks, and imperial memetic infrastructure create visible
@@ -60,6 +63,8 @@ civilizational structures.
 Aquarium should treat these as lighting, sky, time-of-day, and ecological
 pressure constraints. The accepted physical baseline lives in the vault note
 `Eusocial Interbeing/World/Zyphos Umbros Binary System.md`.
+The accepted biosphere baseline lives in
+`Eusocial Interbeing/Ecology/Mutable Memory Endosymbiosis.md`.
 
 ## Feedback Path
 
