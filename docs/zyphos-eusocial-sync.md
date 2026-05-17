@@ -31,7 +31,16 @@ Aquarium into a second lore repository.
 
 ## First Conversation
 
-The first Zyphos pass should stage the planet as two legible continental systems:
+The first Zyphos pass should stage the planet as a dimly lit close-binary world
+with two legible continental systems:
+
+- Umbros is the slightly smaller twin of Zyphos, mutually tidally locked with it
+  and fixed in the sky except for precession/libration;
+- the primary star is dim, so the habitable zone is close and the biosphere is
+  energy-starved relative to Earth;
+- the working vault baseline gives Umbros a very large apparent diameter
+  (roughly 10-13 degrees for the current 8-10 Earth-radii separation candidates)
+  and daily central eclipses around an hour near the relevant equatorial track;
 
 - the Airawa home continent, where living memory networks, mother trees,
   disconnected networks, and imperial memetic infrastructure create visible
@@ -43,6 +52,10 @@ This does not require detailed species bodies yet. The first useful render targe
 is planetary-scale readability: landmass logic, ecological network hints,
 settlement/non-settlement patterns, and night-side signals that reflect distinct
 civilizational structures.
+
+Aquarium should treat these as lighting, sky, time-of-day, and ecological
+pressure constraints. The accepted physical baseline lives in the vault note
+`Eusocial Interbeing/World/Zyphos Umbros Binary System.md`.
 
 ## Feedback Path
 
