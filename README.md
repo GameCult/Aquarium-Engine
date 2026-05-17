@@ -1,6 +1,8 @@
 # Aquarium Engine
 
-![Aquarium Engine icon](Aquarium-Engine-Icon.png)
+<p align="center">
+  <img src="Aquarium-Engine-Icon.png" alt="Aquarium Engine icon" width="260" />
+</p>
 
 C# engine core for Aquarium: a native, owned renderer and interaction runtime
 for a living Epiphany client.
