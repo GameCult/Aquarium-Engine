@@ -64,10 +64,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         new(9, "SdfObject Identity"),
         new(10, "SdfObject Steps"),
     ];
-    private static readonly DebugUi.DebugUiOption[] SynthPresetOptions = AquariumSynth.Dsl.BuiltInScripts.ReferenceScripts()
+    private static readonly DebugUi.DebugUiOption[] SynthPresetOptions = AquaSynth.Dsl.BuiltInScripts.ReferenceScripts()
         .Select((preset, index) => new DebugUi.DebugUiOption(index, $"{preset.Family}/{preset.Name}"))
         .ToArray();
-    private static readonly (string Family, string Name, string Script)[] SynthPresets = AquariumSynth.Dsl.BuiltInScripts.ReferenceScripts().ToArray();
+    private static readonly (string Family, string Name, string Script)[] SynthPresets = AquaSynth.Dsl.BuiltInScripts.ReferenceScripts().ToArray();
 
     private readonly IDXGIFactory4 factory;
     private readonly ID3D12Device device;

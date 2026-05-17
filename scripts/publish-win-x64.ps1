@@ -60,7 +60,7 @@ $requiredFiles = @(
     "Aquarium.Engine.exe",
     "Aquarium.Epiphany.dll",
     "Aquarium.Engine.Contracts.dll",
-    "AquariumSynth.Dsl.dll",
+    "AquaSynth.Dsl.dll",
     "Tools\Faust\lib\faust.dll",
     "Tools\Faust\share\faust\stdfaust.lib",
     "Assets\Aquarium-Engine-Icon.ico",

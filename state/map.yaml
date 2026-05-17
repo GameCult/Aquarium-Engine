@@ -44,7 +44,7 @@ current_model:
   dependencies:
     cult_math: E:\Projects\CultMath
     cult_lib: E:\Projects\CultLib
-    aquarium_synth_dsl: NuGet package AquariumSynth.Dsl 0.1.0-aquarium.1 from repo-local packages feed
+    aqua_synth_dsl: NuGet package AquaSynth.Dsl 0.1.0-aquasynth.1 from repo-local packages feed
   docs:
     doctrine: docs/aquarium-engine-doctrine.md
     engine_client_boundary: docs/engine-client-boundary.md
@@ -83,7 +83,7 @@ renderer_state:
     - SDF light buffer feeds Self emission and direct object lighting; future other Selves should join this light lane, not a generic field-instance table.
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D unified debug panel with tabs for Aquarium renderer controls, client-declared debug panels, terminal commands, and engine/client tooling surfaces.
-    - Aquarium exposes an optional synth/audio hosting boundary through AquariumSynthDocument; Aquarium consumes AquariumSynth.Dsl as a pinned repo-local NuGet package so synth-agent construction cannot break Aquarium builds until the package is intentionally updated.
+    - Aquarium exposes an optional synth/audio hosting boundary through AquariumSynthDocument; Aquarium consumes AquaSynth.Dsl as a pinned repo-local NuGet package so synth-agent construction cannot break Aquarium builds until the package is intentionally updated.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Isolated Epiphany agent preview renders run through the real D3D12 renderer from src/Aquarium.Epiphany.AgentPreview; preview isolation is owned by a preview-only scene shader, while the engine exposes only final-frame PNG capture.
@@ -102,7 +102,7 @@ next_actions:
   - Keep main as the live development branch.
   - Keep scripts/verify-boundaries.ps1 green: Aquarium.Engine and Aquarium.Engine.Contracts must not contain Epiphany/client policy nouns such as grid, agent, body, or epiphany.
   - Verify publish output after every packaging-affecting change.
-  - Update AquariumSynth.Dsl only by packing a new version into packages and changing the pinned PackageReference version deliberately.
+  - Update AquaSynth.Dsl only by packing a new version into packages and changing the pinned PackageReference version deliberately.
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
   - Use scripts/render-agent-preview.ps1 for multi-view isolated SDF review before asking the user to judge another agent body iteration.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.

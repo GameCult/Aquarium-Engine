@@ -85,7 +85,7 @@
     ],
     "audio": [
       "Aquarium exposes an optional audio/synth hosting boundary through contracts; clients declare intent, Aquarium schedules playback and owns device/toolchain integration.",
-      "Aquarium consumes AquariumSynth.Dsl as a pinned repo-local NuGet package. AquariumSynthCSharp owns synth internals and tests; update the package only by deliberate version bump so visual/renderer work can continue while synth construction changes underneath."
+      "Aquarium consumes AquaSynth.Dsl as a pinned repo-local NuGet package. AquaSynth owns synth internals, native Faust compilation, generated DSP manifests, and tests; update the package only by deliberate version bump so visual/renderer work can continue while synth construction changes underneath."
     ],
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",

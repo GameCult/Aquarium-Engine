@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
-    $SourceRoot = if ($env:AQUARIUM_FAUST_HOME) { $env:AQUARIUM_FAUST_HOME } else { "C:\Program Files\Faust" }
+    $SourceRoot = if ($env:AQUASYNTH_FAUST_HOME) { $env:AQUASYNTH_FAUST_HOME } elseif ($env:AQUARIUM_FAUST_HOME) { $env:AQUARIUM_FAUST_HOME } else { "C:\Program Files\Faust" }
 }
 
 if ([string]::IsNullOrWhiteSpace($DestinationRoot)) {
