@@ -1,4 +1,4 @@
-using AquaSynth.Dsl;
+using AquaSynth.Faust;
 
 namespace Aquarium.Engine.Audio;
 
