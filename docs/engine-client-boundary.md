@@ -17,8 +17,10 @@ interpretation, camera intent, cursor semantics, agent visual state, diegetic
 layout rules, and the render graph configuration that turns Epiphany state into
 world pixels.
 
-`Aquarium.Sample.Minimal` exists to keep the split honest. If a feature cannot
-be explained without Epiphany, it is not engine API yet.
+`Aquarium.Sample.Minimal` exists as the tiny smoke test. `Aquarium.Zyphos`
+exists as the first real non-Epiphany demo: a planetary client with its own
+runtime, controls, scene state, and SDF shaders. If a feature cannot be
+explained without Epiphany or Zyphos, it is not engine API yet.
 
 ## Hard Rules
 

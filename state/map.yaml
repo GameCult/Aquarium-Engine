@@ -41,6 +41,14 @@ current_model:
     state_store: src/Aquarium.Epiphany/State/AquariumCultStateStore.cs
     state_document: epiphany.aquarium.live_state
     graphics_settings_document: epiphany.aquarium.graphics_settings
+  zyphos_client:
+    implementation: src/Aquarium.Zyphos
+    render_plan: src/Aquarium.Zyphos/ZyphosRenderPlan.cs
+    scene_builder: src/Aquarium.Zyphos/ZyphosSceneBuilder.cs
+    shaders: src/Aquarium.Zyphos/Shaders
+    purpose: >
+      Non-Epiphany planetary-scale rendering demo using the shared Aquarium host,
+      D3D12 renderer, reload transport, UI contracts, bloom, and SDF proxy path.
   samples:
     minimal_client: src/Aquarium.Sample.Minimal
   dependencies:
@@ -59,6 +67,7 @@ current_model:
     tsr_inspired_taa_spec: docs/tsr-inspired-taa-spec.md
     input: docs/input.md
     hdr_pbr_presentation: research/rendering/hdr-pbr-presentation.md
+    cube_sphere_fractal_brushes: research/rendering/cube-sphere-fractal-brushes.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
@@ -90,6 +99,9 @@ renderer_state:
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Isolated Epiphany agent preview renders run through the real D3D12 renderer from src/Aquarium.Epiphany.AgentPreview; preview isolation is owned by a preview-only scene shader, while the engine exposes only final-frame PNG capture.
+    - Zyphos is the first nontrivial non-Epiphany client: a planetary-scale demo with spherical-domain terrain, atmospheric rim lighting, night-side glints, and an orbiting moon.
+    - Future planetary terrain and fractal body detail should use a cube-sphere/QSC-family address space: six quadtree cube faces projected to the sphere with a measured low-distortion warp, avoiding lat-long pole singularities.
+    - Future multiscale terrain and agent/body detail should come from bounded IFS brush grammars using shared shaped anisotropic envelopes; texture/material detail can be abundant, but traced SDF form detail must be proxy-bounded, LOD-gated, and measured.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
     - D3D11 scene renderer, runtime volumetrics, cloud/fog research, medium/froxel render targets, and the SDF-field renderer plan are shelved and removed from live repo state.
   next:
@@ -98,6 +110,8 @@ renderer_state:
     - Keep src/Aquarium.Sample.Minimal building and launchable as the non-Epiphany boundary proof.
     - Replace fixed fallback role motion with real CultNet-derived AgentVisualState.
     - Build each agent role body from one coherent low-cost SDF form model before adding ornamental or state-reactive detail.
+    - Prototype cube-sphere projection candidates for Zyphos: tangent warp, fifth-order odd polynomial warp, and COBE/QSC-style bivariate warp. Measure area error, inverse lookup cost, and shader cost before committing the terrain address space.
+    - Define the first shaped brush envelope contract as a compact-support anisotropic kernel with rotation, radii/inverse covariance, falloff, shape controls, payload type, and explicit bounds shared by 2D terrain brushes and 3D SDF/body brushes.
     - Add diegetic labels and object-local menus after renderer and text contracts are stable.
     - Continue replacing legacy fixed D3D12 pass execution with client-declared render targets, cameras, shaders, passes, resources, and features.
 
@@ -109,6 +123,7 @@ next_actions:
   - Grow renderer debug controls through the Direct2D/DirectWrite overlay path.
   - Use scripts/render-agent-preview.ps1 for multi-view isolated SDF review before asking the user to judge another agent body iteration.
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
+  - Follow research/rendering/cube-sphere-fractal-brushes.md before replacing planetary terrain addressing, height brushes, or agent/body detail grammars.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.
   - Keep Aquarium and Epiphany in one repo until the contracts and graph API are stable enough for Epiphany to move out without carrying engine policy or reload folklore with it.

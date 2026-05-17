@@ -51,6 +51,8 @@ Epiphany client while the client API is still being carved into its final shape:
   audio host, and engine-owned assets.
 - `src/Aquarium.Epiphany`: Epiphany Aquarium runtime, state interpretation,
   render-plan configuration, and agent shaders.
+- `src/Aquarium.Zyphos`: planetary-scale rendering demo client with its own
+  runtime, controls, scene state, and SDF planet shaders.
 - `src/Aquarium.Sample.Minimal`: tiny non-Epiphany client that proves the host
   can run something other than Epiphany.
 
@@ -89,6 +91,11 @@ repo.
 engine boundary honest. It references only `Aquarium.Engine.Contracts`, declares
 an `AquariumRenderPlan`, and boots through the same host/client loader path.
 
+`src\Aquarium.Zyphos` is the first nontrivial non-Epiphany demo. It renders a
+rotating spherical planet, procedural continents, atmospheric rim light,
+night-side city glints, and an orbiting moon through the same host, renderer,
+reload, UI, bloom, and SDF proxy machinery used by Epiphany.
+
 For iteration while an Aquarium window is already open, use the dev reload
 runner instead of `dotnet run`:
 
@@ -103,6 +110,13 @@ the runtime with a MessagePack CultCache store at
 The previous script-owned process is stopped only after the replacement build
 succeeds. This keeps MSBuild away from the locked normal `bin\Debug` output
 while a live window is still open.
+
+Run a different client project through the same slot machinery with
+`-ClientProject`:
+
+```powershell
+.\scripts\dev-reload.ps1 -ClientProject src\Aquarium.Zyphos\Aquarium.Zyphos.csproj
+```
 
 If the visible dev window was closed but the last slot is still present, reopen
 it without rebuilding:
@@ -120,6 +134,12 @@ For automatic rebuild/restart on source changes, use the watcher:
 .\scripts\dev-watch.ps1
 ```
 
+Watch a specific client project the same way:
+
+```powershell
+.\scripts\dev-watch.ps1 -ClientProject src\Aquarium.Zyphos\Aquarium.Zyphos.csproj
+```
+
 The watcher polls source files, waits for writes to settle, builds into a new
 slot, and only replaces the running Aquarium after the new build succeeds. If a
 build fails, the previous good process keeps running and that same broken source
@@ -135,10 +155,11 @@ run the watcher with:
 ```
 
 Shader edits do not restart the process. The dev watcher fingerprints
-`.hlsl`/`.hlsli` files under both the engine and Epiphany shader roots, copies
-them into the running apphost slot, and lets the renderer rebuild the active
-D3D12 pipelines from its current shader source root. A bad shader edit leaves
-the previous working shaders bound and writes the compiler failure to stderr.
+`.hlsl`/`.hlsli` files under both the engine and selected client shader roots,
+copies them into the running apphost slot, and lets the renderer rebuild the
+active D3D12 pipelines from its current shader source root. A bad shader edit
+leaves the previous working shaders bound and writes the compiler failure to
+stderr.
 
 Epiphany client/runtime code is split into `Aquarium.Epiphany` behind
 `Aquarium.Engine.Contracts`. The host loads that client DLL through a collectible

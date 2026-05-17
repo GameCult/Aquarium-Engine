@@ -3,6 +3,7 @@ param(
     [switch]$NoInitialLaunch,
     [switch]$ReopenWhenClosed,
     [switch]$Once,
+    [string]$ClientProject = "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj",
     [int]$IntervalMilliseconds = 1000,
     [int]$DebounceMilliseconds = 350,
     [int]$RetainSlots = 12,
@@ -14,13 +15,16 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $reloadScript = Join-Path $PSScriptRoot "dev-reload.ps1"
-$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj"
+$liveProjectPath = if ([System.IO.Path]::IsPathRooted($ClientProject)) { $ClientProject } else { Join-Path $repoRoot $ClientProject }
+$liveProjectPath = (Resolve-Path $liveProjectPath).Path
+$liveAssemblyName = [System.IO.Path]::GetFileNameWithoutExtension($liveProjectPath)
+$clientSourceRoot = Split-Path $liveProjectPath
 $watchLogPath = Join-Path $repoRoot "artifacts\dev-reload\watch.log"
 $liveSlotRoot = Join-Path $repoRoot "artifacts\dev-reload\live-slots"
 $liveReloadPointerPath = Join-Path $repoRoot "artifacts\dev-reload\live-current.txt"
 $shaderPath = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders\Aquarium.hlsl"
 $engineShaderRoot = Join-Path $repoRoot "src\Aquarium.Engine\Render\Shaders"
-$clientShaderRoot = Join-Path $repoRoot "src\Aquarium.Epiphany\Shaders"
+$clientShaderRoot = Join-Path $clientSourceRoot "Shaders"
 $visibleStatePath = Join-Path $repoRoot "artifacts\dev-reload\state.clixml"
 $headlessStatePath = Join-Path $repoRoot "artifacts\dev-reload\headless-state.clixml"
 $ownedProcessStatePath = if ($Headless) { $headlessStatePath } else { $visibleStatePath }
@@ -83,13 +87,13 @@ function Get-ShaderFiles {
 
 function Get-LiveFiles {
     Get-SourceFiles | Where-Object {
-        $_.FullName -like (Join-Path $repoRoot "src\Aquarium.Epiphany\*")
+        $_.FullName -like (Join-Path $clientSourceRoot "*")
     }
 }
 
 function Get-RestartFiles {
     Get-SourceFiles | Where-Object {
-        $_.FullName -notlike (Join-Path $repoRoot "src\Aquarium.Epiphany\*")
+        $_.FullName -notlike (Join-Path $clientSourceRoot "*")
     }
 }
 
@@ -205,6 +209,7 @@ function Invoke-Reload {
         "-NoProfile",
         "-ExecutionPolicy", "Bypass",
         "-File", $reloadScript,
+        "-ClientProject", $liveProjectPath,
         "-RetainSlots", "$RetainSlots"
     )
 
@@ -284,6 +289,7 @@ function Invoke-Reopen {
         "-ExecutionPolicy", "Bypass",
         "-File", $reloadScript,
         "-Reopen",
+        "-ClientProject", $liveProjectPath,
         "-RetainSlots", "$RetainSlots"
     )
 
@@ -312,7 +318,7 @@ function Invoke-LiveReload {
         throw "client runtime build failed with exit code $LASTEXITCODE."
     }
 
-    $liveAssemblyPath = Join-Path $liveSlot "Aquarium.Epiphany.dll"
+    $liveAssemblyPath = Join-Path $liveSlot "$liveAssemblyName.dll"
     if (-not (Test-Path $liveAssemblyPath)) {
         throw "Expected client runtime assembly was not produced: $liveAssemblyPath"
     }

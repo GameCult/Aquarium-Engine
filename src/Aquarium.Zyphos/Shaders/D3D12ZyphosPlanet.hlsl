@@ -1,0 +1,96 @@
+static const int SDF_INDEX = 0;
+
+#include "D3D12SdfCommon.hlsli"
+#include "D3D12SdfMath.hlsli"
+
+float3 zyRotateZ(float3 p, float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+    return float3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+}
+
+float3 zyPlanetDir(float3 local, SdfObject sdfObject)
+{
+    return normalize(zyRotateZ(local, -sdfObject.state.y));
+}
+
+float zySphericalField(float3 dir)
+{
+    float latitude = asin(saturate(abs(dir.z)) * 2.0 - 1.0);
+    float longitude = atan2(dir.y, dir.x);
+    float plates =
+        sin(longitude * 2.0 + dir.z * 4.5) * 0.28 +
+        sin(longitude * 3.0 - dir.z * 7.0 + 1.7) * 0.22 +
+        sin((dir.x + dir.y * 0.7 + dir.z * 0.4) * 8.0) * 0.16 +
+        sin((dir.x * 1.3 - dir.y + dir.z * 1.9) * 13.0) * 0.08;
+    float equatorialWarmth = cos(latitude) * 0.18;
+    return 0.50 + plates + equatorialWarmth;
+}
+
+float zyTerrainOffset(float3 dir, SdfObject sdfObject)
+{
+    float field = zySphericalField(dir);
+    float seaLevel = sdfObject.state.z;
+    float land = smoothstep(seaLevel - 0.04, seaLevel + 0.08, field);
+    float mountain = pow(saturate(field - seaLevel), 1.65);
+    float polarCap = pow(abs(dir.z), 8.0) * 0.035;
+    return (field - seaLevel) * 0.10 + mountain * 0.13 + polarCap * land;
+}
+
+float sdfDistance(float3 p, int sdfIndex)
+{
+    SdfObject sdfObject = sdfObjects[sdfIndex];
+    float planetRadius = max(sdfObject.state.x, 0.001);
+    float3 local = p - sdfObject.centerRadius.xyz;
+    float3 dir = zyPlanetDir(local, sdfObject);
+    return length(local) - (planetRadius + zyTerrainOffset(dir, sdfObject));
+}
+
+SdfSurface sdfSurface(float3 p, int sdfIndex)
+{
+    SdfObject sdfObject = sdfObjects[sdfIndex];
+    float3 local = p - sdfObject.centerRadius.xyz;
+    float3 dir = zyPlanetDir(local, sdfObject);
+    float field = zySphericalField(dir);
+    float seaLevel = sdfObject.state.z;
+    float land = smoothstep(seaLevel - 0.03, seaLevel + 0.06, field);
+    float mountain = smoothstep(seaLevel + 0.12, seaLevel + 0.28, field);
+    float polar = smoothstep(0.72, 0.92, abs(dir.z));
+    float cloud = smoothstep(0.73, 0.91, sin(dir.x * 18.0 + dir.y * 13.0 + dir.z * 9.0 + timeSeconds * 0.19) * 0.5 + 0.5);
+
+    float3 ocean = lerp(float3(0.004, 0.070, 0.130), float3(0.010, 0.220, 0.330), saturate(field));
+    float3 lowland = float3(0.070, 0.300, 0.185);
+    float3 highland = float3(0.540, 0.405, 0.220);
+    float3 snow = float3(0.800, 0.865, 0.830);
+    float3 landColor = lerp(lowland, highland, mountain);
+    landColor = lerp(landColor, snow, saturate(polar + mountain * 0.38));
+
+    SdfSurface surface;
+    surface.baseColor = lerp(ocean, landColor, land);
+    surface.baseColor = lerp(surface.baseColor, float3(0.78, 0.84, 0.80), cloud * 0.16);
+    surface.metallic = 0.0;
+    surface.roughness = lerp(0.34, 0.84, land);
+    surface.emission = 0.0;
+    return surface;
+}
+
+float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, SdfSurface surface)
+{
+    SdfObject sdfObject = sdfObjects[sdfIndex];
+    float3 dir = zyPlanetDir(p - sdfObject.centerRadius.xyz, sdfObject);
+    float3 viewDirection = normalize(cameraPosition - p);
+    float3 sunDirection = normalize(float3(-0.46, -0.72, 0.52));
+    float daylight = saturate(dot(normal, sunDirection) * 0.74 + 0.34);
+    float night = saturate(-dot(normal, sunDirection) * 1.7 - 0.20);
+    float citySeed = sin(dir.x * 43.0 + sin(dir.y * 19.0) * 4.0 + dir.z * 31.0);
+    float cityWeb = smoothstep(0.82, 0.96, citySeed * 0.5 + 0.5);
+    float coast = 1.0 - smoothstep(0.020, 0.070, abs(zySphericalField(dir) - sdfObject.state.z));
+    float fresnel = pow(1.0 - saturate(dot(normal, viewDirection)), 3.2);
+    float3 city = float3(1.0, 0.54, 0.14) * cityWeb * coast * night * 1.25;
+    float3 atmosphere = float3(0.07, 0.38, 0.78) * (fresnel * 1.35 + pow(fresnel, 6.0) * 2.6);
+
+    return shadeSdfPbr(p, normal, surface) * daylight + city + atmosphere;
+}
+
+#include "D3D12SdfProxy.hlsli"

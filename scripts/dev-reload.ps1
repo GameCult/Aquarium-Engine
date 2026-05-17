@@ -3,6 +3,7 @@ param(
     [switch]$NoStop,
     [switch]$BuildOnly,
     [switch]$Reopen,
+    [string]$ClientProject = "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj",
     [int]$RetainSlots = 12,
     [int]$StartupTimeoutSeconds = 5,
     [int]$HeadlessTimeoutSeconds = 60
@@ -13,7 +14,9 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "src\Aquarium.Engine\Aquarium.Engine.csproj"
-$liveProjectPath = Join-Path $repoRoot "src\Aquarium.Epiphany\Aquarium.Epiphany.csproj"
+$liveProjectPath = if ([System.IO.Path]::IsPathRooted($ClientProject)) { $ClientProject } else { Join-Path $repoRoot $ClientProject }
+$liveProjectPath = (Resolve-Path $liveProjectPath).Path
+$liveAssemblyName = [System.IO.Path]::GetFileNameWithoutExtension($liveProjectPath)
 $devRoot = Join-Path $repoRoot "artifacts\dev-reload"
 $slotRoot = Join-Path $devRoot "slots"
 $visibleStatePath = Join-Path $devRoot "state.clixml"
@@ -233,7 +236,7 @@ function Reopen-VisibleProcess {
     }
 
     $slotPath = [string]$state.slot
-    $liveAssemblyPath = Join-Path $slotPath "Aquarium.Epiphany.dll"
+    $liveAssemblyPath = Join-Path $slotPath "$liveAssemblyName.dll"
     if ($state.PSObject.Properties.Name -contains "liveAssembly" -and $state.liveAssembly) {
         $liveAssemblyPath = [string]$state.liveAssembly
     }
@@ -300,7 +303,7 @@ if ($BuildOnly) {
 Stop-PreviousOwnedProcess
 
 $exePath = Join-Path $slotPath "Aquarium.Engine.exe"
-$liveAssemblyPath = Join-Path $slotPath "Aquarium.Epiphany.dll"
+$liveAssemblyPath = Join-Path $slotPath "$liveAssemblyName.dll"
 if (-not (Test-Path $exePath)) {
     throw "Expected apphost was not produced: $exePath"
 }

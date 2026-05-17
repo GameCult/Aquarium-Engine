@@ -33,6 +33,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Engine.Tests", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Epiphany.AgentPreview", "src\Aquarium.Epiphany.AgentPreview\Aquarium.Epiphany.AgentPreview.csproj", "{F12A367A-8D8E-490D-B60E-3FDBEA3E07E2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aquarium.Zyphos", "src\Aquarium.Zyphos\Aquarium.Zyphos.csproj", "{801B1913-6AE1-4B8C-8030-4669AC4FE25E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -199,6 +201,18 @@ Global
 		{F12A367A-8D8E-490D-B60E-3FDBEA3E07E2}.Release|x64.Build.0 = Release|Any CPU
 		{F12A367A-8D8E-490D-B60E-3FDBEA3E07E2}.Release|x86.ActiveCfg = Release|Any CPU
 		{F12A367A-8D8E-490D-B60E-3FDBEA3E07E2}.Release|x86.Build.0 = Release|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Debug|x64.Build.0 = Debug|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Debug|x86.Build.0 = Debug|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Release|x64.ActiveCfg = Release|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Release|x64.Build.0 = Release|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Release|x86.ActiveCfg = Release|Any CPU
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -210,5 +224,6 @@ Global
 		{7564E6C2-FF01-4B5B-8C2B-F9CD796858BA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{37363FC6-5AA3-49B4-A3B1-E4AB2CC986EB} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{F12A367A-8D8E-490D-B60E-3FDBEA3E07E2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{801B1913-6AE1-4B8C-8030-4669AC4FE25E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
