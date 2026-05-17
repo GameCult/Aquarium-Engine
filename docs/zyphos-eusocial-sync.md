@@ -23,6 +23,10 @@ Aquarium into a second lore repository.
 - Setting canon belongs in the vault.
 - Aquarium docs may describe render requirements, demo scope, and questions, but
   must not become the authoritative setting bible.
+- Zyphos bends to physics. If orbital mechanics, light budget, eclipse geometry,
+  or climate constraints narrow an early visual idea, the demo should use that
+  pressure as worldbuilding fuel rather than hiding an impossible sky in shader
+  code.
 - Zyphos-specific code belongs under `src/Aquarium.Zyphos`; generic renderer
   machinery belongs under Aquarium.Engine only when it serves multiple clients.
 - Design inference must be labeled before it hardens into canon.
