@@ -23,6 +23,7 @@ cbuffer AquariumFrame : register(b0)
     float bloomVeilIntensity;
     float4 cursorWorlds;
     float4 temporalGaussianInfo;
+    float4 gpuFusionInfo;
 };
 
 struct GpuFusionSeed
@@ -61,9 +62,17 @@ struct GpuSensorCamera
     float4 sensorFromWorld2;
 };
 
+struct AcousticConstraint
+{
+    float4 positionRadius;
+    float4 velocityConfidence;
+    float4 kindTimePad;
+};
+
 StructuredBuffer<GpuFusionSeed> fusionSeeds : register(t26);
 StructuredBuffer<GpuSensorCamera> sensorCameras : register(t27);
 Texture2D<float4> sensorTextures[8] : register(t28);
+StructuredBuffer<AcousticConstraint> acousticConstraints : register(t36);
 RWStructuredBuffer<TemporalGaussian> temporalGaussiansOut : register(u0);
 
 float Hash01(uint value)
@@ -98,6 +107,32 @@ float4 LoadSensorTexture(uint slot, int3 pixel)
         case 6u: return sensorTextures[6].Load(pixel);
         default: return sensorTextures[7].Load(pixel);
     }
+}
+
+float AcousticSupport(float3 center, out float3 velocityBias)
+{
+    uint count = (uint)gpuFusionInfo.x;
+    velocityBias = float3(0.0, 0.0, 0.0);
+    float support = 0.0;
+    float weightSum = 0.0;
+    [loop]
+    for (uint index = 0u; index < min(count, 128u); index++)
+    {
+        AcousticConstraint constraint = acousticConstraints[index];
+        float radius = max(0.001, constraint.positionRadius.w);
+        float distanceMeters = distance(center, constraint.positionRadius.xyz);
+        float weight = saturate(1.0 - distanceMeters / radius) * saturate(constraint.velocityConfidence.w);
+        support = max(support, weight);
+        velocityBias += constraint.velocityConfidence.xyz * weight;
+        weightSum += weight;
+    }
+
+    if (weightSum > 0.0001)
+    {
+        velocityBias /= weightSum;
+    }
+
+    return support;
 }
 
 [numthreads(128, 1, 1)]
@@ -150,7 +185,13 @@ void D3D12LocalCastFusionCS(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint x = (localIndex * 73u + (uint)(Hash01(localIndex) * 37.0)) % width;
     uint y = (localIndex / width * 41u + (uint)(Hash01(localIndex ^ 0x9e3779b9u) * 29.0)) % height;
     float4 rgba = LoadSensorTexture(textureSlot, int3((int)x, (int)y, 0));
+    uint pairSlot = (textureSlot + 1u) % max(1u, textureCount);
+    float4 pairRgba = LoadSensorTexture(pairSlot, int3((int)x, (int)y, 0));
     float luma = dot(rgba.rgb, float3(0.2126, 0.7152, 0.0722));
+    float pairLuma = dot(pairRgba.rgb, float3(0.2126, 0.7152, 0.0722));
+    float descriptor = frac(luma * 3.17 + rgba.r * 1.91 + rgba.g * 2.37 + Hash01(localIndex ^ 0x27d4eb2du) * 0.07);
+    float pairDescriptor = frac(pairLuma * 3.17 + pairRgba.r * 1.91 + pairRgba.g * 2.37);
+    float visualMatch = 1.0 - saturate(abs(descriptor - pairDescriptor) * 3.0 + distance(rgba.rgb, pairRgba.rgb) * 0.35);
     float fx = max(1.0, camera.intrinsics.x);
     float fy = max(1.0, camera.intrinsics.y);
     float cx = camera.intrinsics.z;
@@ -162,14 +203,16 @@ void D3D12LocalCastFusionCS(uint3 dispatchThreadId : SV_DispatchThreadID)
     float focalPixels = max(1.0, 0.5 * (fx + fy));
     float screenFitRadius = targetPixels * depth / focalPixels;
     float radius = clamp(screenFitRadius, 0.0015, 0.018);
-    float confidence = saturate(0.25 + abs(luma - 0.5) * 1.5);
+    float3 acousticVelocity;
+    float acousticSupport = AcousticSupport(center, acousticVelocity);
+    float confidence = saturate((0.20 + abs(luma - 0.5) * 1.15) * lerp(0.55, 1.25, visualMatch) + acousticSupport * 0.35);
 
     gaussian.centerHistoryWeight = float4(center, confidence);
     gaussian.previousCenterFieldId = float4(center, (float)(textureSlot + 1u));
-    gaussian.velocityConfidence = float4(0.0, 0.0, 0.0, confidence);
-    gaussian.radiiFalloff = float4(radius * 1.65, radius, radius * 1.25, 5.8);
+    gaussian.velocityConfidence = float4(acousticVelocity, confidence);
+    gaussian.radiiFalloff = float4(radius * lerp(1.85, 1.25, visualMatch), radius, radius * lerp(1.45, 1.05, visualMatch), 5.8);
     gaussian.orientation = float4(0.0, 0.0, 0.0, 1.0);
     gaussian.colorOpacity = float4(rgba.rgb * 1.35, saturate(0.08 + confidence * 0.42));
-    gaussian.shapePad = float4(1.85, (float)x / (float)width, (float)y / (float)height, camera.textureRangeTime.z);
+    gaussian.shapePad = float4(lerp(2.35, 1.45, visualMatch), descriptor, visualMatch, acousticSupport);
     temporalGaussiansOut[index] = gaussian;
 }

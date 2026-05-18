@@ -336,6 +336,61 @@ public sealed class AquariumGpuSensorFrame
     public bool HasInput => Cameras.Count > 0 || ExternalTextures.Count > 0;
 }
 
+public enum AquariumAcousticConstraintKind
+{
+    Unknown,
+    UltrasonicReflector,
+    VoiceTdoa,
+    SpeakerProbe,
+    ClapImpact,
+}
+
+public readonly record struct AquariumAcousticConstraint(
+    string StableKey,
+    AquariumAcousticConstraintKind Kind,
+    Vector3 Position,
+    Vector3 Velocity,
+    float RadiusMeters,
+    float Confidence,
+    long TimestampNs);
+
+public sealed class AquariumAcousticFieldFrame
+{
+    public static AquariumAcousticFieldFrame Empty { get; } = new();
+
+    public IReadOnlyList<AquariumAcousticConstraint> Constraints { get; init; } = [];
+
+    public long TimingOracleNs { get; init; }
+
+    public float TimingConfidence { get; init; }
+
+    public float TimingUncertaintyMicroseconds { get; init; }
+
+    public float AccumulationWindowSeconds { get; init; }
+
+    public float PresentationDelaySeconds { get; init; }
+
+    public bool HasInput => Constraints.Count > 0;
+}
+
+public readonly record struct AquariumClapCalibrationEvent(
+    string StableKey,
+    Vector3 Position,
+    long AcousticOracleNs,
+    long VisualObservedNs,
+    float TimingUncertaintyMicroseconds,
+    float VisualConfidence,
+    float AcousticConfidence);
+
+public sealed class AquariumCalibrationEventFrame
+{
+    public static AquariumCalibrationEventFrame Empty { get; } = new();
+
+    public IReadOnlyList<AquariumClapCalibrationEvent> ClapEvents { get; init; } = [];
+
+    public bool HasInput => ClapEvents.Count > 0;
+}
+
 public sealed class AquariumGpuFusionField
 {
     public static AquariumGpuFusionField Empty { get; } = new();
@@ -375,6 +430,10 @@ public sealed class AquariumSceneState
     public AquariumTemporalGaussianField TemporalGaussianField { get; init; } = AquariumTemporalGaussianField.Empty;
 
     public AquariumGpuSensorFrame GpuSensorFrame { get; init; } = AquariumGpuSensorFrame.Empty;
+
+    public AquariumAcousticFieldFrame AcousticFieldFrame { get; init; } = AquariumAcousticFieldFrame.Empty;
+
+    public AquariumCalibrationEventFrame CalibrationEventFrame { get; init; } = AquariumCalibrationEventFrame.Empty;
 
     public AquariumGpuFusionField GpuFusionField { get; init; } = AquariumGpuFusionField.Empty;
 }

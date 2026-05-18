@@ -49,4 +49,60 @@ public sealed class GpuSensorFrameContractTests
         Assert.Equal("LocalCastBridge/KiyoProLeft/Bgra", scene.GpuSensorFrame.ExternalTextures[0].SharedHandleName);
         Assert.Equal(18.0f, scene.GpuSensorFrame.AccumulationWindowSeconds, 6);
     }
+
+    [Fact]
+    public void SceneStateCarriesAcousticTimingOracleWithRoomConstraints()
+    {
+        var acoustic = new AquariumAcousticFieldFrame
+        {
+            TimingOracleNs = 99_000_000_123,
+            TimingConfidence = 0.98f,
+            TimingUncertaintyMicroseconds = 2.5f,
+            AccumulationWindowSeconds = 6.0f,
+            PresentationDelaySeconds = 2.0f,
+            Constraints =
+            [
+                new AquariumAcousticConstraint(
+                    "ultrasonic-wall-return:front",
+                    AquariumAcousticConstraintKind.UltrasonicReflector,
+                    new Vector3(0.0f, 1.2f, 1.1f),
+                    Vector3.Zero,
+                    0.18f,
+                    0.87f,
+                    99_000_000_123)
+            ],
+        };
+
+        var scene = new AquariumSceneState { AcousticFieldFrame = acoustic };
+
+        Assert.True(scene.AcousticFieldFrame.HasInput);
+        Assert.Equal(99_000_000_123, scene.AcousticFieldFrame.TimingOracleNs);
+        Assert.Equal(2.5f, scene.AcousticFieldFrame.TimingUncertaintyMicroseconds, 6);
+        Assert.Equal(AquariumAcousticConstraintKind.UltrasonicReflector, scene.AcousticFieldFrame.Constraints[0].Kind);
+    }
+
+    [Fact]
+    public void SceneStateCarriesClapCalibrationEventAlignedToAcousticOracle()
+    {
+        var events = new AquariumCalibrationEventFrame
+        {
+            ClapEvents =
+            [
+                new AquariumClapCalibrationEvent(
+                    "clap:host:0001",
+                    new Vector3(0.12f, 0.4f, 1.35f),
+                    AcousticOracleNs: 123_456_789_000,
+                    VisualObservedNs: 123_456_805_000,
+                    TimingUncertaintyMicroseconds: 1.8f,
+                    VisualConfidence: 0.82f,
+                    AcousticConfidence: 0.97f)
+            ],
+        };
+
+        var scene = new AquariumSceneState { CalibrationEventFrame = events };
+
+        Assert.True(scene.CalibrationEventFrame.HasInput);
+        Assert.Equal(123_456_789_000, scene.CalibrationEventFrame.ClapEvents[0].AcousticOracleNs);
+        Assert.True(scene.CalibrationEventFrame.ClapEvents[0].AcousticConfidence > scene.CalibrationEventFrame.ClapEvents[0].VisualConfidence);
+    }
 }

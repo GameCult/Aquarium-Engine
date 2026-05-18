@@ -104,15 +104,32 @@ Ownership:
 - `D3D12Renderer` owns GPU sensor camera metadata storage, UAV-capable temporal
   Gaussian storage, dispatch, and the transition back to shader-resource state
   for the draw.
+- `AquariumAcousticFieldFrame` carries the ultrasonic chirplet timing oracle and
+  room/position constraints. Visual evidence may arrive late and be refined, but
+  acoustic timing is the clock witness for aligning the delayed broadcast world.
+- `AquariumCalibrationEventFrame` carries deliberate calibration actions such
+  as claps. A clap gives the system one event that every camera can see and the
+  audio timing oracle can timestamp to microsecond-scale uncertainty, making it
+  the cheap, brutal alignment hammer for camera clock offsets and pose drift.
 
 Current Aquarium cut: the contract, D3D12 camera metadata buffer, external
 texture importer, and sensor SRV table exist. A producer may provide either a
 duplicated shared handle or a named shared handle for each camera/Leap plane.
 When sensor textures are present, Aquarium can dispatch fusion without fallback
-seeds and write RGB-derived Gaussian samples into the temporal buffer. Next cut:
-replace the first-pass per-texture sampling with calibrated stereo/flow/feature
-kernels, Leap packed-map channel extraction, and confidence-weighted surface
-correspondence.
+seeds and write RGB-derived Gaussian samples into the temporal buffer. Those
+samples are no longer isolated per-camera flecks: the shader computes a compact
+per-sample visual descriptor, compares it against a neighboring camera stream,
+raises confidence when stochastic samples appear to correspond, and shrinks the
+kernel toward the matched surface. Acoustic constraints from the ultrasonic
+chirplet loop bias confidence and velocity near measured room/position returns.
+
+Next cut: replace the first-pass descriptor comparison with calibrated
+epipolar/flow search, Leap packed-map channel extraction, and a persistent GPU
+correspondence/refinement buffer that can update camera pose and surface tracks
+over the several-second broadcast delay window. Deliberate clap events should
+feed that buffer as high-confidence timing correspondences: visual impact frame
+per camera against acoustic oracle time, then pose/clock correction under the
+same delayed broadcast horizon.
 
 The first shader pass also uses camera-facing proxy planes to evaluate each
 kernel. True ray-integrated volume compositing, Gaussian depth sorting, and
