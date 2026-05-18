@@ -17,6 +17,17 @@ public sealed class ZyphosRuntime : IAquariumRuntime
     private float timeScale = 1.0f;
     private bool autoOrbit = true;
     private ZyphosCameraFrame cameraFrame;
+    private bool showSolarDomain = true;
+    private bool showOrbitalDomain = true;
+    private bool showPlanetaryDomains = true;
+    private bool showSurfaceDomains = true;
+
+    private static readonly AquariumUiOption[] CameraFrameOptions =
+    [
+        new((int)ZyphosCameraFrame.Planet, "Planet"),
+        new((int)ZyphosCameraFrame.Umbros, "Umbros"),
+        new((int)ZyphosCameraFrame.Binary, "Binary"),
+    ];
 
     public AquariumRuntimeOptions Options { get; private set; }
 
@@ -60,6 +71,25 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
                 panel.Readout("Binary", () => $"Umbros {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} deg / {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Rz");
                 panel.Readout("Objects", () => "fractal height DSL, atmosphere, Umbros");
+            })
+            .Panel("Navigation", -18.0f, 82.0f, 316.0f, fadeWhenMouseDistant: true, panel =>
+            {
+                panel.Section("Frame Lock");
+                panel.Options("Target", () => (int)cameraFrame, value => cameraFrame = (ZyphosCameraFrame)Math.Clamp(value, 0, 2), CameraFrameOptions);
+                panel.Toggle("Auto Orbit", () => autoOrbit, value => autoOrbit = value);
+                panel.Readout("Pivot", () => cameraFrame == ZyphosCameraFrame.Planet ? "Zyphos center" : "Parent: Zyphos");
+                panel.Readout("Constraint", () => cameraFrame == ZyphosCameraFrame.Planet ? "planet frame" : "keep parent in sight");
+                panel.Section("Spatial Domains");
+                panel.Toggle("Solar", () => showSolarDomain, value => showSolarDomain = value);
+                panel.Readout("  parent star", () => "M primary / 0.077 AU", isVisible: () => showSolarDomain);
+                panel.Toggle("Orbital", () => showOrbitalDomain, value => showOrbitalDomain = value);
+                panel.Readout("  Zyphos-Umbros", () => "8 Rz / 52 min eclipse", isVisible: () => showOrbitalDomain);
+                panel.Toggle("Planetary", () => showPlanetaryDomains, value => showPlanetaryDomains = value);
+                panel.Readout("  Zyphos", () => "surface + sea domain", isVisible: () => showPlanetaryDomains);
+                panel.Readout("  Umbros", () => "fixed-sky twin", isVisible: () => showPlanetaryDomains);
+                panel.Toggle("Surface", () => showSurfaceDomains, value => showSurfaceDomains = value);
+                panel.Readout("  lat/long", () => "terrain patch parent", isVisible: () => showSurfaceDomains);
+                panel.Readout("  cube tile", () => ZyphosFractalTerrain.Summary, isVisible: () => showSurfaceDomains);
             })
             .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.")
             .Command("zyphos-fractal", _ => ZyphosFractalTerrain.DebugDump, "Dump the compiled Zyphos fractal terrain grammar.")

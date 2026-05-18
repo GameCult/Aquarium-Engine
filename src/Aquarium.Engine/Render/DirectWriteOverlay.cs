@@ -87,12 +87,23 @@ internal sealed class DirectWriteOverlay : IDisposable
     public void Render(AquariumFrame frame, int renderDebugMode, DebugUi? debugUi, IReadOnlyList<DebugUi> clientUiPanels)
     {
         renderTarget.BeginDraw();
-        debugUi?.Draw(
-            renderTarget,
-            directWriteFactory,
-            titleFormat,
-            smallFormat,
-            monospaceFormat,
+        if (debugUi is not null)
+        {
+            DrawPanel(debugUi, 1.0f);
+        }
+
+        foreach (var panel in clientUiPanels)
+        {
+            DrawPanel(panel, panel.DrawOpacity());
+        }
+
+        renderTarget.EndDraw();
+    }
+
+    private void DrawPanel(DebugUi panel, float opacity)
+    {
+        var brushes = new ID2D1SolidColorBrush[]
+        {
             panelBrush,
             rowBrush,
             hoverRowBrush,
@@ -106,9 +117,15 @@ internal sealed class DirectWriteOverlay : IDisposable
             dimAccentBrush,
             trackHoverBrush,
             trackActiveBrush,
-            width,
-            height);
-        foreach (var panel in clientUiPanels)
+        };
+        var originalOpacity = new float[brushes.Length];
+        for (var index = 0; index < brushes.Length; index++)
+        {
+            originalOpacity[index] = brushes[index].Opacity;
+            brushes[index].Opacity = originalOpacity[index] * opacity;
+        }
+
+        try
         {
             panel.Draw(
                 renderTarget,
@@ -132,7 +149,13 @@ internal sealed class DirectWriteOverlay : IDisposable
                 width,
                 height);
         }
-        renderTarget.EndDraw();
+        finally
+        {
+            for (var index = 0; index < brushes.Length; index++)
+            {
+                brushes[index].Opacity = originalOpacity[index];
+            }
+        }
     }
 
     public void Dispose()

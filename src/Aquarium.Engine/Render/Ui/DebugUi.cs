@@ -36,6 +36,7 @@ internal sealed class DebugUi
     private readonly float panelLeft;
     private readonly float panelTop;
     private readonly float panelWidth;
+    private readonly bool fadeWhenMouseDistant;
     private int? activeSliderId;
     private int? activeControlId;
     private int? focusedTextId;
@@ -44,6 +45,7 @@ internal sealed class DebugUi
     private Rect panelBounds;
     private Vector2 mousePosition;
     private int lastViewportHeight = 720;
+    private int lastViewportWidth = 1280;
     private float bodyScrollOffset;
     private float bodyContentHeight;
     private Rect bodyClipBounds;
@@ -59,11 +61,17 @@ internal sealed class DebugUi
     }
 
     public DebugUi(string title, float left, float top, float width, IReadOnlyList<string> tabs, Func<int> readActiveTab, Action<int> writeActiveTab)
+        : this(title, left, top, width, fadeWhenMouseDistant: false, tabs, readActiveTab, writeActiveTab)
+    {
+    }
+
+    public DebugUi(string title, float left, float top, float width, bool fadeWhenMouseDistant, IReadOnlyList<string> tabs, Func<int> readActiveTab, Action<int> writeActiveTab)
     {
         Title = title;
         panelLeft = left;
         panelTop = top;
         panelWidth = width;
+        this.fadeWhenMouseDistant = fadeWhenMouseDistant;
         this.tabs = tabs;
         this.readActiveTab = readActiveTab;
         this.writeActiveTab = writeActiveTab;
@@ -79,7 +87,7 @@ internal sealed class DebugUi
 
     public static DebugUi FromContract(AquariumUiPanel source)
     {
-        var ui = new DebugUi(source.Title, source.Left, source.Top, source.Width);
+        var ui = new DebugUi(source.Title, source.Left, source.Top, source.Width, source.FadeWhenMouseDistant, [], () => 0, _ => { });
         foreach (var control in source.Controls)
         {
             ui.AddContractControl(control);
@@ -361,6 +369,7 @@ internal sealed class DebugUi
             return;
         }
 
+        lastViewportWidth = viewportWidth;
         lastViewportHeight = viewportHeight;
         Layout();
 
@@ -452,13 +461,14 @@ internal sealed class DebugUi
 
     private void Layout()
     {
+        var left = ResolvedPanelLeft();
         var bodyTop = panelTop + HeaderHeight + (tabs.Count > 0 ? TabRowHeight : 0.0f) + 10.0f;
         var maxPanelBottom = MathF.Max(bodyTop + RowHeight, lastViewportHeight - ScreenMargin);
         var visibleControls = controls.Where(control => control.IsVisible).ToArray();
         bodyContentHeight = ContentHeight(visibleControls);
         var desiredBottom = bodyTop + bodyContentHeight + 12.0f;
         var bottom = lastViewportHeight > 0 ? Math.Min(desiredBottom, maxPanelBottom) : desiredBottom;
-        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, bottom);
+        panelBounds = RectFromEdges(left, panelTop, left + panelWidth, bottom);
         bodyClipBounds = RectFromEdges(panelBounds.Left, bodyTop, panelBounds.Right, MathF.Max(bodyTop, panelBounds.Bottom - 8.0f));
         bodyScrollOffset = Math.Clamp(bodyScrollOffset, 0.0f, MaxBodyScrollOffset());
 
@@ -466,9 +476,25 @@ internal sealed class DebugUi
         foreach (var control in visibleControls)
         {
             var height = control.LayoutHeight;
-            control.Bounds = RectFromEdges(panelLeft + 10.0f, y, panelLeft + panelWidth - 10.0f, y + height);
+            control.Bounds = RectFromEdges(left + 10.0f, y, left + panelWidth - 10.0f, y + height);
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
+    }
+
+    public float DrawOpacity()
+    {
+        if (!fadeWhenMouseDistant)
+        {
+            return 1.0f;
+        }
+
+        var near = RectFromEdges(panelBounds.Left - 72.0f, panelBounds.Top - 72.0f, panelBounds.Right + 72.0f, panelBounds.Bottom + 72.0f);
+        return Contains(near, mousePosition) ? 1.0f : 0.1f;
+    }
+
+    private float ResolvedPanelLeft()
+    {
+        return panelLeft < 0.0f ? MathF.Max(ScreenMargin, lastViewportWidth + panelLeft - panelWidth) : panelLeft;
     }
 
     private static float ContentHeight(IReadOnlyList<DebugUiControl> visibleControls)

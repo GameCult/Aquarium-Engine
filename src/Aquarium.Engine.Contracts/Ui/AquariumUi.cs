@@ -18,9 +18,14 @@ public sealed class AquariumUiDocument
 
     public AquariumUiDocument Panel(string title, float left, float top, float width, Action<AquariumUiPanelBuilder> compose)
     {
+        return Panel(title, left, top, width, fadeWhenMouseDistant: false, compose);
+    }
+
+    public AquariumUiDocument Panel(string title, float left, float top, float width, bool fadeWhenMouseDistant, Action<AquariumUiPanelBuilder> compose)
+    {
         var controls = new List<AquariumUiControl>();
         compose(new AquariumUiPanelBuilder(controls));
-        panels.Add(new AquariumUiPanel(title, left, top, width, controls));
+        panels.Add(new AquariumUiPanel(title, left, top, width, controls, fadeWhenMouseDistant));
         return this;
     }
 
@@ -36,7 +41,8 @@ public sealed record AquariumUiPanel(
     float Left,
     float Top,
     float Width,
-    IReadOnlyList<AquariumUiControl> Controls);
+    IReadOnlyList<AquariumUiControl> Controls,
+    bool FadeWhenMouseDistant = false);
 
 public sealed class AquariumUiPanelBuilder(List<AquariumUiControl> controls)
 {
