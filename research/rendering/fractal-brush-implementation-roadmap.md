@@ -332,18 +332,18 @@ Goal: prove page/key semantics before real SSD/GPU streaming.
 
 Tasks:
 
-- [ ] Add fake payload store with resident/missing states.
-- [ ] Add child request queue.
+- [x] Add fake payload store with resident/missing states.
+- [x] Add child request queue.
 - [ ] Add score/cost eviction policy.
-- [ ] Add parent-summary fallback path.
+- [x] Add parent-summary fallback path.
 - [ ] Add debug channels: residency, requests, evictions.
 
 Tests:
 
-- missing child renders parent summary;
-- high-score missing child enqueues request;
+- [x] missing child renders parent summary;
+- [x] high-score missing child enqueues request;
 - low-score high-cost payload evicts first;
-- frame path never blocks on fake store.
+- [x] frame path never blocks on fake store.
 
 Exit gate:
 
