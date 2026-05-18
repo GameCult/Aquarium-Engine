@@ -301,9 +301,9 @@ Goal: refresh contribution estimates under budget and converge.
 
 Tasks:
 
-- [ ] Add estimator state: mean, variance/uncertainty, confidence, sample count, sample age.
-- [ ] Add stochastic scheduler with deterministic random source.
-- [ ] Add exploration budget.
+- [x] Add estimator state: mean, variance/uncertainty, confidence, sample count, sample age.
+- [x] Add stochastic scheduler with deterministic random source.
+- [x] Add exploration budget.
 - [ ] Add confidence decay and stale uncertainty growth.
 - [ ] Add fake contribution probe.
 - [ ] Add convergence telemetry.
