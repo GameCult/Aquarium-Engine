@@ -212,9 +212,9 @@ Goal: preserve authoring meaning before backend flattening.
 
 Tasks:
 
-- [ ] Add contract DTOs for domains, claims, nodes, summaries, and selected cuts.
-- [ ] Add stable key builder for planet tile + grammar path.
-- [ ] Add in-memory ownership tree builder.
+- [x] Add contract DTOs for domains, claims, nodes, summaries, and selected cuts.
+- [x] Add stable key builder for planet tile + grammar path.
+- [x] Add in-memory ownership tree builder.
 - [ ] Implement operations: `Union`, `Subtract`, `Common`, `Repeat`, `Refine`, `Capture`, `Bind`.
 - [ ] Implement operation bounds.
 - [ ] Add flattening compiler to shaped 2D brush packets.

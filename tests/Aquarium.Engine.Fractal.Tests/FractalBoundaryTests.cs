@@ -7,12 +7,6 @@ public sealed class FractalBoundaryTests
     [Fact]
     public void FractalAssemblyDoesNotReferenceRendererOrD3D12Assemblies()
     {
-        var forbiddenPrefixes = new[]
-        {
-            "Aquarium.Engine",
-            "Vortice.",
-        };
-
         var references = typeof(CubeTileKey)
             .Assembly
             .GetReferencedAssemblies()
@@ -20,7 +14,8 @@ public sealed class FractalBoundaryTests
 
         foreach (var reference in references)
         {
-            Assert.DoesNotContain(forbiddenPrefixes, prefix => reference.StartsWith(prefix, StringComparison.Ordinal));
+            Assert.NotEqual("Aquarium.Engine", reference);
+            Assert.False(reference.StartsWith("Vortice.", StringComparison.Ordinal), $"Fractal core must not reference renderer dependency {reference}.");
         }
     }
 

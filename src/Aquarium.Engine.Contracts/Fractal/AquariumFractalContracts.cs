@@ -1,0 +1,105 @@
+using System.Numerics;
+
+namespace Aquarium.Engine.Fractal;
+
+public readonly record struct AquariumFractalKey
+{
+    public AquariumFractalKey(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("Fractal key must not be empty.", nameof(value));
+        }
+
+        Value = value;
+    }
+
+    public string Value { get; }
+
+    public override string ToString()
+    {
+        return Value;
+    }
+}
+
+public enum AquariumFractalDomainKind
+{
+    CubeSphereTile,
+    Surface2D,
+    Object3D,
+}
+
+public readonly record struct AquariumFractalDomain(
+    AquariumFractalKey Key,
+    AquariumFractalDomainKind Kind,
+    AquariumFractalKey ParentKey,
+    Vector4 Parameters0,
+    Vector4 Parameters1);
+
+public enum AquariumFractalPayloadKind
+{
+    Height,
+    Material,
+    SignedDistance,
+}
+
+public readonly record struct AquariumBrushClaim(
+    AquariumFractalKey Key,
+    AquariumFractalKey DomainKey,
+    AquariumFractalKey NodeKey,
+    AquariumFractalPayloadKind PayloadKind,
+    Vector2 Center,
+    Vector2 Radii,
+    float RotationRadians,
+    float Falloff,
+    float ShapePower,
+    float Amplitude,
+    int Seed,
+    string Tags);
+
+public enum AquariumFractalOperation
+{
+    Union,
+    Subtract,
+    Common,
+    Repeat,
+    Refine,
+    Capture,
+    Bind,
+}
+
+public readonly record struct AquariumFractalNode(
+    AquariumFractalKey Key,
+    AquariumFractalKey DomainKey,
+    AquariumFractalKey ParentKey,
+    AquariumFractalOperation Operation,
+    int FirstChildIndex,
+    int ChildCount,
+    int FirstClaimIndex,
+    int ClaimCount,
+    Vector4 BoundsMinMax,
+    int Seed);
+
+public readonly record struct AquariumFractalSummary(
+    AquariumFractalKey NodeKey,
+    Vector4 BoundsMinMax,
+    float MaxHeightError,
+    float MaxMaterialDelta,
+    float EstimatedCost,
+    int DescendantCount);
+
+public readonly record struct AquariumContributionState(
+    AquariumFractalKey NodeKey,
+    float MeanContribution,
+    float Variance,
+    float Confidence,
+    int SampleCount,
+    uint LastSampledFrame,
+    bool Resident);
+
+public readonly record struct AquariumSelectedCut(
+    AquariumFractalKey NodeKey,
+    float Score,
+    float Fade,
+    bool UsesSummary,
+    bool RequestedChildren);
