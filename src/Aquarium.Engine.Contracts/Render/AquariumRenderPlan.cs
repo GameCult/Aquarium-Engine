@@ -233,6 +233,10 @@ public sealed class AquariumSceneState
 {
     public static AquariumSceneState Empty { get; } = new();
 
+    public bool TraceHeightFieldSurface { get; init; } = true;
+
+    public bool UseStarfieldBackground { get; init; }
+
     public IReadOnlyList<AquariumHeightFieldBrush> HeightFieldBrushes { get; init; } = [];
 
     public IReadOnlyList<AquariumSdfObject> SdfObjects { get; init; } = [];

@@ -9,6 +9,8 @@ public static class ZyphosSceneBuilder
     {
         return new AquariumSceneState
         {
+            TraceHeightFieldSurface = false,
+            UseStarfieldBackground = true,
             HeightFieldBrushes = BuildHeightFieldBrushes(),
             SdfObjects = BuildSdfObjects(timeSeconds, previousTimeSeconds),
             SdfLights = BuildSdfLights(timeSeconds),

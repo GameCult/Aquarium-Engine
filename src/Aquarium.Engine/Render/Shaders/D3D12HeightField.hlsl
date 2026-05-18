@@ -5,11 +5,15 @@ cbuffer AquariumFrame : register(b0)
     float viewRadius;
     float3 cameraPosition;
     float farDistance;
+    float3 cameraTarget;
+    float sceneFlags;
     float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
     float previousViewRadius;
+    float3 previousCameraTarget;
+    float previousSceneFlags;
     float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;

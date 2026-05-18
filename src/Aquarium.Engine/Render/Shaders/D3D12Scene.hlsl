@@ -5,11 +5,15 @@ cbuffer AquariumFrame : register(b0)
     float viewRadius;
     float3 cameraPosition;
     float farDistance;
+    float3 cameraTarget;
+    float sceneFlags;
     float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
     float previousViewRadius;
+    float3 previousCameraTarget;
+    float previousSceneFlags;
     float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
@@ -66,21 +70,20 @@ VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
     return output;
 }
 
-void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
+void cameraBasis(float3 camera, float3 target, out float3 forward, out float3 right, out float3 up)
 {
-    float3 target = float3(center, 0.0);
     forward = normalize(target - camera);
     right = normalize(cross(forward, float3(0.0, 0.0, 1.0)));
     up = cross(right, forward);
 }
 
-float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 center)
+float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float3 target)
 {
     float2 ndc = ((pixel + jitter) * 2.0 - resolution) / resolution.y;
     float3 forward;
     float3 right;
     float3 up;
-    cameraBasis(camera, center, forward, right, up);
+    cameraBasis(camera, target, forward, right, up);
     return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
 }
 
@@ -203,7 +206,18 @@ float3 surfaceMirrorRadiance(float3 p, float3 direction, out float3 normal)
 
 float3 backgroundRadiance(float3 direction)
 {
-    return studioPmremConeSample(direction, BACKGROUND_PMREM_LOD, BACKGROUND_PMREM_CONE);
+    float3 studio = studioPmremConeSample(direction, BACKGROUND_PMREM_LOD, BACKGROUND_PMREM_CONE) * 0.22;
+    if (sceneFlags < 1.5)
+    {
+        return studio;
+    }
+
+    float2 starCell = floor(direction.xy * 820.0 + direction.z * float2(131.0, 311.0));
+    float starNoise = frac(sin(dot(starCell, float2(12.9898, 78.233))) * 43758.5453);
+    float star = smoothstep(0.9972, 1.0, starNoise);
+    float galacticBand = pow(saturate(1.0 - abs(direction.z * 1.8 + direction.x * 0.22)), 3.0) * 0.12;
+    float3 space = float3(0.002, 0.006, 0.014) + galacticBand * float3(0.09, 0.11, 0.16);
+    return space + star * float3(2.4, 2.2, 1.8) + studio;
 }
 
 RayMarchResult traverseRay(float3 origin, float3 direction)
@@ -218,7 +232,8 @@ RayMarchResult traverseRay(float3 origin, float3 direction)
 
     float3 surfacePosition;
     float surfaceTravel;
-    bool surfaceHit = traceHeightFieldSurfaceDirect(origin, direction, 0.0, farDistance, surfacePosition, surfaceTravel);
+    bool traceHeightField = fmod(sceneFlags, 2.0) >= 1.0;
+    bool surfaceHit = traceHeightField && traceHeightFieldSurfaceDirect(origin, direction, 0.0, farDistance, surfacePosition, surfaceTravel);
     if (surfaceHit)
     {
         float3 surfaceNormal;
@@ -236,7 +251,7 @@ SceneOut D3D12ScenePS(VertexOut input)
 {
     float2 screenUv = float2(input.uv.x, 1.0 - input.uv.y);
     float2 pixel = screenUv * resolution;
-    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, viewCenter);
+    float3 rayDirection = rayDirectionForPixel(pixel, jitterPixels, cameraPosition, cameraTarget);
 
     RayMarchResult result = traverseRay(cameraPosition, rayDirection);
 

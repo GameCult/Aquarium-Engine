@@ -134,6 +134,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private int temporalFrameIndex;
     private int frameIndex;
     private Vector3 previousCameraPosition;
+    private Vector3 previousCameraTarget;
     private Vector2 previousViewCenter;
     private Vector2 previousCursorWorld;
     private Vector2 previousJitterPixels;
@@ -452,12 +453,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
             return;
         }
 
-        var viewOrigin = new Vector3(frame.View.Center.X, frame.View.Center.Y, 0.0f);
+        var viewOrigin = frame.CameraTarget;
         var farDistance = Vector3.Distance(frame.CameraPosition, viewOrigin) + MathF.Max(frame.View.Radius, 0.001f);
         var jitterPixels = TemporalJitterPixels(temporalFrameIndex);
         if (temporalFrameIndex == 0)
         {
             previousCameraPosition = frame.CameraPosition;
+            previousCameraTarget = frame.CameraTarget;
             previousViewCenter = frame.View.Center;
             previousCursorWorld = frame.CursorWorld;
             previousViewRadius = frame.View.Radius;
@@ -472,11 +474,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
             frame.View.Radius,
             frame.CameraPosition,
             farDistance,
+            frame.CameraTarget,
+            SceneFlags(frame.Scene),
             frame.View.Center,
             temporalFrameIndex,
             previousTimeSeconds,
             previousCameraPosition,
             previousViewRadius,
+            previousCameraTarget,
+            0.0f,
             previousViewCenter,
             jitterPixels,
             previousJitterPixels,
@@ -562,6 +568,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         SignalFrame(frameResources);
         ReportCapacityOncePerSecond(frame.TimeSeconds, frameResources);
         previousCameraPosition = frame.CameraPosition;
+        previousCameraTarget = frame.CameraTarget;
         previousViewCenter = frame.View.Center;
         previousCursorWorld = frame.CursorWorld;
         previousViewRadius = frame.View.Radius;
@@ -1398,6 +1405,22 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
+    private static float SceneFlags(AquariumSceneState scene)
+    {
+        var flags = 0;
+        if (scene.TraceHeightFieldSurface)
+        {
+            flags |= 1;
+        }
+
+        if (scene.UseStarfieldBackground)
+        {
+            flags |= 2;
+        }
+
+        return flags;
+    }
+
     private void SignalFrame(FrameResources frameResources)
     {
         var signalValue = ++fenceValue;
@@ -2013,11 +2036,15 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float viewRadius,
         Vector3 CameraPosition,
         float FarDistance,
+        Vector3 CameraTarget,
+        float SceneFlags,
         Vector2 viewCenter,
         float FrameIndex,
         float PreviousTimeSeconds,
         Vector3 PreviousCameraPosition,
         float previousViewRadius,
+        Vector3 PreviousCameraTarget,
+        float PreviousSceneFlags,
         Vector2 previousViewCenter,
         Vector2 JitterPixels,
         Vector2 PreviousJitterPixels,

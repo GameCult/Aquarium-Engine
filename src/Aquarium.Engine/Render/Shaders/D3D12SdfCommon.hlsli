@@ -5,11 +5,15 @@ cbuffer AquariumFrame : register(b0)
     float viewRadius;
     float3 cameraPosition;
     float farDistance;
+    float3 cameraTarget;
+    float sceneFlags;
     float2 viewCenter;
     float frameIndex;
     float previousTimeSeconds;
     float3 previousCameraPosition;
     float previousViewRadius;
+    float3 previousCameraTarget;
+    float previousSceneFlags;
     float2 previousViewCenter;
     float2 jitterPixels;
     float2 previousJitterPixels;
@@ -72,21 +76,20 @@ struct SdfSurface
     float3 emission;
 };
 
-void cameraBasis(float3 camera, float2 center, out float3 forward, out float3 right, out float3 up)
+void cameraBasis(float3 camera, float3 target, out float3 forward, out float3 right, out float3 up)
 {
-    float3 target = float3(center, 0.0);
     forward = normalize(target - camera);
     right = normalize(cross(forward, float3(0.0, 0.0, 1.0)));
     up = cross(right, forward);
 }
 
-float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float2 center)
+float3 rayDirectionForPixel(float2 pixel, float2 jitter, float3 camera, float3 target)
 {
     float2 ndc = ((pixel + jitter) * 2.0 - resolution) / resolution.y;
     float3 forward;
     float3 right;
     float3 up;
-    cameraBasis(camera, center, forward, right, up);
+    cameraBasis(camera, target, forward, right, up);
     return normalize(forward * 1.6 + right * ndc.x + up * ndc.y);
 }
 
@@ -276,7 +279,7 @@ SdfObjectProxyVertexOut D3D12SdfObjectProxyVS(uint vertexId : SV_VertexID, uint 
     float3 forward;
     float3 right;
     float3 up;
-    cameraBasis(cameraPosition, viewCenter, forward, right, up);
+    cameraBasis(cameraPosition, cameraTarget, forward, right, up);
     float3 delta = sdfObject.centerRadius.xyz - cameraPosition;
     float z = max(dot(delta, forward), 0.0001);
     float2 projected = float2(dot(delta, right), dot(delta, up)) / z * 1.6;

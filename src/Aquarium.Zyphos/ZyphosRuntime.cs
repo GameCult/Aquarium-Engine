@@ -16,6 +16,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
     private float orbitDistance = 15.6f;
     private float timeScale = 1.0f;
     private bool autoOrbit = true;
+    private ZyphosCameraFrame cameraFrame;
 
     public AquariumRuntimeOptions Options { get; private set; }
 
@@ -29,12 +30,20 @@ public sealed class ZyphosRuntime : IAquariumRuntime
 
     public AquariumSynthDocument Synth { get; } = AquariumSynthDocument.Empty;
 
-    public AquariumFrame Frame => new(
-        new ViewFrame(Vector2.Zero, 32.0f),
-        CameraPosition(),
-        timeSeconds,
-        Vector2.Zero,
-        ZyphosSceneBuilder.Build(timeSeconds, previousTimeSeconds));
+    public AquariumFrame Frame
+    {
+        get
+        {
+            var shot = CurrentShot();
+            return new AquariumFrame(
+                new ViewFrame(new Vector2(shot.CameraTarget.X, shot.CameraTarget.Y), MathF.Max(32.0f, shot.EffectiveDistance * 1.15f)),
+                shot.CameraPosition,
+                shot.CameraTarget,
+                timeSeconds,
+                Vector2.Zero,
+                ZyphosSceneBuilder.Build(timeSeconds, previousTimeSeconds));
+        }
+    }
 
     public ZyphosRuntime()
     {
@@ -44,9 +53,10 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Section("Planetary Demo");
                 panel.Toggle("Auto Orbit", () => autoOrbit, value => autoOrbit = value);
                 panel.Slider("Time Scale", () => timeScale, value => timeScale = value, 0.0f, 4.0f, "0.00");
-                panel.Slider("Orbit Distance", () => orbitDistance, value => orbitDistance = value, 9.0f, 24.0f, "0.0");
+                panel.Slider("Frame", () => (int)cameraFrame, value => cameraFrame = (ZyphosCameraFrame)Math.Clamp(value, 0, 2), 0, 2);
+                panel.Slider("Orbit Distance", () => orbitDistance, value => orbitDistance = value, 9.0f, 72.0f, "0.0");
                 panel.Readout("Runtime", () => $"{timeSeconds:0.0}s");
-                panel.Readout("Camera", () => $"{orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
+                panel.Readout("Camera", () => $"{ZyphosCameraComposer.DisplayName(cameraFrame)} / {orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
                 panel.Readout("Binary", () => $"Umbros {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} deg / {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Rz");
                 panel.Readout("Objects", () => "fractal height DSL, atmosphere, Umbros");
@@ -99,7 +109,22 @@ public sealed class ZyphosRuntime : IAquariumRuntime
 
         if (MathF.Abs(input.WheelDelta) > 0.0f)
         {
-            orbitDistance = Math.Clamp(orbitDistance - input.WheelDelta * 0.8f, 8.0f, 26.0f);
+            orbitDistance = Math.Clamp(orbitDistance - input.WheelDelta * 1.4f, 8.0f, 84.0f);
+        }
+
+        if (input.IsKeyPressed(KeyCode.Digit1))
+        {
+            cameraFrame = ZyphosCameraFrame.Planet;
+        }
+
+        if (input.IsKeyPressed(KeyCode.Digit2))
+        {
+            cameraFrame = ZyphosCameraFrame.Umbros;
+        }
+
+        if (input.IsKeyPressed(KeyCode.Digit3))
+        {
+            cameraFrame = ZyphosCameraFrame.Binary;
         }
 
         orbitPitch = Math.Clamp(orbitPitch, 0.12f, 0.86f);
@@ -118,13 +143,9 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         Options = options;
     }
 
-    private Vector3 CameraPosition()
+    private ZyphosCameraShot CurrentShot()
     {
-        var horizontal = MathF.Cos(orbitPitch) * orbitDistance;
-        return new Vector3(
-            MathF.Sin(orbitYaw) * horizontal,
-            -MathF.Cos(orbitYaw) * horizontal,
-            MathF.Sin(orbitPitch) * orbitDistance + 3.1f);
+        return ZyphosCameraComposer.Compose(cameraFrame, orbitYaw, orbitPitch, orbitDistance, timeSeconds);
     }
 }
 
