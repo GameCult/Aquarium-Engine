@@ -41,6 +41,14 @@ the D3D12 backend, `D3D12LocalCastFusion.hlsl` dispatches over them, and the
 compute shader writes the temporal Gaussian buffer consumed by the SDF Gaussian
 draw. It does not downsample the document in client space.
 
+LocalCast GPU fusion also has its own live-history accumulator. New frames
+update stable-key tracks, stale tracks expire after a bounded horizon, and the
+whole retained set is sent to the GPU seed buffer every frame. The default
+history horizon is 18 seconds and may be overridden with
+`LOCALCAST_GPU_HISTORY_SECONDS` from 1 to 120 seconds. That is the reconstruction
+buffer: long enough to harvest samples, bounded enough to remain a machine
+instead of a scrapbook with a power cord.
+
 ## Invariants
 
 - Field accumulation happens in world space before pixel history. TAA is the
@@ -82,6 +90,8 @@ Ownership:
 - `AquariumGpuFusionField` is the renderer contract for GPU-owned fusion input.
 - `LocalCastGpuFusionMapper` converts typed LocalCast point claims into compact
   seeds without client downsampling.
+- `LocalCastGpuFusionAccumulator` owns the bounded live history buffer for
+  stable seeds before GPU lowering.
 - `D3D12LocalCastFusion.hlsl` owns the first compute lowering pass.
 - `D3D12Renderer` owns UAV-capable temporal Gaussian storage, dispatch, and the
   transition back to shader-resource state for the draw.

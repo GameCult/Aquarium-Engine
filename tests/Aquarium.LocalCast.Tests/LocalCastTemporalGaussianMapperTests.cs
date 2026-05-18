@@ -116,4 +116,58 @@ public sealed class LocalCastTemporalGaussianMapperTests
         Assert.Contains(field.Seeds, seed => seed.StableKey.StartsWith("dense-rgb:", StringComparison.Ordinal));
         Assert.Contains(field.Seeds, seed => seed.ShapePower > 2.0f);
     }
+
+    [Fact]
+    public void GpuFusionAccumulatorRetainsStableSamplesAcrossHistoryWindow()
+    {
+        var accumulator = new LocalCastGpuFusionAccumulator(historySeconds: 10.0f, smoothing: 1.0f, maxSeedCount: 16);
+        accumulator.Observe(FrameWithPoint(1, "room-rgb:old", new Vector3(-0.2f, 0.0f, 1.0f), 1_000_000_000));
+        accumulator.Observe(FrameWithPoint(2, "room-rgb:new", new Vector3(0.2f, 0.0f, 1.0f), 5_000_000_000));
+
+        var field = accumulator.BuildField(6.0f);
+
+        Assert.Equal(2, field.Seeds.Count);
+        Assert.Contains(field.Seeds, seed => seed.StableKey == "room-rgb:old");
+        Assert.Contains(field.Seeds, seed => seed.StableKey == "room-rgb:new");
+    }
+
+    [Fact]
+    public void GpuFusionAccumulatorExpiresSamplesOutsideHistoryWindow()
+    {
+        var accumulator = new LocalCastGpuFusionAccumulator(historySeconds: 2.0f, smoothing: 1.0f, maxSeedCount: 16);
+        accumulator.Observe(FrameWithPoint(1, "room-rgb:old", new Vector3(-0.2f, 0.0f, 1.0f), 1_000_000_000));
+        accumulator.Observe(FrameWithPoint(2, "room-rgb:new", new Vector3(0.2f, 0.0f, 1.0f), 4_000_000_000));
+
+        var field = accumulator.BuildField(4.2f);
+
+        Assert.Single(field.Seeds);
+        Assert.Equal("room-rgb:new", field.Seeds[0].StableKey);
+    }
+
+    private static LocalCastVisualFrame FrameWithPoint(long frameId, string key, Vector3 position, long sourceTimeNs)
+    {
+        return new LocalCastVisualFrame
+        {
+            SchemaVersion = LocalCastVisualStateReader.RenderFrameSchemaId,
+            FrameId = frameId,
+            CreatedMonotonicNs = sourceTimeNs,
+            SourceTimeMinNs = sourceTimeNs,
+            SourceTimeMaxNs = sourceTimeNs,
+            PresentTimeNs = sourceTimeNs + 350_000_000,
+            AudioAlignmentTimeNs = sourceTimeNs + 350_000_000,
+            SpoutSenderName = "LocalCastBridge Point Cloud",
+            TargetWidth = 1920,
+            TargetHeight = 1080,
+            Points =
+            [
+                new LocalCastVisualPoint(
+                    key,
+                    position,
+                    0.012f,
+                    new Vector4(0.5f, 0.7f, 0.9f, 0.85f),
+                    0.9f,
+                    sourceTimeNs)
+            ],
+        };
+    }
 }

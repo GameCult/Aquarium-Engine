@@ -16,8 +16,10 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         smoothing: 0.55f);
     private readonly LocalCastTemporalGaussianMapper mapper = new();
     private readonly LocalCastGpuFusionMapper gpuFusionMapper = new();
+    private readonly LocalCastGpuFusionAccumulator gpuFusionAccumulator = new(
+        ResolveGpuHistorySeconds(),
+        smoothing: 0.45f);
     private readonly LocalCastVisualStateReader reader;
-    private AquariumGpuFusionField latestGpuFusionField = AquariumGpuFusionField.Empty;
     private float timeSeconds;
     private float sceneTimelineSeconds;
     private long lastFrameId = -1;
@@ -34,6 +36,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
                 panel.Section("Camera Field");
                 panel.Readout("Cache", () => reader.Path);
                 panel.Readout("Frame", () => lastFrameId >= 0 ? $"{lastFrameId} / {latestPointCount} splats" : latestStatus);
+                panel.Readout("History", () => $"{gpuFusionAccumulator.TrackCount} tracked seeds");
                 panel.Readout("Timeline", () => $"{sceneTimelineSeconds:0.000}s");
             });
     }
@@ -55,14 +58,15 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         get
         {
             var temporalField = accumulator.BuildField(sceneTimelineSeconds);
+            var gpuFusionField = gpuFusionAccumulator.BuildField(sceneTimelineSeconds);
             var scene = new AquariumSceneState
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
-                TemporalGaussianField = ReferenceEquals(latestGpuFusionField, AquariumGpuFusionField.Empty)
+                TemporalGaussianField = gpuFusionField.Seeds.Count == 0
                     ? temporalField
                     : AquariumTemporalGaussianField.Empty,
-                GpuFusionField = latestGpuFusionField,
+                GpuFusionField = gpuFusionField,
             };
 
             return new AquariumFrame(
@@ -99,7 +103,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         if (frame.FrameId != lastFrameId)
         {
             accumulator.Observe(mapper.Map(frame));
-            latestGpuFusionField = gpuFusionMapper.Map(frame);
+            gpuFusionAccumulator.Observe(frame);
             lastFrameId = frame.FrameId;
             latestPointCount = frame.Points.Count;
             latestStatus = "live";
@@ -133,6 +137,14 @@ public sealed class LocalCastRuntime : IAquariumRuntime
             "calibration",
             "runs",
             "visual-state.msgpack");
+    }
+
+    private static float ResolveGpuHistorySeconds()
+    {
+        var raw = Environment.GetEnvironmentVariable("LOCALCAST_GPU_HISTORY_SECONDS");
+        return float.TryParse(raw, out var seconds) && float.IsFinite(seconds) && seconds > 0.0f
+            ? Math.Clamp(seconds, 1.0f, 120.0f)
+            : 18.0f;
     }
 }
 
