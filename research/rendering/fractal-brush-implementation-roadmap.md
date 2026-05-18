@@ -274,9 +274,9 @@ Tasks:
 
 - [x] Add stable-keyed contribution table.
 - [x] Add projected error scorer.
-- [ ] Add selected-cut builder.
-- [ ] Add hysteresis fade weights.
-- [ ] Add budget clamp.
+- [x] Add selected-cut builder.
+- [x] Add hysteresis fade weights.
+- [x] Add budget clamp.
 - [ ] Add debug channels: score, depth, fade, estimated cost.
 
 Tests:
@@ -284,7 +284,7 @@ Tests:
 - [x] score decreases with distance for fixed error;
 - [x] score increases with error for fixed distance;
 - small camera motion keeps cut stable;
-- budget clamp chooses parent summaries;
+- [x] budget clamp chooses parent summaries;
 - fade never changes conservative SDF/height safety fields.
 
 Exit gate:
