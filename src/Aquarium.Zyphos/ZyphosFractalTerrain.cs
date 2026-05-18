@@ -16,6 +16,8 @@ public static class ZyphosFractalTerrain
     private static readonly Lazy<AquariumFractalSummary[]> Summaries = new(() => FractalSummaryBuilder.Build(Tree.Value));
     private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 64.0f));
     private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, SelectedCut.Value));
+    private static readonly object PlanCacheLock = new();
+    private static readonly Dictionary<int, ZyphosFractalRenderPlan> PlanCache = [];
 
     public static string PatchPath => Path.Combine(AppContext.BaseDirectory, PatchRelativePath);
 
@@ -32,13 +34,30 @@ public static class ZyphosFractalTerrain
     public static ZyphosFractalRenderPlan BuildRenderPlan(ZyphosCameraShot shot)
     {
         var pixelsPerWorld = Math.Clamp(72.0f / MathF.Max(shot.EffectiveDistance, 0.001f), 0.25f, 48.0f);
-        var selectedCut = FractalSelectedCutBuilder.Build(Summaries.Value, _ => pixelsPerWorld, maxEstimatedCost: 64.0f);
+        var bucket = (int)Math.Clamp(MathF.Round(pixelsPerWorld * 16.0f), 4.0f, 768.0f);
+        lock (PlanCacheLock)
+        {
+            if (PlanCache.TryGetValue(bucket, out var cached))
+            {
+                return cached;
+            }
+        }
+
+        var bucketPixelsPerWorld = bucket / 16.0f;
+        var selectedCut = FractalSelectedCutBuilder.Build(Summaries.Value, _ => bucketPixelsPerWorld, maxEstimatedCost: 64.0f);
         var brushes = FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut);
-        return new ZyphosFractalRenderPlan(
+        var plan = new ZyphosFractalRenderPlan(
             brushes,
             selectedCut,
-            pixelsPerWorld,
-            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {pixelsPerWorld:0.00} px-wu");
+            bucketPixelsPerWorld,
+            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {bucketPixelsPerWorld:0.00} px-wu");
+
+        lock (PlanCacheLock)
+        {
+            PlanCache[bucket] = plan;
+        }
+
+        return plan;
     }
 
     public static string Summary =>
