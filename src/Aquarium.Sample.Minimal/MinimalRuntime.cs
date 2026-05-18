@@ -19,6 +19,8 @@ public sealed class MinimalRuntime : IAquariumRuntime
 
     public AquariumUiDocument Ui { get; } = AquariumUiDocument.Empty;
 
+    public AquariumAudioDocument Audio { get; } = new();
+
     public AquariumSynthDocument Synth { get; } = AquariumSynthDocument.Empty;
 
     public AquariumFrame Frame => new(

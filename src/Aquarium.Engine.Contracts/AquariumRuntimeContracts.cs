@@ -17,6 +17,8 @@ public interface IAquariumRuntime : IDisposable
 
     AquariumUiDocument Ui { get; }
 
+    AquariumAudioDocument Audio { get; }
+
     AquariumSynthDocument Synth { get; }
 
     void Start();

@@ -11,9 +11,14 @@ internal sealed class AquariumSynthHost : IDisposable
     private readonly AquaSynthRenderSession renderSession = new(new AquaSynthNativeOptions(DspSourceDirectory: Path.Combine(AppContext.BaseDirectory, "Synth")));
     private float timeSeconds;
 
-    public void Update(AquariumSynthDocument synth, float deltaSeconds)
+    public void Update(AquariumSynthDocument synth, AquariumAudioDocument audio, float deltaSeconds)
     {
         timeSeconds += Math.Max(deltaSeconds, 0.0f);
+        foreach (var chunk in audio.DrainPcmChunks())
+        {
+            audioDevice.Play(chunk.MonoSamples, chunk.SampleRate);
+        }
+
         if (!synth.Enabled)
         {
             return;

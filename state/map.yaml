@@ -101,6 +101,8 @@ renderer_state:
     - Studio2 PMREM and irradiance DDS cubemaps are loaded as D3D12 TextureCubes; PMREM serves roughness-mip specular, irradiance serves Lambertian diffuse IBL for non-metal bodies.
     - DirectWrite/Direct2D unified debug panel with tabs for Aquarium renderer controls, client-declared debug panels, terminal commands, and engine/client tooling surfaces.
     - Aquarium exposes an optional synth/audio hosting boundary through AquariumSynthDocument; Aquarium consumes AquaSynth.Faust as a pinned repo-local NuGet package so synth-agent construction cannot break Aquarium builds until the package is intentionally updated. AquaSynth.Core arrives transitively for patch editor/parser surfaces.
+    - Aquarium now exposes a generic queued PCM audio lane through AquariumAudioDocument. Epiphany Face voice uses it to play streamed Codex realtime output without reaching into the engine's WASAPI internals.
+    - Epiphany owns the first native Face realtime voice session controller. It stores loopback app-server URI, thread id, voice, and speech prompt in CultCache live state; starts `thread/realtime/start` with audio output over the experimental Codex app-server WebSocket JSON-RPC edge; sends text utterances; reflects ephemeral transcript/error/audio counters in the debug UI; and treats speech as transient Face surface, not durable memory or project authority.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
     - Isolated Epiphany agent preview renders run through the real D3D12 renderer from src/Aquarium.Epiphany.AgentPreview; preview isolation is owned by a preview-only scene shader, while the engine exposes only final-frame PNG capture.
@@ -144,4 +146,5 @@ next_actions:
   - Follow docs/zyphos-eusocial-sync.md and E:\Projects\Eusocial Interbeing\Eusocial Interbeing\World\Zyphos Simulation Brief.md before turning Zyphos visual choices into setting claims.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.
+  - Next Face voice slice: replace text-only input with microphone/WebRTC or a native capture bridge, then move the transport contract from Codex JSON-RPC compatibility toward a typed CultNet FaceVoiceSession once Epiphany advertises that surface.
   - Keep Aquarium and Epiphany in one repo until the contracts and graph API are stable enough for Epiphany to move out without carrying engine policy or reload folklore with it.

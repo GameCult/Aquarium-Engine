@@ -25,6 +25,8 @@ public sealed class ZyphosRuntime : IAquariumRuntime
 
     public AquariumUiDocument Ui { get; }
 
+    public AquariumAudioDocument Audio { get; } = new();
+
     public AquariumSynthDocument Synth { get; } = AquariumSynthDocument.Empty;
 
     public AquariumFrame Frame => new(
