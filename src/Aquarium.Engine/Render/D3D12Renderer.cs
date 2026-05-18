@@ -32,6 +32,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int MaxSdfLightCount = 64;
     private const int MaxSdfObjectCount = 64;
     private const int MaxGpuSensorCameraCount = 32;
+    private const int MaxGpuSensorTextureCount = 8;
+    private const int GpuSensorSamplesPerTexture = 131_072;
     private const int MaxTemporalGaussianCount = 1_048_576;
     private const float SurfaceTransparentMinZ = -1.85f;
     private const float SurfaceTransparentMaxZ = 0.45f;
@@ -56,7 +58,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int RootFusionFrameConstants = 0;
     private const int RootFusionSeeds = 1;
     private const int RootFusionSensorCameras = 2;
-    private const int RootFusionOutput = 3;
+    private const int RootFusionSensorTextures = 3;
+    private const int RootFusionOutput = 4;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -136,6 +139,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12StructuredBuffer gpuSensorCameraBuffer;
     private readonly D3D12StructuredBuffer gpuFusionSeedBuffer;
     private readonly D3D12StructuredBuffer temporalGaussianBuffer;
+    private readonly Dictionary<string, D3D12ExternalSensorTexture> externalSensorTextures = new(StringComparer.Ordinal);
     private readonly D3D12CubeTexture studioPmremTexture;
     private readonly D3D12CubeTexture studioIrradianceTexture;
     private readonly AquariumSdfLight[] sdfLights = new AquariumSdfLight[MaxSdfLightCount];
@@ -145,6 +149,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12TemporalGaussianPacket[] temporalGaussians = new D3D12TemporalGaussianPacket[MaxTemporalGaussianCount];
     private int temporalGaussianCount;
     private int gpuSensorCameraCount;
+    private int gpuSensorTextureCount;
+    private int gpuFusionSeedCount;
     private bool temporalGaussiansGpuGenerated;
     private Viewport viewport;
     private RawRect scissorRect;
@@ -540,8 +546,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new Vector4(
                 temporalGaussianCount,
                 gpuSensorCameraCount,
-                activeAccumulationWindow,
-                activePresentationDelay)));
+                gpuSensorTextureCount,
+                gpuFusionSeedCount)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
@@ -558,6 +564,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sdfObjectBuffer.CreateShaderResourceView(device, frameResources.SdfObjectDescriptor);
         frameResources.GpuSensorCameraDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         gpuSensorCameraBuffer.CreateShaderResourceView(device, frameResources.GpuSensorCameraDescriptor);
+        frameResources.GpuSensorTextureDescriptor = frameResources.TransientShaderDescriptors.AllocateRange(MaxGpuSensorTextureCount);
+        CreateGpuSensorTextureViews(frame.Scene.GpuSensorFrame, frameResources.GpuSensorTextureDescriptor);
         frameResources.GpuFusionSeedDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         gpuFusionSeedBuffer.CreateShaderResourceView(device, frameResources.GpuFusionSeedDescriptor);
         frameResources.TemporalGaussianDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -779,6 +787,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         temporalGaussianBuffer.Dispose();
         gpuFusionSeedBuffer.Dispose();
         gpuSensorCameraBuffer.Dispose();
+        foreach (var texture in externalSensorTextures.Values)
+        {
+            texture.Dispose();
+        }
+
+        externalSensorTextures.Clear();
         sdfObjectBuffer.Dispose();
         sdfLightBuffer.Dispose();
         DisposeBloomRenderTargets();
@@ -1434,7 +1448,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             gpuSensorCameraBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, gpuSensorCameras.AsSpan(0, gpuSensorCameraCount));
             if (temporalGaussiansGpuGenerated)
             {
-                gpuFusionSeedBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, gpuFusionSeeds.AsSpan(0, temporalGaussianCount));
+                gpuFusionSeedBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, gpuFusionSeeds.AsSpan(0, gpuFusionSeedCount));
             }
             else
             {
@@ -1465,6 +1479,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.SetComputeRootDescriptorTable(RootFusionFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
             activeCommandList.SetComputeRootDescriptorTable(RootFusionSeeds, frameResources.GpuFusionSeedDescriptor.Gpu);
             activeCommandList.SetComputeRootDescriptorTable(RootFusionSensorCameras, frameResources.GpuSensorCameraDescriptor.Gpu);
+            activeCommandList.SetComputeRootDescriptorTable(RootFusionSensorTextures, frameResources.GpuSensorTextureDescriptor.Gpu);
             activeCommandList.SetComputeRootDescriptorTable(RootFusionOutput, frameResources.TemporalGaussianUnorderedAccessDescriptor.Gpu);
             activeCommandList.Dispatch((uint)((temporalGaussianCount + 127) / 128), 1, 1);
             temporalGaussianBuffer.Transition(activeCommandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
@@ -1473,6 +1488,65 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             activeCommandList.EndEvent();
         }
+    }
+
+    private void CreateGpuSensorTextureViews(AquariumGpuSensorFrame sensorFrame, D3D12DescriptorSlot firstDescriptor)
+    {
+        var activeHandles = new HashSet<string>(StringComparer.Ordinal);
+        gpuSensorTextureCount = Math.Min(sensorFrame.ExternalTextures.Count, MaxGpuSensorTextureCount);
+
+        for (var index = 0; index < MaxGpuSensorTextureCount; index++)
+        {
+            var descriptor = frames[frameIndex].TransientShaderDescriptors.Offset(firstDescriptor, index);
+            if (index >= gpuSensorTextureCount)
+            {
+                CreateNullSensorTextureView(descriptor);
+                continue;
+            }
+
+            var texture = sensorFrame.ExternalTextures[index];
+            var cacheKey = D3D12ExternalSensorTexture.CacheKey(texture);
+            activeHandles.Add(cacheKey);
+            if (!externalSensorTextures.TryGetValue(cacheKey, out var externalTexture)
+                || !externalTexture.Matches(texture))
+            {
+                externalTexture?.Dispose();
+                if (D3D12ExternalSensorTexture.TryOpen(device, texture, out var openedTexture))
+                {
+                    externalTexture = openedTexture;
+                    externalSensorTextures[cacheKey] = externalTexture;
+                }
+                else
+                {
+                    externalSensorTextures.Remove(cacheKey);
+                    CreateNullSensorTextureView(descriptor);
+                    continue;
+                }
+            }
+
+            externalTexture.UpdateTimestamp(texture.TimestampNs);
+            externalTexture.CreateShaderResourceView(device, descriptor);
+        }
+
+        foreach (var staleHandle in externalSensorTextures.Keys.Where(handle => !activeHandles.Contains(handle)).ToArray())
+        {
+            externalSensorTextures[staleHandle].Dispose();
+            externalSensorTextures.Remove(staleHandle);
+        }
+    }
+
+    private void CreateNullSensorTextureView(D3D12DescriptorSlot descriptor)
+    {
+        device.CreateShaderResourceView(
+            null,
+            new ShaderResourceViewDescription
+            {
+                Format = Format.B8G8R8A8_UNorm,
+                ViewDimension = Vortice.Direct3D12.ShaderResourceViewDimension.Texture2D,
+                Shader4ComponentMapping = ShaderComponentMapping.Default,
+                Texture2D = new Texture2DShaderResourceView { MipLevels = 1 },
+            },
+            descriptor.Cpu);
     }
 
     private void RenderHeightField(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
@@ -1510,6 +1584,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Array.Clear(sdfLights);
         temporalGaussianCount = 0;
         gpuSensorCameraCount = 0;
+        gpuSensorTextureCount = 0;
+        gpuFusionSeedCount = 0;
         temporalGaussiansGpuGenerated = false;
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
 
@@ -1535,11 +1611,20 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             var seedCount = Math.Min(scene.GpuFusionField.Seeds.Count, MaxTemporalGaussianCount);
             temporalGaussianCount = seedCount;
+            gpuFusionSeedCount = seedCount;
             temporalGaussiansGpuGenerated = true;
             for (var index = 0; index < seedCount; index++)
             {
                 gpuFusionSeeds[index] = ToGpuFusionSeedPacket(scene.GpuFusionField.Seeds[index]);
             }
+            return;
+        }
+
+        gpuSensorTextureCount = Math.Min(scene.GpuSensorFrame.ExternalTextures.Count, MaxGpuSensorTextureCount);
+        if (gpuSensorTextureCount > 0 && gpuSensorCameraCount > 0)
+        {
+            temporalGaussianCount = Math.Min(MaxTemporalGaussianCount, gpuSensorTextureCount * GpuSensorSamplesPerTexture);
+            temporalGaussiansGpuGenerated = true;
             return;
         }
 
@@ -2080,6 +2165,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             27,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var sensorTextureRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            MaxGpuSensorTextureCount,
+            28,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var outputRange = new DescriptorRange(
             DescriptorRangeType.UnorderedAccessView,
             1,
@@ -2091,6 +2182,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([frameRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([seedRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([sensorCameraRange]), ShaderVisibility.All),
+            new RootParameter(new RootDescriptorTable([sensorTextureRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([outputRange]), ShaderVisibility.All),
         };
         var description = new RootSignatureDescription(
@@ -2411,6 +2503,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot SdfObjectDescriptor { get; set; }
 
         public D3D12DescriptorSlot GpuSensorCameraDescriptor { get; set; }
+
+        public D3D12DescriptorSlot GpuSensorTextureDescriptor { get; set; }
 
         public D3D12DescriptorSlot GpuFusionSeedDescriptor { get; set; }
 

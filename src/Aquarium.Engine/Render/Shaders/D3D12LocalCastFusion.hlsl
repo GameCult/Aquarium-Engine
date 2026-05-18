@@ -63,32 +63,113 @@ struct GpuSensorCamera
 
 StructuredBuffer<GpuFusionSeed> fusionSeeds : register(t26);
 StructuredBuffer<GpuSensorCamera> sensorCameras : register(t27);
+Texture2D<float4> sensorTextures[8] : register(t28);
 RWStructuredBuffer<TemporalGaussian> temporalGaussiansOut : register(u0);
+
+float Hash01(uint value)
+{
+    value ^= value >> 16;
+    value *= 2246822519u;
+    value ^= value >> 13;
+    value *= 3266489917u;
+    value ^= value >> 16;
+    return (float)(value & 0x00ffffffu) / 16777215.0;
+}
+
+float3 TransformSensorPoint(GpuSensorCamera camera, float3 sensorPoint)
+{
+    float4 p = float4(sensorPoint, 1.0);
+    return float3(
+        dot(camera.worldFromSensor0, p),
+        dot(camera.worldFromSensor1, p),
+        dot(camera.worldFromSensor2, p));
+}
+
+float4 LoadSensorTexture(uint slot, int3 pixel)
+{
+    switch (slot)
+    {
+        case 0u: return sensorTextures[0].Load(pixel);
+        case 1u: return sensorTextures[1].Load(pixel);
+        case 2u: return sensorTextures[2].Load(pixel);
+        case 3u: return sensorTextures[3].Load(pixel);
+        case 4u: return sensorTextures[4].Load(pixel);
+        case 5u: return sensorTextures[5].Load(pixel);
+        case 6u: return sensorTextures[6].Load(pixel);
+        default: return sensorTextures[7].Load(pixel);
+    }
+}
 
 [numthreads(128, 1, 1)]
 void D3D12LocalCastFusionCS(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     uint index = dispatchThreadId.x;
-    uint seedCount = (uint)temporalGaussianInfo.x;
-    if (index >= seedCount)
+    uint outputCount = (uint)temporalGaussianInfo.x;
+    uint cameraCount = (uint)temporalGaussianInfo.y;
+    uint textureCount = (uint)temporalGaussianInfo.z;
+    uint seedCount = (uint)temporalGaussianInfo.w;
+    if (index >= outputCount)
     {
         return;
     }
 
-    GpuFusionSeed seed = fusionSeeds[index];
-    uint cameraCount = (uint)temporalGaussianInfo.y;
     TemporalGaussian gaussian;
-    gaussian.centerHistoryWeight = seed.centerHistoryWeight;
-    gaussian.previousCenterFieldId = seed.previousCenterFieldId;
-    gaussian.velocityConfidence = seed.velocityConfidence;
-    gaussian.radiiFalloff = seed.radiiFalloff;
-    gaussian.orientation = float4(0.0, 0.0, 0.0, 1.0);
-    gaussian.colorOpacity = seed.colorOpacity;
-    gaussian.shapePad = seed.shapePad;
-    if (cameraCount > 0)
+    if (index < seedCount)
     {
-        GpuSensorCamera camera = sensorCameras[index % cameraCount];
-        gaussian.shapePad.w = camera.textureRangeTime.z;
+        GpuFusionSeed seed = fusionSeeds[index];
+        gaussian.centerHistoryWeight = seed.centerHistoryWeight;
+        gaussian.previousCenterFieldId = seed.previousCenterFieldId;
+        gaussian.velocityConfidence = seed.velocityConfidence;
+        gaussian.radiiFalloff = seed.radiiFalloff;
+        gaussian.orientation = float4(0.0, 0.0, 0.0, 1.0);
+        gaussian.colorOpacity = seed.colorOpacity;
+        gaussian.shapePad = seed.shapePad;
+        temporalGaussiansOut[index] = gaussian;
+        return;
     }
+
+    if (textureCount == 0 || cameraCount == 0)
+    {
+        gaussian.centerHistoryWeight = float4(0.0, 0.0, 0.0, 0.0);
+        gaussian.previousCenterFieldId = float4(0.0, 0.0, 0.0, 0.0);
+        gaussian.velocityConfidence = float4(0.0, 0.0, 0.0, 0.0);
+        gaussian.radiiFalloff = float4(0.001, 0.001, 0.001, 4.0);
+        gaussian.orientation = float4(0.0, 0.0, 0.0, 1.0);
+        gaussian.colorOpacity = float4(0.0, 0.0, 0.0, 0.0);
+        gaussian.shapePad = float4(1.0, 0.0, 0.0, 0.0);
+        temporalGaussiansOut[index] = gaussian;
+        return;
+    }
+
+    uint textureSampleIndex = index - seedCount;
+    uint textureSlot = min(textureCount - 1, textureSampleIndex / max(1u, ((outputCount - seedCount) / textureCount)));
+    GpuSensorCamera camera = sensorCameras[min(cameraCount - 1, textureSlot % cameraCount)];
+    uint width = max(1u, (uint)camera.extentsKind.x);
+    uint height = max(1u, (uint)camera.extentsKind.y);
+    uint localIndex = textureSampleIndex + textureSlot * 747796405u;
+    uint x = (localIndex * 73u + (uint)(Hash01(localIndex) * 37.0)) % width;
+    uint y = (localIndex / width * 41u + (uint)(Hash01(localIndex ^ 0x9e3779b9u) * 29.0)) % height;
+    float4 rgba = LoadSensorTexture(textureSlot, int3((int)x, (int)y, 0));
+    float luma = dot(rgba.rgb, float3(0.2126, 0.7152, 0.0722));
+    float fx = max(1.0, camera.intrinsics.x);
+    float fy = max(1.0, camera.intrinsics.y);
+    float cx = camera.intrinsics.z;
+    float cy = camera.intrinsics.w;
+    float depth = 0.75 + luma * 2.25;
+    float3 sensorPoint = float3(((float)x - cx) / fx * depth, ((float)y - cy) / fy * depth, depth);
+    float3 center = TransformSensorPoint(camera, sensorPoint);
+    float targetPixels = lerp(1.75, 3.75, Hash01(localIndex ^ 0x85ebca6bu));
+    float focalPixels = max(1.0, 0.5 * (fx + fy));
+    float screenFitRadius = targetPixels * depth / focalPixels;
+    float radius = clamp(screenFitRadius, 0.0015, 0.018);
+    float confidence = saturate(0.25 + abs(luma - 0.5) * 1.5);
+
+    gaussian.centerHistoryWeight = float4(center, confidence);
+    gaussian.previousCenterFieldId = float4(center, (float)(textureSlot + 1u));
+    gaussian.velocityConfidence = float4(0.0, 0.0, 0.0, confidence);
+    gaussian.radiiFalloff = float4(radius * 1.65, radius, radius * 1.25, 5.8);
+    gaussian.orientation = float4(0.0, 0.0, 0.0, 1.0);
+    gaussian.colorOpacity = float4(rgba.rgb * 1.35, saturate(0.08 + confidence * 0.42));
+    gaussian.shapePad = float4(1.85, (float)x / (float)width, (float)y / (float)height, camera.textureRangeTime.z);
     temporalGaussiansOut[index] = gaussian;
 }

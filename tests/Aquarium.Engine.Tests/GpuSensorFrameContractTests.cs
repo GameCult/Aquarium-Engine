@@ -36,7 +36,8 @@ public sealed class GpuSensorFrameContractTests
                     1920,
                     1080,
                     AquariumGpuSensorPixelFormat.Bgra8Unorm,
-                    10_000_000_000)
+                    10_000_000_000,
+                    SharedHandleName: "LocalCastBridge/KiyoProLeft/Bgra")
             ],
         };
 
@@ -45,6 +46,7 @@ public sealed class GpuSensorFrameContractTests
         Assert.True(scene.GpuSensorFrame.HasInput);
         Assert.Equal("kiyo-pro-left", scene.GpuSensorFrame.Cameras[0].SensorId);
         Assert.Equal(AquariumGpuSensorPixelFormat.Bgra8Unorm, scene.GpuSensorFrame.ExternalTextures[0].PixelFormat);
+        Assert.Equal("LocalCastBridge/KiyoProLeft/Bgra", scene.GpuSensorFrame.ExternalTextures[0].SharedHandleName);
         Assert.Equal(18.0f, scene.GpuSensorFrame.AccumulationWindowSeconds, 6);
     }
 }

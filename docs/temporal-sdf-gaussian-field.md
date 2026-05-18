@@ -105,10 +105,14 @@ Ownership:
   Gaussian storage, dispatch, and the transition back to shader-resource state
   for the draw.
 
-Current Aquarium cut: the contract and D3D12 camera metadata buffer exist, and
-the fusion root now accepts that buffer beside fallback seeds. Next cut: import
-the external texture handles as SRVs, bind packed camera planes and Leap packed
-maps, then move stereo/flow/feature extraction directly into GPU kernels.
+Current Aquarium cut: the contract, D3D12 camera metadata buffer, external
+texture importer, and sensor SRV table exist. A producer may provide either a
+duplicated shared handle or a named shared handle for each camera/Leap plane.
+When sensor textures are present, Aquarium can dispatch fusion without fallback
+seeds and write RGB-derived Gaussian samples into the temporal buffer. Next cut:
+replace the first-pass per-texture sampling with calibrated stereo/flow/feature
+kernels, Leap packed-map channel extraction, and confidence-weighted surface
+correspondence.
 
 The first shader pass also uses camera-facing proxy planes to evaluate each
 kernel. True ray-integrated volume compositing, Gaussian depth sorting, and

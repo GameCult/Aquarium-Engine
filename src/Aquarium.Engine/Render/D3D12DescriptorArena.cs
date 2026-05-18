@@ -42,6 +42,32 @@ internal sealed class D3D12DescriptorArena : IDisposable
             Heap.GetGPUDescriptorHandleForHeapStart() + (index * descriptorSize));
     }
 
+    public D3D12DescriptorSlot AllocateRange(int count)
+    {
+        if (count <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), count, "Descriptor range count must be positive.");
+        }
+
+        if (used + count > Capacity)
+        {
+            throw new InvalidOperationException($"D3D12 descriptor arena '{Name}' exhausted ({Capacity} {Type} descriptors; requested range {count}).");
+        }
+
+        var index = used;
+        used += count;
+        return new D3D12DescriptorSlot(
+            Heap.GetCPUDescriptorHandleForHeapStart() + (index * descriptorSize),
+            Heap.GetGPUDescriptorHandleForHeapStart() + (index * descriptorSize));
+    }
+
+    public D3D12DescriptorSlot Offset(D3D12DescriptorSlot start, int offset)
+    {
+        return new D3D12DescriptorSlot(
+            start.Cpu + (offset * descriptorSize),
+            start.Gpu + (offset * descriptorSize));
+    }
+
     public void Reset()
     {
         used = 0;

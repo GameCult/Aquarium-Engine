@@ -304,7 +304,8 @@ public readonly record struct AquariumExternalGpuTexture(
     int Height,
     AquariumGpuSensorPixelFormat PixelFormat,
     long TimestampNs,
-    int PlaneIndex = 0);
+    int PlaneIndex = 0,
+    string SharedHandleName = "");
 
 public readonly record struct AquariumGpuSensorCamera(
     string SensorId,
