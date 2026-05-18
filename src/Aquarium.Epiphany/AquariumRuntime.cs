@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Globalization;
 using Aquarium.Engine;
 using Aquarium.Engine.Audio;
 using Aquarium.Engine.Input;
@@ -15,7 +16,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
 
     private readonly OrbitCameraRig cameraRig;
     private readonly AquariumCultStateStore stateStore;
-    private readonly RealtimeFaceVoiceSession faceVoice;
+    private readonly FaceVoiceRouter faceVoice;
 
     private ViewFrame ViewFrame;
     private GraphicsSettings graphicsSettings;
@@ -46,13 +47,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
         ViewFrame = ViewFrame.FromCamera(cameraRig.Target, cameraRig.Distance);
         previousFrameTimeSeconds = timeSeconds;
         previousCursorWorld = ViewFrame.Center;
-        faceVoice = new RealtimeFaceVoiceSession(Audio)
-        {
-            AppServerUri = liveState.FaceVoiceAppServerUri,
-            ThreadId = liveState.FaceVoiceThreadId,
-            Voice = liveState.FaceVoiceVoice,
-            Prompt = liveState.FaceVoicePrompt
-        };
+        faceVoice = new FaceVoiceRouter(Audio, liveState);
         Ui = new AquariumUiDocument()
             .Panel("Epiphany", 396.0f, 82.0f, 360.0f, panel => panel
                 .Section("Runtime")
@@ -61,16 +56,21 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 .Button("Flush State", FlushState, "Writes current Epiphany runtime state to CultCache.")
                 .Section("Face Voice")
                 .Text("App Server", () => faceVoice.AppServerUri, value => faceVoice.AppServerUri = value.Trim(), "Loopback Codex app-server websocket, e.g. ws://127.0.0.1:8765.")
-                .Text("Thread", () => faceVoice.ThreadId, value => faceVoice.ThreadId = value.Trim(), "Thread id that owns the realtime Face session.")
-                .Text("Voice", () => faceVoice.Voice, value => faceVoice.Voice = value.Trim(), "Realtime voice name, such as marin, cedar, or cove.")
-                .Readout("Status", () => faceVoice.Status, "Realtime transport status.")
-                .Readout("Audio", () => faceVoice.AudioStats, "Received output-audio chunks from Codex realtime.")
-                .TextBox("Prompt", () => faceVoice.Prompt, value => faceVoice.Prompt = value, lines: 3, acceptsReturn: true, monospace: false, tooltip: "Backend realtime instructions for Face. This is speech behavior, not memory authority.")
-                .TextBox("Say", () => faceVoiceText, value => faceVoiceText = value, lines: 2, acceptsReturn: false, submit: SendFaceVoiceText, monospace: false, tooltip: "Send one text utterance through Face voice.")
-                .Button("Start Voice", faceVoice.Start, "Starts a thread-scoped realtime session with audio output.")
-                .Button("Stop Voice", faceVoice.Stop, "Stops the realtime Face voice session.")
-                .Button("Clear Voice Log", faceVoice.ClearTranscript, "Clears local transcript and audio counters.")
-                .Readout("Error", () => faceVoice.LastError, "Last realtime transport error.")
+                .Toggle("Auto Route", () => faceVoice.AutoSelect, value => faceVoice.AutoSelect = value, "Routes speech to the nearest enabled Face endpoint by cursor/listener proximity.")
+                .Readout("Active", () => faceVoice.ActiveSummary, "Currently selected Face endpoint and listener distance.")
+                .Readout("Routes", () => faceVoice.RouteSummary, "Distances from the listener cursor to each Face endpoint.")
+                .Text("Name", () => faceVoice.ActiveEndpoint.DisplayName, value => faceVoice.ActiveEndpoint.DisplayName = value.Trim(), "Display name for the active Face endpoint.")
+                .Text("Thread", () => faceVoice.ActiveEndpoint.ThreadId, value => faceVoice.ActiveEndpoint.ThreadId = value.Trim(), "Thread id that owns the active realtime Face session.")
+                .Text("Voice", () => faceVoice.ActiveEndpoint.Voice, value => faceVoice.ActiveEndpoint.Voice = value.Trim(), "Realtime voice name, such as marin, cedar, or cove.")
+                .Slider("Anchor X", () => faceVoice.ActiveEndpoint.Anchor.X, SetActiveFaceAnchorX, -32.0f, 32.0f, "0.0", "World X anchor for proximity routing.")
+                .Slider("Anchor Y", () => faceVoice.ActiveEndpoint.Anchor.Y, SetActiveFaceAnchorY, -32.0f, 32.0f, "0.0", "World Y anchor for proximity routing.")
+                .Readout("Status", () => faceVoice.ActiveStatus, "Realtime transport status for the active Face.")
+                .TextBox("Prompt", () => faceVoice.ActiveEndpoint.Prompt, value => faceVoice.ActiveEndpoint.Prompt = value, lines: 3, acceptsReturn: true, monospace: false, tooltip: "Backend realtime instructions for the active Face. This is speech behavior, not memory authority.")
+                .TextBox("Say", () => faceVoiceText, value => faceVoiceText = value, lines: 2, acceptsReturn: false, submit: SendFaceVoiceText, monospace: false, tooltip: "Send one text utterance through the active Face route.")
+                .Button("Start Active", faceVoice.StartActive, "Starts the active thread-scoped realtime session with audio output.")
+                .Button("Stop Active", faceVoice.StopActive, "Stops the active realtime Face voice session.")
+                .Button("Clear Voice Log", faceVoice.ClearActiveLog, "Clears local transcript and audio counters for the active Face.")
+                .Readout("Error", () => faceVoice.LastError, "Last realtime transport error for the active Face.")
                 .TextBox("Transcript", () => faceVoice.Transcript, _ => { }, lines: 7, acceptsReturn: true, monospace: false, tooltip: "Local ephemeral realtime transcript. It is not durable Epiphany memory."))
             .Command("pause", args =>
             {
@@ -95,29 +95,79 @@ public sealed class AquariumRuntime : IAquariumRuntime
             {
                 if (args.Count == 0)
                 {
-                    return $"Face voice {faceVoice.Status}; audio {faceVoice.AudioStats}";
+                    return $"Face voice {faceVoice.ActiveSummary}; {faceVoice.ActiveStatus}";
                 }
 
                 var verb = args[0].Trim().ToLowerInvariant();
                 if (verb == "start")
                 {
-                    faceVoice.Start();
-                    return "Face voice starting";
+                    faceVoice.StartActive();
+                    return $"Face voice starting: {faceVoice.ActiveSummary}";
                 }
 
                 if (verb == "stop")
                 {
-                    faceVoice.Stop();
-                    return "Face voice stopping";
+                    faceVoice.StopActive();
+                    return $"Face voice stopping: {faceVoice.ActiveSummary}";
+                }
+
+                if (verb == "stopall")
+                {
+                    faceVoice.StopAll();
+                    return "All Face voice sessions stopping";
                 }
 
                 if (verb == "say" && args.Count > 1)
                 {
-                    faceVoice.SendText(string.Join(" ", args.Skip(1)));
-                    return "Face voice text sent";
+                    SendFaceVoiceText(string.Join(" ", args.Skip(1)));
+                    return $"Face voice text sent to {faceVoice.ActiveEndpoint.Id}";
                 }
 
-                return "facevoice start | stop | say <text>";
+                if (verb == "list")
+                {
+                    return faceVoice.RouteSummary;
+                }
+
+                if (verb == "auto" && args.Count > 1 && bool.TryParse(args[1], out var autoSelect))
+                {
+                    faceVoice.AutoSelect = autoSelect;
+                    return $"Face voice auto route {faceVoice.AutoSelect}";
+                }
+
+                if (verb == "select" && args.Count > 1)
+                {
+                    return faceVoice.Select(args[1])
+                        ? $"Face voice selected {faceVoice.ActiveEndpoint.Id}"
+                        : $"No Face voice endpoint named {args[1]}";
+                }
+
+                if (verb == "add" && args.Count >= 5 && TryParsePoint(args[3], args[4], out var anchor))
+                {
+                    var voice = args.Count > 5 ? args[5] : null;
+                    var endpoint = faceVoice.AddOrUpdate(args[1], args[2], anchor, voice);
+                    return $"Face voice endpoint {endpoint.Id} anchored at {endpoint.Anchor.X:0.0}, {endpoint.Anchor.Y:0.0}";
+                }
+
+                if (verb == "move" && args.Count > 2 && TryParsePoint(args[1], args[2], out var movedAnchor))
+                {
+                    faceVoice.ActiveEndpoint.Anchor = movedAnchor;
+                    return $"Face voice endpoint {faceVoice.ActiveEndpoint.Id} moved to {movedAnchor.X:0.0}, {movedAnchor.Y:0.0}";
+                }
+
+                if (verb == "movehere")
+                {
+                    faceVoice.ActiveEndpoint.Anchor = faceVoice.ListenerWorld;
+                    return $"Face voice endpoint {faceVoice.ActiveEndpoint.Id} moved to listener";
+                }
+
+                if (verb == "remove" && args.Count > 1)
+                {
+                    return faceVoice.Remove(args[1])
+                        ? $"Face voice endpoint {args[1]} removed"
+                        : $"Face voice endpoint {args[1]} was not removed";
+                }
+
+                return "facevoice start | stop | stopall | say <text> | list | auto <true|false> | select <id> | add <id> <thread> <x> <y> [voice] | move <x> <y> | movehere | remove <id>";
             }, "Controls the Face realtime voice session.");
     }
 
@@ -160,6 +210,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 frame.CameraPosition,
                 frame.View.Center),
         };
+        faceVoice.UpdateListener(frameWithCursor.CursorWorld);
         var scene = EpiphanySceneBuilder.Build(frameWithCursor, previousFrameTimeSeconds, previousCursorWorld);
         previousFrameTimeSeconds = frameWithCursor.TimeSeconds;
         previousCursorWorld = frameWithCursor.CursorWorld;
@@ -201,8 +252,8 @@ public sealed class AquariumRuntime : IAquariumRuntime
 
     public void Dispose()
     {
-        faceVoice.Dispose();
         FlushState();
+        faceVoice.Dispose();
         stateStore.Dispose();
     }
 
@@ -217,22 +268,54 @@ public sealed class AquariumRuntime : IAquariumRuntime
             CameraPitchRadians = cameraRig.PitchRadians,
             CameraDistance = cameraRig.Distance,
             FaceVoiceAppServerUri = faceVoice.AppServerUri,
-            FaceVoiceThreadId = faceVoice.ThreadId,
-            FaceVoiceVoice = faceVoice.Voice,
-            FaceVoicePrompt = faceVoice.Prompt
+            FaceVoiceThreadId = faceVoice.ActiveEndpoint.ThreadId,
+            FaceVoiceVoice = faceVoice.ActiveEndpoint.Voice,
+            FaceVoicePrompt = faceVoice.ActiveEndpoint.Prompt,
+            FaceVoiceEndpoints = faceVoice.ExportState(),
+            FaceVoiceAutoSelect = faceVoice.AutoSelect
         });
     }
 
     private void SendFaceVoiceText()
     {
-        var text = faceVoiceText.Trim();
-        if (text.Length == 0)
+        SendFaceVoiceText(faceVoiceText);
+        faceVoiceText = "";
+    }
+
+    private void SendFaceVoiceText(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
         {
             return;
         }
 
-        faceVoice.SendText(text);
-        faceVoiceText = "";
+        faceVoice.SendText(trimmed);
+    }
+
+    private void SetActiveFaceAnchorX(float value)
+    {
+        var anchor = faceVoice.ActiveEndpoint.Anchor;
+        faceVoice.ActiveEndpoint.Anchor = new Vector2(value, anchor.Y);
+    }
+
+    private void SetActiveFaceAnchorY(float value)
+    {
+        var anchor = faceVoice.ActiveEndpoint.Anchor;
+        faceVoice.ActiveEndpoint.Anchor = new Vector2(anchor.X, value);
+    }
+
+    private static bool TryParsePoint(string x, string y, out Vector2 point)
+    {
+        if (float.TryParse(x, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedX)
+            && float.TryParse(y, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedY))
+        {
+            point = new Vector2(parsedX, parsedY);
+            return true;
+        }
+
+        point = default;
+        return false;
     }
 
     private void SaveGraphicsSettingsIfDirty()
