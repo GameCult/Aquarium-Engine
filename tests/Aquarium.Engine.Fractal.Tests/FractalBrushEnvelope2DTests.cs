@@ -59,4 +59,42 @@ public sealed class FractalBrushEnvelope2DTests
         Assert.Equal(0.75f, packet.RotationFalloffShape.W);
         Assert.Equal(-2.0f, packet.Payload.X);
     }
+
+    [Fact]
+    public void CpuEnvelopeMatchesShaderReferenceFormula()
+    {
+        var envelope = new FractalBrushEnvelope2D(new Vector2(-1.0f, 2.0f), 4.0, 1.5, 0.37, falloff: 3.25, shapePower: 0.8);
+
+        foreach (var point in new[]
+        {
+            new Vector2(-1.0f, 2.0f),
+            new Vector2(0.5f, 2.25f),
+            new Vector2(-2.0f, 2.8f),
+            new Vector2(3.5f, 2.0f),
+        })
+        {
+            Assert.Equal(envelope.Evaluate(point), ShaderReferenceEvaluate(envelope, point), 6);
+        }
+    }
+
+    private static double ShaderReferenceEvaluate(FractalBrushEnvelope2D envelope, Vector2 point)
+    {
+        var delta = point - envelope.Center;
+        var c = Math.Cos(envelope.RotationRadians);
+        var s = Math.Sin(envelope.RotationRadians);
+        var localX = delta.X * c + delta.Y * s;
+        var localY = -delta.X * s + delta.Y * c;
+        var normalizedX = localX / Math.Max(envelope.RadiusX, 0.001);
+        var normalizedY = localY / Math.Max(envelope.RadiusY, 0.001);
+        var normalizedRadiusSquared = (normalizedX * normalizedX) + (normalizedY * normalizedY);
+        if (normalizedRadiusSquared >= 1.0)
+        {
+            return 0.0;
+        }
+
+        var edgeValue = Math.Exp(-envelope.Falloff);
+        var gaussianValue = Math.Exp(-envelope.Falloff * normalizedRadiusSquared);
+        var compactValue = (gaussianValue - edgeValue) / Math.Max(1.0 - edgeValue, 0.000001);
+        return Math.Pow(Math.Clamp(compactValue, 0.0, 1.0), envelope.ShapePower);
+    }
 }

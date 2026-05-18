@@ -65,6 +65,19 @@ float powerPulse(float distanceValue, float radius, float power)
     return shaped * shaped * (3.0 - 2.0 * shaped);
 }
 
+float compactGaussianPulse(float normalizedRadiusSquared, float falloff, float shapePower)
+{
+    if (normalizedRadiusSquared >= 1.0)
+    {
+        return 0.0;
+    }
+
+    float edgeValue = exp(-falloff);
+    float gaussianValue = exp(-falloff * normalizedRadiusSquared);
+    float compactValue = (gaussianValue - edgeValue) / max(1.0 - edgeValue, 0.000001);
+    return pow(saturate(compactValue), shapePower);
+}
+
 VertexOut FullscreenTriangleVS(uint vertexId : SV_VertexID)
 {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
@@ -95,7 +108,9 @@ BrushVertexOut D3D12HeightFieldBrushVS(uint vertexId : SV_VertexID, uint instanc
     };
 
     float4 centerRadius = brushCenterRadius[instanceId];
-    float2 world = centerRadius.xy + corners[vertexId] * centerRadius.z;
+    float2 radii = float2(centerRadius.z, centerRadius.w > 0.0 ? centerRadius.w : centerRadius.z);
+    float supportRadius = max(radii.x, radii.y);
+    float2 world = centerRadius.xy + corners[vertexId] * supportRadius;
     float2 uv = viewUv(world);
 
     BrushVertexOut output;
@@ -111,9 +126,22 @@ BrushVertexOut D3D12HeightFieldBrushVS(uint vertexId : SV_VertexID, uint instanc
 float D3D12HeightFieldBrushPS(BrushVertexOut input) : SV_Target
 {
     float2 world = viewWorld(saturate(input.uv));
-    float distanceValue = length(world - input.centerRadius.xy);
-    float well = powerPulse(distanceValue, input.centerRadius.z, input.shape.x);
+    float2 delta = world - input.centerRadius.xy;
+    float2 radii = float2(input.centerRadius.z, input.centerRadius.w > 0.0 ? input.centerRadius.w : input.centerRadius.z);
+    float distanceValue = length(delta);
     float normalizedDistance = saturate(distanceValue / max(input.centerRadius.z, 0.001));
+    float well = powerPulse(distanceValue, input.centerRadius.z, input.shape.x);
+    if (input.shape.w > 0.0)
+    {
+        float c = cos(input.shape.z);
+        float s = sin(input.shape.z);
+        float2 local = float2(delta.x * c + delta.y * s, -delta.x * s + delta.y * c);
+        float2 normalized = local / max(radii, float2(0.001, 0.001));
+        float normalizedRadiusSquared = dot(normalized, normalized);
+        normalizedDistance = saturate(sqrt(normalizedRadiusSquared));
+        well = compactGaussianPulse(normalizedRadiusSquared, input.shape.w, input.shape.x);
+    }
+
     float legacyPhase = distanceValue * input.wave.y - timeSeconds * input.wave.z;
     float radialPhase = pow(normalizedDistance, input.wave.w) * input.wave.y - timeSeconds * input.wave.z;
     float ripple = input.wave.w > 0.0 ? cos(radialPhase) : sin(legacyPhase);

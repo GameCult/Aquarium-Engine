@@ -224,7 +224,10 @@ public readonly record struct AquariumHeightFieldBrush(
     float WaveAmplitude,
     float WaveFrequency,
     float WaveSpeed,
-    float WaveSinePower);
+    float WaveSinePower,
+    float RadiusY = 0.0f,
+    float RotationRadians = 0.0f,
+    float EnvelopeFalloff = 0.0f);
 
 public sealed class AquariumSceneState
 {

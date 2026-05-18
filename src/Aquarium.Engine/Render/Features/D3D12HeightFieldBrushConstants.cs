@@ -39,10 +39,11 @@ internal record struct D3D12HeightFieldBrushConstants(
         for (var index = 0; index < brushCount; index++)
         {
             var brush = brushes[index];
+            var radiusY = brush.RadiusY > 0.0f ? brush.RadiusY : brush.Radius;
             constants.Set(
                 index,
-                new Vector4(brush.Center, brush.Radius, 0.0f),
-                new Vector4(brush.Power, brush.Amplitude, 0.0f, 0.0f),
+                new Vector4(brush.Center, brush.Radius, radiusY),
+                new Vector4(brush.Power, brush.Amplitude, brush.RotationRadians, brush.EnvelopeFalloff),
                 new Vector4(brush.WaveAmplitude, brush.WaveFrequency, brush.WaveSpeed, brush.WaveSinePower));
         }
 

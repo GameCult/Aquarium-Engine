@@ -191,14 +191,35 @@ public static class EpiphanySceneBuilder
 
     private static float GridBrushHeight(Vector2 world, AquariumHeightFieldBrush brush, float timeSeconds)
     {
-        var distanceValue = Vector2.Distance(world, brush.Center);
-        if (distanceValue > brush.Radius)
+        var delta = world - brush.Center;
+        var distanceValue = delta.Length();
+        var radiusY = brush.RadiusY > 0.0f ? brush.RadiusY : brush.Radius;
+        var supportRadius = MathF.Max(brush.Radius, radiusY);
+        if (distanceValue > supportRadius)
         {
             return 0.0f;
         }
 
         var well = PowerPulse(distanceValue, brush.Radius, brush.Power);
         var normalized = Math.Clamp(distanceValue / MathF.Max(brush.Radius, 0.001f), 0.0f, 1.0f);
+        if (brush.EnvelopeFalloff > 0.0f)
+        {
+            var cos = MathF.Cos(brush.RotationRadians);
+            var sin = MathF.Sin(brush.RotationRadians);
+            var localX = delta.X * cos + delta.Y * sin;
+            var localY = -delta.X * sin + delta.Y * cos;
+            var normalizedX = localX / MathF.Max(brush.Radius, 0.001f);
+            var normalizedY = localY / MathF.Max(radiusY, 0.001f);
+            var normalizedRadiusSquared = (normalizedX * normalizedX) + (normalizedY * normalizedY);
+            if (normalizedRadiusSquared >= 1.0f)
+            {
+                return 0.0f;
+            }
+
+            well = CompactGaussianPulse(normalizedRadiusSquared, brush.EnvelopeFalloff, brush.Power);
+            normalized = Math.Clamp(MathF.Sqrt(normalizedRadiusSquared), 0.0f, 1.0f);
+        }
+
         var wavePhase = brush.WaveSinePower > 0.0f
             ? MathF.Pow(normalized, brush.WaveSinePower) * brush.WaveFrequency - timeSeconds * brush.WaveSpeed
             : distanceValue * brush.WaveFrequency - timeSeconds * brush.WaveSpeed;
@@ -240,6 +261,14 @@ public static class EpiphanySceneBuilder
         var normalized = Math.Clamp(distanceValue / MathF.Max(radius, 0.001f), 0.0f, 1.0f);
         var shaped = MathF.Pow(1.0f - normalized, power);
         return shaped * shaped * (3.0f - 2.0f * shaped);
+    }
+
+    private static float CompactGaussianPulse(float normalizedRadiusSquared, float falloff, float shapePower)
+    {
+        var edgeValue = MathF.Exp(-falloff);
+        var gaussianValue = MathF.Exp(-falloff * normalizedRadiusSquared);
+        var compactValue = (gaussianValue - edgeValue) / MathF.Max(1.0f - edgeValue, 0.000001f);
+        return MathF.Pow(Math.Clamp(compactValue, 0.0f, 1.0f), shapePower);
     }
 
     private static float Hash21(float x, float y)
