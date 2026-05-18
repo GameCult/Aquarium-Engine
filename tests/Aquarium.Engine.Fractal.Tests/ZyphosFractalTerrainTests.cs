@@ -10,7 +10,7 @@ public sealed class ZyphosFractalTerrainTests
         var tree = ZyphosFractalTerrain.OwnershipTree;
         var brushes = ZyphosFractalTerrain.HeightBrushes;
 
-        Assert.Equal(8, tree.Claims.Count);
+        Assert.Equal(12, tree.Claims.Count);
         Assert.Equal(tree.Claims.Count, brushes.Length);
         Assert.Contains(tree.Claims, claim => claim.Tags == "crater");
         Assert.Contains(tree.Claims, claim => claim.Tags == "ridge");
