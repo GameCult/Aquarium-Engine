@@ -64,6 +64,12 @@ public sealed class AquariumUiPanelBuilder(List<AquariumUiControl> controls)
         return this;
     }
 
+    public AquariumUiPanelBuilder TreeItem(string label, int depth, bool canExpand, Func<bool> isExpanded, Action<bool> setExpanded, Func<bool> isSelected, Action select, string? detail = null, string? tooltip = null, Func<bool>? isVisible = null)
+    {
+        controls.Add(new AquariumUiTreeItem(label, Math.Max(0, depth), canExpand, isExpanded, setExpanded, isSelected, select, detail, tooltip, isVisible));
+        return this;
+    }
+
     public AquariumUiPanelBuilder Slider(string label, Func<float> read, Action<float> write, float min, float max, string format = "0.###", string? tooltip = null, Func<bool>? isVisible = null)
     {
         controls.Add(new AquariumUiFloatSlider(label, read, write, min, max, format, tooltip, isVisible));
@@ -117,6 +123,9 @@ public sealed record AquariumUiButton(string Label, Action Action, string? Toolt
     : AquariumUiControl(Label, Tooltip, IsVisible);
 
 public sealed record AquariumUiToggle(string Label, Func<bool> Read, Action<bool> Write, string? Tooltip = null, Func<bool>? IsVisible = null)
+    : AquariumUiControl(Label, Tooltip, IsVisible);
+
+public sealed record AquariumUiTreeItem(string Label, int Depth, bool CanExpand, Func<bool> IsExpanded, Action<bool> SetExpanded, Func<bool> IsSelected, Action Select, string? Detail = null, string? Tooltip = null, Func<bool>? IsVisible = null)
     : AquariumUiControl(Label, Tooltip, IsVisible);
 
 public sealed record AquariumUiFloatSlider(string Label, Func<float> Read, Action<float> Write, float Min, float Max, string Format = "0.###", string? Tooltip = null, Func<bool>? IsVisible = null)

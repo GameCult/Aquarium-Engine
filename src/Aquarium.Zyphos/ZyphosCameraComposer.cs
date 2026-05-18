@@ -2,52 +2,41 @@ using System.Numerics;
 
 namespace Aquarium.Zyphos;
 
-public enum ZyphosCameraFrame
-{
-    Planet,
-    Umbros,
-    Binary,
-}
-
 public readonly record struct ZyphosCameraShot(
     Vector3 CameraPosition,
     Vector3 CameraTarget,
     Vector3 ParentAnchor,
     Vector3 TrackedCenter,
-    float EffectiveDistance);
+    float EffectiveDistance,
+    ZyphosSpatialDomainKey DomainKey,
+    ZyphosSpatialDomainKey? ParentDomainKey);
 
 public static class ZyphosCameraComposer
 {
     public static ZyphosCameraShot Compose(
-        ZyphosCameraFrame frame,
+        ZyphosSpatialDomainKey domainKey,
         float yaw,
         float pitch,
         float requestedDistance,
         float timeSeconds)
     {
-        var parent = ZyphosUmbrosSystem.ZyphosCenter;
-        var tracked = frame switch
-        {
-            ZyphosCameraFrame.Umbros => ZyphosUmbrosSystem.UmbrosCenter(timeSeconds),
-            ZyphosCameraFrame.Binary => ZyphosUmbrosSystem.ZyphosCenter + (ZyphosUmbrosSystem.UmbrosCenter(timeSeconds) - ZyphosUmbrosSystem.ZyphosCenter) * 0.5f,
-            _ => ZyphosUmbrosSystem.ZyphosCenter,
-        };
-        var desiredTarget = frame == ZyphosCameraFrame.Planet ? tracked : parent;
-        var subjectSpan = Vector3.Distance(parent, tracked);
-        var effectiveDistance = MathF.Max(requestedDistance, subjectSpan * 1.35f);
+        var domain = ZyphosSpatialDomainCatalog.GetRequired(domainKey);
+        var parentDomain = ZyphosSpatialDomainCatalog.ParentOf(domain);
+        var domainPose = domain.Pose(timeSeconds);
+        var parentPose = parentDomain?.Pose(timeSeconds) ?? domainPose;
+        var parent = parentPose.Center;
+        var tracked = domainPose.Center;
+        var subjectSpan = Vector3.Distance(parent, tracked) + domainPose.Radius + (parentDomain is null ? 0.0f : parentPose.Radius * 0.35f);
+        var effectiveDistance = MathF.Max(requestedDistance, MathF.Max(domain.NavigationRadius, subjectSpan * 1.22f));
         var orbitDirection = OrbitDirection(yaw, pitch);
-        var cameraPosition = desiredTarget + orbitDirection * effectiveDistance;
-        return new ZyphosCameraShot(cameraPosition, desiredTarget, parent, tracked, effectiveDistance);
+        var cameraPosition = parent + orbitDirection * effectiveDistance;
+        return new ZyphosCameraShot(cameraPosition, parent, parent, tracked, effectiveDistance, domain.Key, domain.ParentKey);
     }
 
-    public static string DisplayName(ZyphosCameraFrame frame)
+    public static string DisplayName(ZyphosSpatialDomainKey domainKey)
     {
-        return frame switch
-        {
-            ZyphosCameraFrame.Umbros => "Umbros frame",
-            ZyphosCameraFrame.Binary => "Binary frame",
-            _ => "Planet frame",
-        };
+        var domain = ZyphosSpatialDomainCatalog.GetRequired(domainKey);
+        return $"{domain.Label} {domain.Kind.ToLowerInvariant()}";
     }
 
     private static Vector3 OrbitDirection(float yaw, float pitch)

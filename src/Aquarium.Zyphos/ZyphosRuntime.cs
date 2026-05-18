@@ -16,18 +16,14 @@ public sealed class ZyphosRuntime : IAquariumRuntime
     private float orbitDistance = 15.6f;
     private float timeScale = 1.0f;
     private bool autoOrbit = true;
-    private ZyphosCameraFrame cameraFrame;
-    private bool showSolarDomain = true;
-    private bool showOrbitalDomain = true;
-    private bool showPlanetaryDomains = true;
-    private bool showSurfaceDomains = true;
-
-    private static readonly AquariumUiOption[] CameraFrameOptions =
-    [
-        new((int)ZyphosCameraFrame.Planet, "Planet"),
-        new((int)ZyphosCameraFrame.Umbros, "Umbros"),
-        new((int)ZyphosCameraFrame.Binary, "Binary"),
-    ];
+    private ZyphosSpatialDomainKey selectedDomainKey = ZyphosSpatialDomainCatalog.Planet;
+    private readonly Dictionary<ZyphosSpatialDomainKey, bool> expandedDomains = new()
+    {
+        [ZyphosSpatialDomainCatalog.Solar] = true,
+        [ZyphosSpatialDomainCatalog.Orbital] = true,
+        [ZyphosSpatialDomainCatalog.Planet] = true,
+        [ZyphosSpatialDomainCatalog.PlanetLatLong] = true,
+    };
 
     public AquariumRuntimeOptions Options { get; private set; }
 
@@ -64,32 +60,36 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Section("Planetary Demo");
                 panel.Toggle("Auto Orbit", () => autoOrbit, value => autoOrbit = value);
                 panel.Slider("Time Scale", () => timeScale, value => timeScale = value, 0.0f, 4.0f, "0.00");
-                panel.Slider("Frame", () => (int)cameraFrame, value => cameraFrame = (ZyphosCameraFrame)Math.Clamp(value, 0, 2), 0, 2);
                 panel.Slider("Orbit Distance", () => orbitDistance, value => orbitDistance = value, 9.0f, 72.0f, "0.0");
                 panel.Readout("Runtime", () => $"{timeSeconds:0.0}s");
-                panel.Readout("Camera", () => $"{ZyphosCameraComposer.DisplayName(cameraFrame)} / {orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
+                panel.Readout("Camera", () => $"{ZyphosCameraComposer.DisplayName(selectedDomainKey)} / {orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
                 panel.Readout("Binary", () => $"Umbros {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} deg / {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Rz");
                 panel.Readout("Objects", () => "fractal height DSL, atmosphere, Umbros");
             })
             .Panel("Navigation", -18.0f, 82.0f, 316.0f, fadeWhenMouseDistant: true, panel =>
             {
-                panel.Section("Frame Lock");
-                panel.Options("Target", () => (int)cameraFrame, value => cameraFrame = (ZyphosCameraFrame)Math.Clamp(value, 0, 2), CameraFrameOptions);
+                panel.Section("Camera");
                 panel.Toggle("Auto Orbit", () => autoOrbit, value => autoOrbit = value);
-                panel.Readout("Pivot", () => cameraFrame == ZyphosCameraFrame.Planet ? "Zyphos center" : "Parent: Zyphos");
-                panel.Readout("Constraint", () => cameraFrame == ZyphosCameraFrame.Planet ? "planet frame" : "keep parent in sight");
+                panel.Readout("Mode", () => ZyphosCameraComposer.DisplayName(selectedDomainKey));
+                panel.Readout("Pivot", CurrentPivotLabel);
+                panel.Readout("Mouse", () => "drag orbit / wheel zoom");
                 panel.Section("Spatial Domains");
-                panel.Toggle("Solar", () => showSolarDomain, value => showSolarDomain = value);
-                panel.Readout("  parent star", () => "M primary / 0.077 AU", isVisible: () => showSolarDomain);
-                panel.Toggle("Orbital", () => showOrbitalDomain, value => showOrbitalDomain = value);
-                panel.Readout("  Zyphos-Umbros", () => "8 Rz / 52 min eclipse", isVisible: () => showOrbitalDomain);
-                panel.Toggle("Planetary", () => showPlanetaryDomains, value => showPlanetaryDomains = value);
-                panel.Readout("  Zyphos", () => "surface + sea domain", isVisible: () => showPlanetaryDomains);
-                panel.Readout("  Umbros", () => "fixed-sky twin", isVisible: () => showPlanetaryDomains);
-                panel.Toggle("Surface", () => showSurfaceDomains, value => showSurfaceDomains = value);
-                panel.Readout("  lat/long", () => "terrain patch parent", isVisible: () => showSurfaceDomains);
-                panel.Readout("  cube tile", () => ZyphosFractalTerrain.Summary, isVisible: () => showSurfaceDomains);
+                foreach (var domain in ZyphosSpatialDomainCatalog.Domains)
+                {
+                    var captured = domain;
+                    panel.TreeItem(
+                        captured.Label,
+                        ZyphosSpatialDomainCatalog.DepthOf(captured),
+                        ZyphosSpatialDomainCatalog.ChildrenOf(captured.Key).Count > 0,
+                        () => IsExpanded(captured.Key),
+                        value => SetExpanded(captured.Key, value),
+                        () => selectedDomainKey == captured.Key,
+                        () => SelectDomain(captured.Key),
+                        captured.Detail,
+                        $"{captured.Kind} domain `{captured.Key}`.",
+                        () => IsDomainVisible(captured));
+                }
             })
             .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.")
             .Command("zyphos-fractal", _ => ZyphosFractalTerrain.DebugDump, "Dump the compiled Zyphos fractal terrain grammar.")
@@ -142,19 +142,33 @@ public sealed class ZyphosRuntime : IAquariumRuntime
             orbitDistance = Math.Clamp(orbitDistance - input.WheelDelta * 1.4f, 8.0f, 84.0f);
         }
 
+        if (input.LeftMouseDown && input.MouseDelta != Vector2.Zero)
+        {
+            autoOrbit = false;
+            orbitYaw -= input.MouseDelta.X * 0.0065f;
+            orbitPitch += input.MouseDelta.Y * 0.0045f;
+        }
+
+        if (input.RightMouseDown && input.MouseDelta != Vector2.Zero)
+        {
+            autoOrbit = false;
+            orbitYaw -= input.MouseDelta.X * 0.0025f;
+            orbitDistance = Math.Clamp(orbitDistance + input.MouseDelta.Y * 0.055f, 8.0f, 84.0f);
+        }
+
         if (input.IsKeyPressed(KeyCode.Digit1))
         {
-            cameraFrame = ZyphosCameraFrame.Planet;
+            SelectDomain(ZyphosSpatialDomainCatalog.Planet);
         }
 
         if (input.IsKeyPressed(KeyCode.Digit2))
         {
-            cameraFrame = ZyphosCameraFrame.Umbros;
+            SelectDomain(ZyphosSpatialDomainCatalog.Umbros);
         }
 
         if (input.IsKeyPressed(KeyCode.Digit3))
         {
-            cameraFrame = ZyphosCameraFrame.Binary;
+            SelectDomain(ZyphosSpatialDomainCatalog.Orbital);
         }
 
         orbitPitch = Math.Clamp(orbitPitch, 0.12f, 0.86f);
@@ -175,7 +189,51 @@ public sealed class ZyphosRuntime : IAquariumRuntime
 
     private ZyphosCameraShot CurrentShot()
     {
-        return ZyphosCameraComposer.Compose(cameraFrame, orbitYaw, orbitPitch, orbitDistance, timeSeconds);
+        return ZyphosCameraComposer.Compose(selectedDomainKey, orbitYaw, orbitPitch, orbitDistance, timeSeconds);
+    }
+
+    private void SelectDomain(ZyphosSpatialDomainKey key)
+    {
+        selectedDomainKey = key;
+        var domain = ZyphosSpatialDomainCatalog.GetRequired(key);
+        orbitDistance = Math.Clamp(orbitDistance, 8.0f, MathF.Max(84.0f, domain.NavigationRadius * 2.0f));
+        while (ZyphosSpatialDomainCatalog.ParentOf(domain) is { } parent)
+        {
+            expandedDomains[parent.Key] = true;
+            domain = parent;
+        }
+    }
+
+    private string CurrentPivotLabel()
+    {
+        var domain = ZyphosSpatialDomainCatalog.GetRequired(selectedDomainKey);
+        var parent = ZyphosSpatialDomainCatalog.ParentOf(domain);
+        return parent is null ? domain.Label : parent.Label;
+    }
+
+    private bool IsExpanded(ZyphosSpatialDomainKey key)
+    {
+        return expandedDomains.TryGetValue(key, out var expanded) && expanded;
+    }
+
+    private void SetExpanded(ZyphosSpatialDomainKey key, bool expanded)
+    {
+        expandedDomains[key] = expanded;
+    }
+
+    private bool IsDomainVisible(ZyphosSpatialDomain domain)
+    {
+        while (ZyphosSpatialDomainCatalog.ParentOf(domain) is { } parent)
+        {
+            if (!IsExpanded(parent.Key))
+            {
+                return false;
+            }
+
+            domain = parent;
+        }
+
+        return true;
     }
 }
 

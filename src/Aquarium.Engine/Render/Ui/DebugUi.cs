@@ -116,6 +116,19 @@ internal sealed class DebugUi
             case AquariumUiToggle toggle:
                 controls.Add(new ToggleControl(toggle.Label, toggle.Read, toggle.Write, toggle.Tooltip, () => toggle.Visible));
                 break;
+            case AquariumUiTreeItem treeItem:
+                controls.Add(new TreeItemControl(
+                    treeItem.Label,
+                    treeItem.Depth,
+                    treeItem.CanExpand,
+                    treeItem.IsExpanded,
+                    treeItem.SetExpanded,
+                    treeItem.IsSelected,
+                    treeItem.Select,
+                    treeItem.Detail,
+                    treeItem.Tooltip,
+                    () => treeItem.Visible));
+                break;
             case AquariumUiFloatSlider slider:
                 controls.Add(new FloatSliderControl(slider.Label, slider.Read, slider.Write, slider.Min, slider.Max, slider.Format, slider.Tooltip, () => slider.Visible));
                 break;
@@ -713,6 +726,12 @@ internal sealed class DebugUi
             return this;
         }
 
+        public DebugUiPanel TreeItem(string label, int depth, bool canExpand, Func<bool> isExpanded, Action<bool> setExpanded, Func<bool> isSelected, Action select, string? detail = null, string? tooltip = null, Func<bool>? isVisible = null)
+        {
+            controls.Add(new TreeItemControl(label, Math.Max(0, depth), canExpand, isExpanded, setExpanded, isSelected, select, detail, tooltip, isVisible));
+            return this;
+        }
+
         public DebugUiPanel Slider(string label, Func<float> read, Action<float> write, float min, float max, string format = "0.###", string? tooltip = null, Func<bool>? isVisible = null)
         {
             controls.Add(new FloatSliderControl(label, read, write, min, max, format, tooltip, isVisible));
@@ -934,6 +953,95 @@ internal sealed class DebugUi
             {
                 target.DrawLine(new Vector2(box.Left + 3.0f, box.Top + 8.0f), new Vector2(box.Left + 7.0f, box.Bottom - 3.0f), accentBrush, 2.0f);
                 target.DrawLine(new Vector2(box.Left + 7.0f, box.Bottom - 3.0f), new Vector2(box.Right - 2.0f, box.Top + 3.0f), accentBrush, 2.0f);
+            }
+        }
+    }
+
+    private sealed class TreeItemControl(
+        string label,
+        int depth,
+        bool canExpand,
+        Func<bool> isExpanded,
+        Action<bool> setExpanded,
+        Func<bool> isSelected,
+        Action select,
+        string? detail,
+        string? tooltip,
+        Func<bool>? isVisible) : DebugUiControl(label, tooltip, isVisible)
+    {
+        private const float IndentWidth = 17.0f;
+
+        public override void Click(Vector2 mouse)
+        {
+            if (canExpand && Contains(DisclosureBounds(), mouse))
+            {
+                setExpanded(!isExpanded());
+                return;
+            }
+
+            select();
+        }
+
+        public override void Draw(
+            ID2D1RenderTarget target,
+            IDWriteFactory6 directWriteFactory,
+            IDWriteTextFormat format,
+            ID2D1SolidColorBrush rowBrush,
+            ID2D1SolidColorBrush hoverRowBrush,
+            ID2D1SolidColorBrush activeRowBrush,
+            ID2D1SolidColorBrush outlineBrush,
+            ID2D1SolidColorBrush primaryBrush,
+            ID2D1SolidColorBrush quietBrush,
+            ID2D1SolidColorBrush accentBrush,
+            ID2D1SolidColorBrush accentHoverBrush,
+            ID2D1SolidColorBrush accentActiveBrush,
+            ID2D1SolidColorBrush dimAccentBrush,
+            ID2D1SolidColorBrush trackHoverBrush,
+            ID2D1SolidColorBrush trackActiveBrush)
+        {
+            var selected = isSelected();
+            target.FillRectangle(Bounds, selected ? activeRowBrush : IsActive ? activeRowBrush : IsHovered ? hoverRowBrush : rowBrush);
+            target.DrawLine(new Vector2(Bounds.Left, Bounds.Bottom), new Vector2(Bounds.Right, Bounds.Bottom), outlineBrush, 1.0f);
+            if (selected)
+            {
+                target.DrawLine(new Vector2(Bounds.Left + 2.0f, Bounds.Top + 5.0f), new Vector2(Bounds.Left + 2.0f, Bounds.Bottom - 5.0f), accentBrush, 2.0f);
+            }
+
+            DrawDisclosure(target, canExpand ? accentBrush : quietBrush);
+            var textLeft = Bounds.Left + 8.0f + depth * IndentWidth + 18.0f;
+            target.DrawText(Label, format, RectFromEdges(textLeft, Bounds.Top, Bounds.Right - 92.0f, Bounds.Bottom), selected ? primaryBrush : accentBrush, DrawTextOptions.Clip);
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                target.DrawText(detail, format, RectFromEdges(MathF.Max(textLeft + 72.0f, Bounds.Right - 90.0f), Bounds.Top, Bounds.Right - 8.0f, Bounds.Bottom), selected ? primaryBrush : quietBrush, DrawTextOptions.Clip);
+            }
+        }
+
+        private Rect DisclosureBounds()
+        {
+            var left = Bounds.Left + 7.0f + depth * IndentWidth;
+            return RectFromEdges(left, Bounds.Top + 7.0f, left + 13.0f, Bounds.Bottom - 7.0f);
+        }
+
+        private void DrawDisclosure(ID2D1RenderTarget target, ID2D1SolidColorBrush brush)
+        {
+            var disclosure = DisclosureBounds();
+            var cx = (disclosure.Left + disclosure.Right) * 0.5f;
+            var cy = (disclosure.Top + disclosure.Bottom) * 0.5f;
+            if (!canExpand)
+            {
+                target.FillEllipse(new Ellipse(new Vector2(cx, cy), 1.6f, 1.6f), brush);
+                return;
+            }
+
+            if (isExpanded())
+            {
+                target.DrawLine(new Vector2(cx - 4.5f, cy - 2.0f), new Vector2(cx, cy + 3.0f), brush, 1.6f);
+                target.DrawLine(new Vector2(cx, cy + 3.0f), new Vector2(cx + 4.5f, cy - 2.0f), brush, 1.6f);
+            }
+            else
+            {
+                target.DrawLine(new Vector2(cx - 2.0f, cy - 4.5f), new Vector2(cx + 3.0f, cy), brush, 1.6f);
+                target.DrawLine(new Vector2(cx + 3.0f, cy), new Vector2(cx - 2.0f, cy + 4.5f), brush, 1.6f);
             }
         }
     }
