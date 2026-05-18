@@ -15,7 +15,9 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         presentationDelaySeconds: 0.35f,
         smoothing: 0.55f);
     private readonly LocalCastTemporalGaussianMapper mapper = new();
+    private readonly LocalCastGpuFusionMapper gpuFusionMapper = new();
     private readonly LocalCastVisualStateReader reader;
+    private AquariumGpuFusionField latestGpuFusionField = AquariumGpuFusionField.Empty;
     private float timeSeconds;
     private float sceneTimelineSeconds;
     private long lastFrameId = -1;
@@ -57,7 +59,10 @@ public sealed class LocalCastRuntime : IAquariumRuntime
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
-                TemporalGaussianField = temporalField,
+                TemporalGaussianField = ReferenceEquals(latestGpuFusionField, AquariumGpuFusionField.Empty)
+                    ? temporalField
+                    : AquariumTemporalGaussianField.Empty,
+                GpuFusionField = latestGpuFusionField,
             };
 
             return new AquariumFrame(
@@ -94,6 +99,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         if (frame.FrameId != lastFrameId)
         {
             accumulator.Observe(mapper.Map(frame));
+            latestGpuFusionField = gpuFusionMapper.Map(frame);
             lastFrameId = frame.FrameId;
             latestPointCount = frame.Points.Count;
             latestStatus = "live";
@@ -101,7 +107,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
 
         sceneTimelineSeconds = MathF.Max(
             sceneTimelineSeconds + Math.Max(deltaSeconds, 0.0f),
-            mapper.ToTimelineSeconds(frame.PresentTimeNs));
+            gpuFusionMapper.ToTimelineSeconds(frame.PresentTimeNs));
     }
 
     public void FlushState()

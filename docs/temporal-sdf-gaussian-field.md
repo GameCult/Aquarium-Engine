@@ -34,9 +34,12 @@ diegetic scene content.
 
 `Aquarium.LocalCast` is the first concrete live client for this contract. It
 reads `localcast.visual.render_frame` from LocalCastBridge's typed CultCache
-MessagePack document, maps every point claim into `TemporalGaussianObservation`
-rows, and lets the accumulator own smoothing, history, and presentation delay.
-It does not downsample the document in client space.
+MessagePack document. The older CPU path can still map point claims into
+`TemporalGaussianObservation` rows for accumulator smoothing, but the live
+LocalCast path now prefers `AquariumGpuFusionField`: compact fusion seeds enter
+the D3D12 backend, `D3D12LocalCastFusion.hlsl` dispatches over them, and the
+compute shader writes the temporal Gaussian buffer consumed by the SDF Gaussian
+draw. It does not downsample the document in client space.
 
 ## Invariants
 
@@ -55,10 +58,37 @@ It does not downsample the document in client space.
 
 This cut deliberately claims million-slot ingestion, not a finished million-splat
 renderer architecture. The live D3D12 path can draw up to 1,048,576 temporal
-Gaussians through instanced proxy quads and only uploads the active packet span.
-The next scaling cut belongs to the Aquarium renderer: selected-cut residency,
-tiled/bin dispatch, GPU accumulation, and clustered visibility. Do not push that
-scheduler into LocalCastBridge.
+Gaussians through instanced proxy quads, only uploads the active seed/packet
+span, and now owns the GPU lowering step from LocalCast fusion seeds to Gaussian
+packets. The next scaling cut belongs to the Aquarium renderer: packed camera
+planes, selected-cut residency, tiled/bin dispatch, GPU accumulation, and
+clustered visibility. Do not push that scheduler into LocalCastBridge.
+
+## GPU Fusion Spine
+
+The active GPU boundary is deliberately narrow:
+
+```text
+LocalCast typed visual frame
+-> AquariumGpuFusionSeed[]
+-> D3D12 LocalCast fusion compute shader
+-> RWStructuredBuffer<TemporalGaussian>
+-> instanced SDF Gaussian draw
+-> TAA/resolve
+```
+
+Ownership:
+
+- `AquariumGpuFusionField` is the renderer contract for GPU-owned fusion input.
+- `LocalCastGpuFusionMapper` converts typed LocalCast point claims into compact
+  seeds without client downsampling.
+- `D3D12LocalCastFusion.hlsl` owns the first compute lowering pass.
+- `D3D12Renderer` owns UAV-capable temporal Gaussian storage, dispatch, and the
+  transition back to shader-resource state for the draw.
+
+Next cut: replace point-claim seeds with packed camera planes and Leap packed
+maps so the compute shader performs stereo/flow/feature extraction directly on
+GPU-resident sensor data.
 
 The first shader pass also uses camera-facing proxy planes to evaluate each
 kernel. True ray-integrated volume compositing, Gaussian depth sorting, and

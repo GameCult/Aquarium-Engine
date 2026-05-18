@@ -29,6 +29,8 @@ public sealed class AquariumShaderManifest
 
     public string TemporalGaussianShader { get; private set; } = "D3D12TemporalGaussian.hlsl";
 
+    public string LocalCastFusionShader { get; private set; } = "D3D12LocalCastFusion.hlsl";
+
     public string PostShader { get; private set; } = "D3D12Post.hlsl";
 
     public string SdfCommonInclude { get; private set; } = "D3D12SdfCommon.hlsli";
@@ -64,6 +66,12 @@ public sealed class AquariumShaderManifest
     public AquariumShaderManifest TemporalGaussian(string path)
     {
         TemporalGaussianShader = path;
+        return this;
+    }
+
+    public AquariumShaderManifest LocalCastFusion(string path)
+    {
+        LocalCastFusionShader = path;
         return this;
     }
 
@@ -256,6 +264,30 @@ public readonly record struct AquariumTemporalSdfGaussian(
     float ShapePower,
     int FieldId);
 
+public readonly record struct AquariumGpuFusionSeed(
+    string StableKey,
+    Vector3 Center,
+    Vector3 PreviousCenter,
+    Vector3 Velocity,
+    Vector3 Radii,
+    Vector4 ColorOpacity,
+    float Confidence,
+    float HistoryWeight,
+    float Falloff,
+    float ShapePower,
+    int FieldId);
+
+public sealed class AquariumGpuFusionField
+{
+    public static AquariumGpuFusionField Empty { get; } = new();
+
+    public IReadOnlyList<AquariumGpuFusionSeed> Seeds { get; init; } = [];
+
+    public float AccumulationWindowSeconds { get; init; }
+
+    public float PresentationDelaySeconds { get; init; }
+}
+
 public sealed class AquariumTemporalGaussianField
 {
     public static AquariumTemporalGaussianField Empty { get; } = new();
@@ -282,4 +314,6 @@ public sealed class AquariumSceneState
     public IReadOnlyList<AquariumSdfLight> SdfLights { get; init; } = [];
 
     public AquariumTemporalGaussianField TemporalGaussianField { get; init; } = AquariumTemporalGaussianField.Empty;
+
+    public AquariumGpuFusionField GpuFusionField { get; init; } = AquariumGpuFusionField.Empty;
 }

@@ -81,4 +81,39 @@ public sealed class LocalCastTemporalGaussianMapperTests
         Assert.Contains(observations, observation => observation.StableKey == "leap-motion:green:0:0");
         Assert.Contains(observations, observation => observation.StableKey.StartsWith("room-rgb:", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void MapsVisualPointsToGpuFusionSeedsWithoutClientDownsampling()
+    {
+        var points = new List<LocalCastVisualPoint>();
+        for (var index = 0; index < 8192; index++)
+        {
+            points.Add(new LocalCastVisualPoint(
+                index % 2 == 0 ? $"dense-rgb:{index}" : $"leap-motion:green:{index}",
+                new Vector3(index * 0.0001f, 0.0f, 1.0f),
+                0.006f,
+                new Vector4(0.4f, 0.7f, 1.0f, 0.85f),
+                0.9f,
+                1_000_000_000 + index));
+        }
+
+        var field = new LocalCastGpuFusionMapper().Map(new LocalCastVisualFrame
+        {
+            SchemaVersion = LocalCastVisualStateReader.RenderFrameSchemaId,
+            FrameId = 2,
+            CreatedMonotonicNs = 1_000_000_000,
+            SourceTimeMinNs = 1_000_000_000,
+            SourceTimeMaxNs = 1_000_010_000,
+            PresentTimeNs = 1_350_000_000,
+            AudioAlignmentTimeNs = 1_350_000_000,
+            SpoutSenderName = "LocalCastBridge Point Cloud",
+            TargetWidth = 1920,
+            TargetHeight = 1080,
+            Points = points,
+        });
+
+        Assert.Equal(8192, field.Seeds.Count);
+        Assert.Contains(field.Seeds, seed => seed.StableKey.StartsWith("dense-rgb:", StringComparison.Ordinal));
+        Assert.Contains(field.Seeds, seed => seed.ShapePower > 2.0f);
+    }
 }

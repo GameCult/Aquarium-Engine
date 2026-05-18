@@ -138,6 +138,12 @@ public sealed class AquariumShaderBuilder(AquariumShaderManifest manifest)
         return this;
     }
 
+    public AquariumShaderBuilder LocalCastFusion(string path)
+    {
+        manifest.LocalCastFusion(path);
+        return this;
+    }
+
     public AquariumShaderBuilder Include(string path)
     {
         manifest.Include(path);

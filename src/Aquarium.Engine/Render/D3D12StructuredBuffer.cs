@@ -9,14 +9,16 @@ internal sealed class D3D12StructuredBuffer : IDisposable
     private readonly int elementCount;
     private readonly int strideBytes;
 
-    public D3D12StructuredBuffer(ID3D12Device device, int elementCount, int strideBytes, string name)
+    public D3D12StructuredBuffer(ID3D12Device device, int elementCount, int strideBytes, string name, bool allowUnorderedAccess = false)
     {
         this.elementCount = elementCount;
         this.strideBytes = strideBytes;
         SizeBytes = elementCount * strideBytes;
         Resource = device.CreateCommittedResource(
             HeapType.Default,
-            ResourceDescription.Buffer((ulong)SizeBytes),
+            ResourceDescription.Buffer(
+                (ulong)SizeBytes,
+                allowUnorderedAccess ? ResourceFlags.AllowUnorderedAccess : ResourceFlags.None),
             ResourceStates.Common,
             null);
         Resource.Name = name;
@@ -96,7 +98,28 @@ internal sealed class D3D12StructuredBuffer : IDisposable
             descriptor.Cpu);
     }
 
-    private void Transition(ID3D12GraphicsCommandList commandList, ResourceStates nextState)
+    public void CreateUnorderedAccessView(ID3D12Device device, D3D12DescriptorSlot descriptor)
+    {
+        device.CreateUnorderedAccessView(
+            Resource,
+            null,
+            new UnorderedAccessViewDescription
+            {
+                Format = Format.Unknown,
+                ViewDimension = UnorderedAccessViewDimension.Buffer,
+                Buffer = new BufferUnorderedAccessView
+                {
+                    FirstElement = 0,
+                    NumElements = (uint)elementCount,
+                    StructureByteStride = (uint)strideBytes,
+                    CounterOffsetInBytes = 0,
+                    Flags = BufferUnorderedAccessViewFlags.None,
+                },
+            },
+            descriptor.Cpu);
+    }
+
+    public void Transition(ID3D12GraphicsCommandList commandList, ResourceStates nextState)
     {
         if (State == nextState)
         {

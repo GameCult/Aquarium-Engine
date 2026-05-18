@@ -52,6 +52,9 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int RootStudioIrradiance = 11;
     private const int RootSdfObjects = 12;
     private const int RootTemporalGaussians = 13;
+    private const int RootFusionFrameConstants = 0;
+    private const int RootFusionSeeds = 1;
+    private const int RootFusionOutput = 2;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -85,10 +88,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly FrameResources[] frames = new FrameResources[BackBufferCount];
     private readonly ID3D12GraphicsCommandList commandList;
     private readonly ID3D12RootSignature fullscreenRootSignature;
+    private readonly ID3D12RootSignature localCastFusionRootSignature;
     private ID3D12PipelineState? heightFieldBasePipelineState;
     private ID3D12PipelineState? heightFieldBrushPipelineState;
     private ID3D12PipelineState? scenePipelineState;
     private ID3D12PipelineState? temporalGaussianPipelineState;
+    private ID3D12PipelineState? localCastFusionPipelineState;
     private ID3D12PipelineState?[] sdfProxyPipelineStates = [];
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
@@ -126,13 +131,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12StructuredBuffer sdfLightBuffer;
     private readonly D3D12StructuredBuffer sdfObjectBuffer;
+    private readonly D3D12StructuredBuffer gpuFusionSeedBuffer;
     private readonly D3D12StructuredBuffer temporalGaussianBuffer;
     private readonly D3D12CubeTexture studioPmremTexture;
     private readonly D3D12CubeTexture studioIrradianceTexture;
     private readonly AquariumSdfLight[] sdfLights = new AquariumSdfLight[MaxSdfLightCount];
     private readonly AquariumSdfObject[] sdfObjects = new AquariumSdfObject[MaxSdfObjectCount];
+    private readonly D3D12GpuFusionSeedPacket[] gpuFusionSeeds = new D3D12GpuFusionSeedPacket[MaxTemporalGaussianCount];
     private readonly D3D12TemporalGaussianPacket[] temporalGaussians = new D3D12TemporalGaussianPacket[MaxTemporalGaussianCount];
     private int temporalGaussianCount;
+    private bool temporalGaussiansGpuGenerated;
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
@@ -230,9 +238,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateGraphRenderTargets();
         sdfLightBuffer = new D3D12StructuredBuffer(device, MaxSdfLightCount, Marshal.SizeOf<AquariumSdfLight>(), "Aquarium D3D12 Sdf Light Buffer");
         sdfObjectBuffer = new D3D12StructuredBuffer(device, MaxSdfObjectCount, Marshal.SizeOf<AquariumSdfObject>(), "Aquarium D3D12 Sdf Object Buffer");
-        temporalGaussianBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12TemporalGaussianPacket>(), "Aquarium D3D12 Temporal Gaussian Buffer");
+        gpuFusionSeedBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12GpuFusionSeedPacket>(), "Aquarium D3D12 LocalCast GPU Fusion Seed Buffer");
+        temporalGaussianBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12TemporalGaussianPacket>(), "Aquarium D3D12 Temporal Gaussian Buffer", allowUnorderedAccess: true);
         resourceRegistry.Add("sdf-light-buffer", sdfLightBuffer);
         resourceRegistry.Add("sdf-object-buffer", sdfObjectBuffer);
+        resourceRegistry.Add("gpu-fusion-seed-buffer", gpuFusionSeedBuffer);
         resourceRegistry.Add("temporal-gaussian-buffer", temporalGaussianBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
@@ -249,6 +259,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ReportStartupProgress(startupProgress, "Creating D3D12 render pipelines");
         fullscreenRootSignature = CreateFullscreenRootSignature();
         fullscreenRootSignature.Name = "Aquarium D3D12 Fullscreen Root Signature";
+        localCastFusionRootSignature = CreateLocalCastFusionRootSignature();
+        localCastFusionRootSignature.Name = "Aquarium D3D12 LocalCast Fusion Root Signature";
         CaptureShaderWriteTimes();
         StartPipelineBuild("initial");
         viewport = new Viewport(0.0f, 0.0f, width, height);
@@ -484,6 +496,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         CopySceneState(frame.Scene);
+        var activeAccumulationWindow = frame.Scene.GpuFusionField.Seeds.Count > 0
+            ? frame.Scene.GpuFusionField.AccumulationWindowSeconds
+            : frame.Scene.TemporalGaussianField.AccumulationWindowSeconds;
+        var activePresentationDelay = frame.Scene.GpuFusionField.Seeds.Count > 0
+            ? frame.Scene.GpuFusionField.PresentationDelaySeconds
+            : frame.Scene.TemporalGaussianField.PresentationDelaySeconds;
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
             new Vector2(width, height),
             frame.TimeSeconds,
@@ -510,8 +528,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new Vector4(
                 temporalGaussianCount,
                 MaxTemporalGaussianCount,
-                frame.Scene.TemporalGaussianField.AccumulationWindowSeconds,
-                frame.Scene.TemporalGaussianField.PresentationDelaySeconds)));
+                activeAccumulationWindow,
+                activePresentationDelay)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
@@ -526,8 +544,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sdfLightBuffer.CreateShaderResourceView(device, frameResources.SdfLightDescriptor);
         frameResources.SdfObjectDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sdfObjectBuffer.CreateShaderResourceView(device, frameResources.SdfObjectDescriptor);
+        frameResources.GpuFusionSeedDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        gpuFusionSeedBuffer.CreateShaderResourceView(device, frameResources.GpuFusionSeedDescriptor);
         frameResources.TemporalGaussianDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         temporalGaussianBuffer.CreateShaderResourceView(device, frameResources.TemporalGaussianDescriptor);
+        frameResources.TemporalGaussianUnorderedAccessDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        temporalGaussianBuffer.CreateUnorderedAccessView(device, frameResources.TemporalGaussianUnorderedAccessDescriptor);
         frameResources.StudioPmremDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         studioPmremTexture.CreateShaderResourceView(device, frameResources.StudioPmremDescriptor);
         frameResources.StudioIrradianceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -569,6 +591,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var recordCpuStart = Stopwatch.GetTimestamp();
         commandList.BeginEvent("Aquarium D3D12 Frame");
         UploadSceneStructuredResources(commandList, frameResources);
+        DispatchLocalCastGpuFusion(commandList, frameResources);
         RenderHeightField(commandList, frameResources);
         RenderSceneAndPresent(new D3D12PassContext(commandList, frameResources.BackBuffer, frameResources.BackBufferRenderTargetView.Cpu), frameResources);
         commandList.EndEvent();
@@ -698,6 +721,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         && heightFieldBrushPipelineState is not null
         && scenePipelineState is not null
         && temporalGaussianPipelineState is not null
+        && localCastFusionPipelineState is not null
         && sdfProxyPipelineStates.All(pipeline => pipeline is not null)
         && bloomPrefilterPipelineState is not null
         && bloomDownsamplePipelineState is not null
@@ -735,8 +759,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
         overlayDevice.Dispose();
         DisposePipelineStates();
         fullscreenRootSignature.Dispose();
+        localCastFusionRootSignature.Dispose();
         studioIrradianceTexture.Dispose();
         studioPmremTexture.Dispose();
+        temporalGaussianBuffer.Dispose();
+        gpuFusionSeedBuffer.Dispose();
         sdfObjectBuffer.Dispose();
         sdfLightBuffer.Dispose();
         DisposeBloomRenderTargets();
@@ -876,6 +903,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         scene.Name = "Aquarium D3D12 Scene Pipeline";
         var temporalGaussian = CreateTemporalGaussianPipelineState(paths.TemporalGaussian);
         temporalGaussian.Name = "Aquarium D3D12 Temporal Gaussian Pipeline";
+        var localCastFusion = CreateLocalCastFusionPipelineState(paths.LocalCastFusion);
+        localCastFusion.Name = "Aquarium D3D12 LocalCast Fusion Compute Pipeline";
         var sdfProxies = new ID3D12PipelineState[paths.SdfShaders.Count];
         for (var index = 0; index < paths.SdfShaders.Count; index++)
         {
@@ -899,6 +928,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             heightFieldBrush,
             scene,
             temporalGaussian,
+            localCastFusion,
             sdfProxies,
             bloomPrefilter,
             bloomDownsample,
@@ -1386,7 +1416,41 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             sdfLightBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfLights);
             sdfObjectBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfObjects);
-            temporalGaussianBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, temporalGaussians.AsSpan(0, temporalGaussianCount));
+            if (temporalGaussiansGpuGenerated)
+            {
+                gpuFusionSeedBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, gpuFusionSeeds.AsSpan(0, temporalGaussianCount));
+            }
+            else
+            {
+                temporalGaussianBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, temporalGaussians.AsSpan(0, temporalGaussianCount));
+            }
+        }
+        finally
+        {
+            activeCommandList.EndEvent();
+        }
+    }
+
+    private void DispatchLocalCastGpuFusion(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
+    {
+        if (!temporalGaussiansGpuGenerated || temporalGaussianCount <= 0)
+        {
+            return;
+        }
+
+        activeCommandList.BeginEvent("LocalCast GPU Fusion");
+        try
+        {
+            gpuFusionSeedBuffer.Transition(activeCommandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
+            temporalGaussianBuffer.Transition(activeCommandList, ResourceStates.UnorderedAccess);
+            activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
+            activeCommandList.SetComputeRootSignature(localCastFusionRootSignature);
+            activeCommandList.SetPipelineState(localCastFusionPipelineState!);
+            activeCommandList.SetComputeRootDescriptorTable(RootFusionFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
+            activeCommandList.SetComputeRootDescriptorTable(RootFusionSeeds, frameResources.GpuFusionSeedDescriptor.Gpu);
+            activeCommandList.SetComputeRootDescriptorTable(RootFusionOutput, frameResources.TemporalGaussianUnorderedAccessDescriptor.Gpu);
+            activeCommandList.Dispatch((uint)((temporalGaussianCount + 127) / 128), 1, 1);
+            temporalGaussianBuffer.Transition(activeCommandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
         }
         finally
         {
@@ -1428,6 +1492,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         Array.Clear(sdfObjects);
         Array.Clear(sdfLights);
         temporalGaussianCount = 0;
+        temporalGaussiansGpuGenerated = false;
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
 
         var objectCount = Math.Min(scene.SdfObjects.Count, MaxSdfObjectCount);
@@ -1442,12 +1507,35 @@ public sealed class D3D12Renderer : IAquariumRenderer
             sdfLights[index] = scene.SdfLights[index];
         }
 
+        if (scene.GpuFusionField.Seeds.Count > 0)
+        {
+            var seedCount = Math.Min(scene.GpuFusionField.Seeds.Count, MaxTemporalGaussianCount);
+            temporalGaussianCount = seedCount;
+            temporalGaussiansGpuGenerated = true;
+            for (var index = 0; index < seedCount; index++)
+            {
+                gpuFusionSeeds[index] = ToGpuFusionSeedPacket(scene.GpuFusionField.Seeds[index]);
+            }
+            return;
+        }
+
         var gaussianCount = Math.Min(scene.TemporalGaussianField.Gaussians.Count, MaxTemporalGaussianCount);
         temporalGaussianCount = gaussianCount;
         for (var index = 0; index < gaussianCount; index++)
         {
             temporalGaussians[index] = ToTemporalGaussianPacket(scene.TemporalGaussianField.Gaussians[index]);
         }
+    }
+
+    private static D3D12GpuFusionSeedPacket ToGpuFusionSeedPacket(AquariumGpuFusionSeed seed)
+    {
+        return new D3D12GpuFusionSeedPacket(
+            new Vector4(seed.Center, Math.Clamp(seed.HistoryWeight, 0.0f, 1.0f)),
+            new Vector4(seed.PreviousCenter, seed.FieldId),
+            new Vector4(seed.Velocity, Math.Clamp(seed.Confidence, 0.0f, 1.0f)),
+            new Vector4(Vector3.Max(seed.Radii, new Vector3(0.0001f)), MathF.Max(0.0001f, seed.Falloff)),
+            seed.ColorOpacity,
+            new Vector4(MathF.Max(0.0001f, seed.ShapePower), 0.0f, 0.0f, 0.0f));
     }
 
     private static D3D12TemporalGaussianPacket ToTemporalGaussianPacket(AquariumTemporalSdfGaussian gaussian)
@@ -1691,6 +1779,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 heightFieldBrushPipelineState!,
                 scenePipelineState!,
                 temporalGaussianPipelineState!,
+                localCastFusionPipelineState!,
                 sdfProxyPipelineStates.Select(pipeline => pipeline!).ToArray(),
                 bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
@@ -1706,6 +1795,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         heightFieldBrushPipelineState = pipelines.HeightFieldBrush;
         scenePipelineState = pipelines.Scene;
         temporalGaussianPipelineState = pipelines.TemporalGaussian;
+        localCastFusionPipelineState = pipelines.LocalCastFusion;
         for (var index = 0; index < sdfProxyPipelineStates.Length; index++)
         {
             sdfProxyPipelineStates[index] = pipelines.SdfProxies[index];
@@ -1724,6 +1814,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         heightFieldBrushPipelineState = null;
         scenePipelineState = null;
         temporalGaussianPipelineState = null;
+        localCastFusionPipelineState = null;
         Array.Clear(sdfProxyPipelineStates);
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
@@ -1917,6 +2008,39 @@ public sealed class D3D12Renderer : IAquariumRenderer
         return device.CreateRootSignature(0, in description, RootSignatureVersion.Version1);
     }
 
+    private ID3D12RootSignature CreateLocalCastFusionRootSignature()
+    {
+        var frameRange = new DescriptorRange(
+            DescriptorRangeType.ConstantBufferView,
+            1,
+            0,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var seedRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            26,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var outputRange = new DescriptorRange(
+            DescriptorRangeType.UnorderedAccessView,
+            1,
+            0,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
+        var rootParameters = new[]
+        {
+            new RootParameter(new RootDescriptorTable([frameRange]), ShaderVisibility.All),
+            new RootParameter(new RootDescriptorTable([seedRange]), ShaderVisibility.All),
+            new RootParameter(new RootDescriptorTable([outputRange]), ShaderVisibility.All),
+        };
+        var description = new RootSignatureDescription(
+            RootSignatureFlags.None,
+            rootParameters,
+            []);
+        return device.CreateRootSignature(0, in description, RootSignatureVersion.Version1);
+    }
+
     private FrameResources CreateFrameResources(int index)
     {
         var commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
@@ -1945,6 +2069,17 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState CreateTemporalGaussianPipelineState(string path)
     {
         return CreateFullscreenPipelineState(path, "D3D12TemporalGaussianVS", "D3D12TemporalGaussianPS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
+    }
+
+    private ID3D12PipelineState CreateLocalCastFusionPipelineState(string path)
+    {
+        var computeShader = CompileShader(path, "D3D12LocalCastFusionCS", "cs_5_0");
+        var description = new ComputePipelineStateDescription
+        {
+            RootSignature = localCastFusionRootSignature,
+            ComputeShader = computeShader,
+        };
+        return device.CreateComputePipelineState(description);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -2134,6 +2269,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         string HeightField,
         string Scene,
         string TemporalGaussian,
+        string LocalCastFusion,
         string SdfCommon,
         string SdfProxy,
         IReadOnlyList<string> SdfShaders,
@@ -2141,7 +2277,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         IReadOnlyList<string> Includes,
         string Post)
     {
-        public IReadOnlyList<string> All { get; } = [HeightField, Scene, TemporalGaussian, SdfCommon, SdfProxy, ..SdfShaders, SdfMath, ..Includes, Post];
+        public IReadOnlyList<string> All { get; } = [HeightField, Scene, TemporalGaussian, LocalCastFusion, SdfCommon, SdfProxy, ..SdfShaders, SdfMath, ..Includes, Post];
 
         public static D3D12ShaderPaths FromManifest(string root, AquariumShaderManifest manifest)
         {
@@ -2153,6 +2289,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 shaderPath(manifest.HeightFieldShader),
                 shaderPath(manifest.SceneShader),
                 shaderPath(manifest.TemporalGaussianShader),
+                shaderPath(manifest.LocalCastFusionShader),
                 shaderPath(manifest.SdfCommonInclude),
                 shaderPath(manifest.SdfProxyInclude),
                 manifest.SdfShaderPaths.Select(shaderPath).ToArray(),
@@ -2167,6 +2304,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState HeightFieldBrush,
         ID3D12PipelineState Scene,
         ID3D12PipelineState TemporalGaussian,
+        ID3D12PipelineState LocalCastFusion,
         IReadOnlyList<ID3D12PipelineState> SdfProxies,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
@@ -2181,6 +2319,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
+            LocalCastFusion.Dispose();
             TemporalGaussian.Dispose();
             foreach (var sdfProxy in SdfProxies)
             {
@@ -2212,7 +2351,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         public D3D12DescriptorSlot SdfObjectDescriptor { get; set; }
 
+        public D3D12DescriptorSlot GpuFusionSeedDescriptor { get; set; }
+
         public D3D12DescriptorSlot TemporalGaussianDescriptor { get; set; }
+
+        public D3D12DescriptorSlot TemporalGaussianUnorderedAccessDescriptor { get; set; }
 
         public D3D12DescriptorSlot StudioPmremDescriptor { get; set; }
 
