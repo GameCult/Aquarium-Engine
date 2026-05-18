@@ -22,6 +22,7 @@ cbuffer AquariumFrame : register(b0)
     float bloomIntensity;
     float bloomVeilIntensity;
     float4 cursorWorlds;
+    float4 temporalGaussianInfo;
 };
 
 Texture2D<float4> heightFieldTexture : register(t0);

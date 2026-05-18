@@ -67,6 +67,7 @@ current_model:
     runtime_surface: docs/cult-runtime-surface.md
     native_spine: docs/vortice-spine.md
     tsr_inspired_taa_spec: docs/tsr-inspired-taa-spec.md
+    temporal_sdf_gaussian_field: docs/temporal-sdf-gaussian-field.md
     input: docs/input.md
     zyphos_eusocial_sync: docs/zyphos-eusocial-sync.md
     hdr_pbr_presentation: research/rendering/hdr-pbr-presentation.md
@@ -109,6 +110,7 @@ renderer_state:
     - Face voice routing is no longer a singleton. Epiphany persists typed FaceVoiceEndpoint rows with id, display name, thread id, voice, prompt, enabled flag, XY proximity anchor, and an audible-radius scale. FaceVoiceRouter uses proximity only to choose the addressed endpoint for user input; enabled endpoints can all run concurrently so active rumination loops may speak regardless of listener distance. Distance shapes PCM output gain and stereo pan through AquariumAudioDocument/WasapiAudioDevice.
     - Global GraphicsSettings document feeding render debug, exposure, bloom intensity, and bloom veil.
     - Temporal resolve uses scene color, metadata, and control history only; dormant event history lanes are cut until a real producer and consumer contract exists.
+    - Aquarium owns the temporal SDF Gaussian field renderer boundary: clients can publish `AquariumTemporalGaussianField`, `TemporalGaussianAccumulator` can buffer stable keyed observations in world space, and D3D12 lowers those packets into an instanced compact-kernel splat pass that writes normal scene color/travel/metadata/control targets.
     - Isolated Epiphany agent preview renders run through the real D3D12 renderer from src/Aquarium.Epiphany.AgentPreview; preview isolation is owned by a preview-only scene shader, while the engine exposes only final-frame PNG capture.
     - Zyphos is the first nontrivial non-Epiphany client: a planetary-scale demo with spherical-domain terrain, atmospheric rim lighting, night-side glints, fixed-sky Umbros, and first-pass eclipse cadence.
     - Zyphos/Umbros render-scale binary constants live in src/Aquarium.Zyphos/ZyphosUmbrosSystem.cs: Umbros is modeled as a 0.9-radius mutually tidally locked twin at 8 Zyphos radii, while the dim primary star phase moves through the Zyphos-local frame.
@@ -159,6 +161,7 @@ next_actions:
   - Use research/rendering/fractal-brush-implementation-roadmap.md as the actionable execution checklist for fractal brush work.
   - Follow docs/zyphos-eusocial-sync.md and E:\Projects\Eusocial Interbeing\Eusocial Interbeing\World\Zyphos Simulation Brief.md before turning Zyphos visual choices into setting claims.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
+  - Use docs/temporal-sdf-gaussian-field.md before wiring LocalCastBridge visual sensor fusion into Aquarium or scaling the temporal Gaussian renderer beyond the current bounded instanced pass.
   - Promote future runtime knobs into typed CultCache documents before they become process folklore.
   - Next Face voice slice: replace text-only input with microphone/WebRTC or a native capture bridge, bind endpoint anchors to real Face/body spatial projections instead of manual XY rows, then move the transport contract from Codex JSON-RPC compatibility toward a typed CultNet FaceVoiceSession once Epiphany advertises that surface.
   - Keep Aquarium and Epiphany in one repo until the contracts and graph API are stable enough for Epiphany to move out without carrying engine policy or reload folklore with it.

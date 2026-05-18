@@ -132,6 +132,12 @@ public sealed class AquariumShaderBuilder(AquariumShaderManifest manifest)
         return this;
     }
 
+    public AquariumShaderBuilder TemporalGaussian(string path)
+    {
+        manifest.TemporalGaussian(path);
+        return this;
+    }
+
     public AquariumShaderBuilder Include(string path)
     {
         manifest.Include(path);

@@ -22,6 +22,7 @@ cbuffer AquariumFrame : register(b0)
     float bloomIntensity;
     float bloomVeilIntensity;
     float4 cursorWorlds;
+    float4 temporalGaussianInfo;
 };
 
 cbuffer HeightFieldBrushes : register(b1)

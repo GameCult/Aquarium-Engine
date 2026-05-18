@@ -130,12 +130,25 @@ Current Gate 2B implementation:
 - this gives analytic SDF bodies object motion without a full velocity buffer
   yet
 
+Current Gate 2C implementation:
+
+- `AquariumSceneState.TemporalGaussianField` carries world-space temporal SDF
+  Gaussian splats with stable keys, current/previous center, velocity,
+  confidence, history weight, field id, and compact-kernel controls
+- `TemporalGaussianAccumulator` buffers sensor observations in world space before
+  rendering, using a presentation delay plus accumulation window instead of
+  asking final-pixel TAA to discover identity after projection
+- D3D12 uploads the field into a structured buffer and renders it through
+  `D3D12TemporalGaussian.hlsl`, writing color/travel, field metadata, normals,
+  and temporal-control coverage into the existing scene/resolve path
+
 Still missing:
 
 - separate field ids once the SDF field registry exists
 - reactive/coverage masks
 - richer disocclusion classification
 - a general velocity buffer for non-rigid fields and deformation
+- per-Gaussian previous-center reprojection in the resolve pass
 
 ### Gate 3: Stochastic Event Control
 

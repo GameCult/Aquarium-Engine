@@ -31,6 +31,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format SceneDepthFormat = Format.D32_Float;
     private const int MaxSdfLightCount = 64;
     private const int MaxSdfObjectCount = 64;
+    private const int MaxTemporalGaussianCount = 4096;
     private const float SurfaceTransparentMinZ = -1.85f;
     private const float SurfaceTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -50,6 +51,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int RootStudioPmrem = 10;
     private const int RootStudioIrradiance = 11;
     private const int RootSdfObjects = 12;
+    private const int RootTemporalGaussians = 13;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -86,6 +88,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState? heightFieldBasePipelineState;
     private ID3D12PipelineState? heightFieldBrushPipelineState;
     private ID3D12PipelineState? scenePipelineState;
+    private ID3D12PipelineState? temporalGaussianPipelineState;
     private ID3D12PipelineState?[] sdfProxyPipelineStates = [];
     private ID3D12PipelineState? bloomPrefilterPipelineState;
     private ID3D12PipelineState? bloomDownsamplePipelineState;
@@ -123,10 +126,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12RenderTarget[] bloomScratchTargets = new D3D12RenderTarget[BloomLevelCount];
     private readonly D3D12StructuredBuffer sdfLightBuffer;
     private readonly D3D12StructuredBuffer sdfObjectBuffer;
+    private readonly D3D12StructuredBuffer temporalGaussianBuffer;
     private readonly D3D12CubeTexture studioPmremTexture;
     private readonly D3D12CubeTexture studioIrradianceTexture;
     private readonly AquariumSdfLight[] sdfLights = new AquariumSdfLight[MaxSdfLightCount];
     private readonly AquariumSdfObject[] sdfObjects = new AquariumSdfObject[MaxSdfObjectCount];
+    private readonly D3D12TemporalGaussianPacket[] temporalGaussians = new D3D12TemporalGaussianPacket[MaxTemporalGaussianCount];
+    private int temporalGaussianCount;
     private Viewport viewport;
     private RawRect scissorRect;
     private int width;
@@ -224,8 +230,10 @@ public sealed class D3D12Renderer : IAquariumRenderer
         CreateGraphRenderTargets();
         sdfLightBuffer = new D3D12StructuredBuffer(device, MaxSdfLightCount, Marshal.SizeOf<AquariumSdfLight>(), "Aquarium D3D12 Sdf Light Buffer");
         sdfObjectBuffer = new D3D12StructuredBuffer(device, MaxSdfObjectCount, Marshal.SizeOf<AquariumSdfObject>(), "Aquarium D3D12 Sdf Object Buffer");
+        temporalGaussianBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12TemporalGaussianPacket>(), "Aquarium D3D12 Temporal Gaussian Buffer");
         resourceRegistry.Add("sdf-light-buffer", sdfLightBuffer);
         resourceRegistry.Add("sdf-object-buffer", sdfObjectBuffer);
+        resourceRegistry.Add("temporal-gaussian-buffer", temporalGaussianBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
         commandList.Close();
@@ -498,7 +506,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             settings.SceneExposure,
             settings.BloomIntensity,
             settings.BloomVeilIntensity,
-            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y)));
+            new Vector4(frame.CursorWorld.X, frame.CursorWorld.Y, previousCursorWorld.X, previousCursorWorld.Y),
+            new Vector4(
+                temporalGaussianCount,
+                MaxTemporalGaussianCount,
+                frame.Scene.TemporalGaussianField.AccumulationWindowSeconds,
+                frame.Scene.TemporalGaussianField.PresentationDelaySeconds)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         device.CreateConstantBufferView(
             new ConstantBufferViewDescription(frameConstants.GpuVirtualAddress, frameConstants.SizeInBytes),
@@ -513,6 +526,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         sdfLightBuffer.CreateShaderResourceView(device, frameResources.SdfLightDescriptor);
         frameResources.SdfObjectDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         sdfObjectBuffer.CreateShaderResourceView(device, frameResources.SdfObjectDescriptor);
+        frameResources.TemporalGaussianDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        temporalGaussianBuffer.CreateShaderResourceView(device, frameResources.TemporalGaussianDescriptor);
         frameResources.StudioPmremDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         studioPmremTexture.CreateShaderResourceView(device, frameResources.StudioPmremDescriptor);
         frameResources.StudioIrradianceDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -553,7 +568,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         var recordCpuStart = Stopwatch.GetTimestamp();
         commandList.BeginEvent("Aquarium D3D12 Frame");
-        UploadSdfLightResources(commandList, frameResources);
+        UploadSceneStructuredResources(commandList, frameResources);
         RenderHeightField(commandList, frameResources);
         RenderSceneAndPresent(new D3D12PassContext(commandList, frameResources.BackBuffer, frameResources.BackBufferRenderTargetView.Cpu), frameResources);
         commandList.EndEvent();
@@ -682,6 +697,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         heightFieldBasePipelineState is not null
         && heightFieldBrushPipelineState is not null
         && scenePipelineState is not null
+        && temporalGaussianPipelineState is not null
         && sdfProxyPipelineStates.All(pipeline => pipeline is not null)
         && bloomPrefilterPipelineState is not null
         && bloomDownsamplePipelineState is not null
@@ -858,6 +874,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         heightFieldBrush.Name = "Aquarium D3D12 Height Field Brush Pipeline";
         var scene = CreateScenePipelineState(paths.Scene);
         scene.Name = "Aquarium D3D12 Scene Pipeline";
+        var temporalGaussian = CreateTemporalGaussianPipelineState(paths.TemporalGaussian);
+        temporalGaussian.Name = "Aquarium D3D12 Temporal Gaussian Pipeline";
         var sdfProxies = new ID3D12PipelineState[paths.SdfShaders.Count];
         for (var index = 0; index < paths.SdfShaders.Count; index++)
         {
@@ -880,6 +898,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             heightFieldBase,
             heightFieldBrush,
             scene,
+            temporalGaussian,
             sdfProxies,
             bloomPrefilter,
             bloomDownsample,
@@ -1205,6 +1224,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(RootStudioPmrem, frameResources.StudioPmremDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootStudioIrradiance, frameResources.StudioIrradianceDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootSdfObjects, frameResources.SdfObjectDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootTemporalGaussians, frameResources.TemporalGaussianDescriptor.Gpu);
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
             context.CommandList.OMSetRenderTargets(
@@ -1221,6 +1241,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             {
                 context.CommandList.SetPipelineState(sdfProxyPipelineStates[sdfIndex]!);
                 context.CommandList.DrawInstanced(6, 1, 0, 0);
+            }
+
+            if (temporalGaussianCount > 0)
+            {
+                context.CommandList.SetPipelineState(temporalGaussianPipelineState!);
+                context.CommandList.DrawInstanced(6, (uint)temporalGaussianCount, 0, 0);
             }
         }
         finally
@@ -1332,6 +1358,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootDescriptorTable(RootHistoryMetadata, frameResources.HistoryMetadataDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootHistoryControl, frameResources.HistoryControlDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootSdfObjects, frameResources.SdfObjectDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootTemporalGaussians, frameResources.TemporalGaussianDescriptor.Gpu);
 
             context.CommandList.RSSetViewports(viewport);
             context.CommandList.RSSetScissorRects(scissorRect);
@@ -1352,13 +1379,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
     }
 
-    private void UploadSdfLightResources(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
+    private void UploadSceneStructuredResources(ID3D12GraphicsCommandList activeCommandList, FrameResources frameResources)
     {
         activeCommandList.BeginEvent("SDF State Upload");
         try
         {
             sdfLightBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfLights);
-        sdfObjectBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfObjects);
+            sdfObjectBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfObjects);
+            temporalGaussianBuffer.Upload(activeCommandList, frameResources.UploadRing, temporalGaussians);
         }
         finally
         {
@@ -1399,6 +1427,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         Array.Clear(sdfObjects);
         Array.Clear(sdfLights);
+        Array.Clear(temporalGaussians);
+        temporalGaussianCount = 0;
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
 
         var objectCount = Math.Min(scene.SdfObjects.Count, MaxSdfObjectCount);
@@ -1412,6 +1442,28 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             sdfLights[index] = scene.SdfLights[index];
         }
+
+        var gaussianCount = Math.Min(scene.TemporalGaussianField.Gaussians.Count, MaxTemporalGaussianCount);
+        temporalGaussianCount = gaussianCount;
+        for (var index = 0; index < gaussianCount; index++)
+        {
+            temporalGaussians[index] = ToTemporalGaussianPacket(scene.TemporalGaussianField.Gaussians[index]);
+        }
+    }
+
+    private static D3D12TemporalGaussianPacket ToTemporalGaussianPacket(AquariumTemporalSdfGaussian gaussian)
+    {
+        var orientation = gaussian.Orientation.LengthSquared() <= 0.000001f
+            ? Quaternion.Identity
+            : Quaternion.Normalize(gaussian.Orientation);
+        return new D3D12TemporalGaussianPacket(
+            new Vector4(gaussian.Center, gaussian.HistoryWeight),
+            new Vector4(gaussian.PreviousCenter, gaussian.FieldId),
+            new Vector4(gaussian.Velocity, gaussian.Confidence),
+            new Vector4(gaussian.Radii, gaussian.Falloff),
+            new Vector4(orientation.X, orientation.Y, orientation.Z, orientation.W),
+            gaussian.ColorOpacity,
+            new Vector4(gaussian.ShapePower, 0.0f, 0.0f, 0.0f));
     }
 
     private static float SceneFlags(AquariumSceneState scene)
@@ -1639,6 +1691,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 heightFieldBasePipelineState!,
                 heightFieldBrushPipelineState!,
                 scenePipelineState!,
+                temporalGaussianPipelineState!,
                 sdfProxyPipelineStates.Select(pipeline => pipeline!).ToArray(),
                 bloomPrefilterPipelineState!,
                 bloomDownsamplePipelineState!,
@@ -1653,6 +1706,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         heightFieldBasePipelineState = pipelines.HeightFieldBase;
         heightFieldBrushPipelineState = pipelines.HeightFieldBrush;
         scenePipelineState = pipelines.Scene;
+        temporalGaussianPipelineState = pipelines.TemporalGaussian;
         for (var index = 0; index < sdfProxyPipelineStates.Length; index++)
         {
             sdfProxyPipelineStates[index] = pipelines.SdfProxies[index];
@@ -1670,6 +1724,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         heightFieldBasePipelineState = null;
         heightFieldBrushPipelineState = null;
         scenePipelineState = null;
+        temporalGaussianPipelineState = null;
         Array.Clear(sdfProxyPipelineStates);
         bloomPrefilterPipelineState = null;
         bloomDownsamplePipelineState = null;
@@ -1816,6 +1871,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             24,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var temporalGaussianRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            25,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([constantBufferRange]), ShaderVisibility.All),
@@ -1831,6 +1892,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([studioPmremRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([studioIrradianceRange]), ShaderVisibility.Pixel),
             new RootParameter(new RootDescriptorTable([sdfObjectRange]), ShaderVisibility.All),
+            new RootParameter(new RootDescriptorTable([temporalGaussianRange]), ShaderVisibility.All),
         };
         var staticSamplers = new[]
         {
@@ -1879,6 +1941,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private ID3D12PipelineState CreateSdfObjectProxyPipelineState(string path)
     {
         return CreateFullscreenPipelineState(path, "D3D12SdfObjectProxyVS", "D3D12SdfProxyPS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
+    }
+
+    private ID3D12PipelineState CreateTemporalGaussianPipelineState(string path)
+    {
+        return CreateFullscreenPipelineState(path, "D3D12TemporalGaussianVS", "D3D12TemporalGaussianPS", [SceneHdrFormat, SceneHdrFormat, SceneHdrFormat], enableDepth: true);
     }
 
     private ID3D12PipelineState CreateBloomPrefilterPipelineState(string path)
@@ -2061,11 +2128,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         float Exposure,
         float BloomIntensity,
         float BloomVeilIntensity,
-        Vector4 CursorWorlds);
+        Vector4 CursorWorlds,
+        Vector4 TemporalGaussianInfo);
 
     private sealed record D3D12ShaderPaths(
         string HeightField,
         string Scene,
+        string TemporalGaussian,
         string SdfCommon,
         string SdfProxy,
         IReadOnlyList<string> SdfShaders,
@@ -2073,7 +2142,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         IReadOnlyList<string> Includes,
         string Post)
     {
-        public IReadOnlyList<string> All { get; } = [HeightField, Scene, SdfCommon, SdfProxy, ..SdfShaders, SdfMath, ..Includes, Post];
+        public IReadOnlyList<string> All { get; } = [HeightField, Scene, TemporalGaussian, SdfCommon, SdfProxy, ..SdfShaders, SdfMath, ..Includes, Post];
 
         public static D3D12ShaderPaths FromManifest(string root, AquariumShaderManifest manifest)
         {
@@ -2084,6 +2153,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             return new D3D12ShaderPaths(
                 shaderPath(manifest.HeightFieldShader),
                 shaderPath(manifest.SceneShader),
+                shaderPath(manifest.TemporalGaussianShader),
                 shaderPath(manifest.SdfCommonInclude),
                 shaderPath(manifest.SdfProxyInclude),
                 manifest.SdfShaderPaths.Select(shaderPath).ToArray(),
@@ -2097,6 +2167,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         ID3D12PipelineState HeightFieldBase,
         ID3D12PipelineState HeightFieldBrush,
         ID3D12PipelineState Scene,
+        ID3D12PipelineState TemporalGaussian,
         IReadOnlyList<ID3D12PipelineState> SdfProxies,
         ID3D12PipelineState BloomPrefilter,
         ID3D12PipelineState BloomDownsample,
@@ -2111,6 +2182,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             BloomBlurHorizontal.Dispose();
             BloomDownsample.Dispose();
             BloomPrefilter.Dispose();
+            TemporalGaussian.Dispose();
             foreach (var sdfProxy in SdfProxies)
             {
                 sdfProxy.Dispose();
@@ -2140,6 +2212,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot SdfLightDescriptor { get; set; }
 
         public D3D12DescriptorSlot SdfObjectDescriptor { get; set; }
+
+        public D3D12DescriptorSlot TemporalGaussianDescriptor { get; set; }
 
         public D3D12DescriptorSlot StudioPmremDescriptor { get; set; }
 
