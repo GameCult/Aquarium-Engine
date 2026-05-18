@@ -215,14 +215,14 @@ Tasks:
 - [x] Add contract DTOs for domains, claims, nodes, summaries, and selected cuts.
 - [x] Add stable key builder for planet tile + grammar path.
 - [x] Add in-memory ownership tree builder.
-- [ ] Implement operations: `Union`, `Subtract`, `Common`, `Repeat`, `Refine`, `Capture`, `Bind`.
+- [x] Implement operations: `Union`, `Subtract`, `Common`, `Repeat`, `Refine`, `Capture`, `Bind`.
 - [ ] Implement operation bounds.
 - [x] Add flattening compiler to shaped 2D brush packets.
 - [ ] Add debug dump for authored tree and flattened packets.
 
 Tests:
 
-- seeded grammar determinism;
+- [x] seeded grammar determinism;
 - stable keys across equivalent expansion;
 - union/subtract/common bounds;
 - flattening golden packets;
