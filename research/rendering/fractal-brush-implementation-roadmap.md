@@ -187,7 +187,7 @@ Tasks:
 - [x] Implement compact-support ellipse evaluator.
 - [x] Add CPU/HLSL parity fixture.
 - [x] Add brush bounds and support rejection tests.
-- [ ] Add a small adapter that lowers one claim into the current height brush path.
+- [x] Add a small adapter that lowers one claim into the current height brush path.
 - [ ] Add debug overlay for envelope bounds and weight.
 
 Tests:
@@ -217,7 +217,7 @@ Tasks:
 - [x] Add in-memory ownership tree builder.
 - [ ] Implement operations: `Union`, `Subtract`, `Common`, `Repeat`, `Refine`, `Capture`, `Bind`.
 - [ ] Implement operation bounds.
-- [ ] Add flattening compiler to shaped 2D brush packets.
+- [x] Add flattening compiler to shaped 2D brush packets.
 - [ ] Add debug dump for authored tree and flattened packets.
 
 Tests:
