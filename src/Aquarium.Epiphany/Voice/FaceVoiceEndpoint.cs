@@ -37,6 +37,10 @@ public sealed class FaceVoiceEndpoint : IDisposable
 
     public RealtimeFaceVoiceSession Session => session;
 
+    public float SpatialGain { get; private set; } = 1.0f;
+
+    public float SpatialPan { get; private set; }
+
     public string Status => session.Status;
 
     public string AudioStats => session.AudioStats;
@@ -51,6 +55,17 @@ public sealed class FaceVoiceEndpoint : IDisposable
         session.ThreadId = ThreadId.Trim();
         session.Voice = Voice.Trim();
         session.Prompt = Prompt;
+    }
+
+    public void UpdateSpatial(Vector2 listenerWorld, float audibleRadius)
+    {
+        var delta = Anchor - listenerWorld;
+        var distance = delta.Length();
+        var safeRadius = Math.Max(audibleRadius, 0.001f);
+        var normalizedDistance = Math.Clamp(distance / safeRadius, 0.0f, 1.0f);
+        SpatialGain = Math.Clamp(1.0f / (1.0f + normalizedDistance * normalizedDistance * 3.0f), 0.18f, 1.0f);
+        SpatialPan = Math.Clamp(delta.X / safeRadius, -0.95f, 0.95f);
+        session.SetOutputSpatial(SpatialGain, SpatialPan);
     }
 
     public AquariumFaceVoiceEndpointState ToState()

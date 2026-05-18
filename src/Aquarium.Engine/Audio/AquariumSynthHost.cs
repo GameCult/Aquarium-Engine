@@ -16,7 +16,7 @@ internal sealed class AquariumSynthHost : IDisposable
         timeSeconds += Math.Max(deltaSeconds, 0.0f);
         foreach (var chunk in audio.DrainPcmChunks())
         {
-            audioDevice.Play(chunk.MonoSamples, chunk.SampleRate);
+            audioDevice.Play(chunk.MonoSamples, chunk.SampleRate, chunk.LeftGain, chunk.RightGain);
         }
 
         if (!synth.Enabled)

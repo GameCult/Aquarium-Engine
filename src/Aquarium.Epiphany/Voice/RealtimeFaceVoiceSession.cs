@@ -21,6 +21,8 @@ public sealed class RealtimeFaceVoiceSession : IDisposable
     private string remoteSdp = "";
     private int outputAudioChunks;
     private int outputAudioBytes;
+    private float outputGain = 0.85f;
+    private float outputPan;
 
     public RealtimeFaceVoiceSession(AquariumAudioDocument audio)
     {
@@ -98,6 +100,15 @@ public sealed class RealtimeFaceVoiceSession : IDisposable
             {
                 return socket?.State == WebSocketState.Open && status == "running";
             }
+        }
+    }
+
+    public void SetOutputSpatial(float gain, float pan)
+    {
+        lock (sync)
+        {
+            outputGain = Math.Clamp(gain, 0.0f, 1.5f);
+            outputPan = Math.Clamp(pan, -1.0f, 1.0f);
         }
     }
 
@@ -372,7 +383,15 @@ public sealed class RealtimeFaceVoiceSession : IDisposable
         var channels = audioObject?["numChannels"]?.GetValue<int?>() ?? 1;
         if (!string.IsNullOrWhiteSpace(data))
         {
-            audio.EnqueuePcm16Base64(data, sampleRate, channels, 0.85f);
+            float gain;
+            float pan;
+            lock (sync)
+            {
+                gain = outputGain;
+                pan = outputPan;
+            }
+
+            audio.EnqueuePcm16Base64(data, sampleRate, channels, gain, pan);
         }
 
         lock (sync)

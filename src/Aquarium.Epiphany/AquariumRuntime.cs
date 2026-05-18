@@ -57,9 +57,11 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 .Section("Face Voice")
                 .Text("App Server", () => faceVoice.AppServerUri, value => faceVoice.AppServerUri = value.Trim(), "Loopback Codex app-server websocket, e.g. ws://127.0.0.1:8765.")
                 .Toggle("Auto Route", () => faceVoice.AutoSelect, value => faceVoice.AutoSelect = value, "Routes speech to the nearest enabled Face endpoint by cursor/listener proximity.")
+                .Slider("Audible Radius", () => faceVoice.AudibleRadius, value => faceVoice.AudibleRadius = value, 1.0f, 64.0f, "0.0", "Distance scale for Face voice gain and stereo pan.")
                 .Readout("Active", () => faceVoice.ActiveSummary, "Currently selected Face endpoint and listener distance.")
                 .Readout("Routes", () => faceVoice.RouteSummary, "Distances from the listener cursor to each Face endpoint.")
                 .Text("Name", () => faceVoice.ActiveEndpoint.DisplayName, value => faceVoice.ActiveEndpoint.DisplayName = value.Trim(), "Display name for the active Face endpoint.")
+                .Toggle("Enabled", () => faceVoice.ActiveEndpoint.Enabled, value => faceVoice.ActiveEndpoint.Enabled = value, "Allows this Face endpoint to speak and participate in auto routing.")
                 .Text("Thread", () => faceVoice.ActiveEndpoint.ThreadId, value => faceVoice.ActiveEndpoint.ThreadId = value.Trim(), "Thread id that owns the active realtime Face session.")
                 .Text("Voice", () => faceVoice.ActiveEndpoint.Voice, value => faceVoice.ActiveEndpoint.Voice = value.Trim(), "Realtime voice name, such as marin, cedar, or cove.")
                 .Slider("Anchor X", () => faceVoice.ActiveEndpoint.Anchor.X, SetActiveFaceAnchorX, -32.0f, 32.0f, "0.0", "World X anchor for proximity routing.")
@@ -68,6 +70,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 .TextBox("Prompt", () => faceVoice.ActiveEndpoint.Prompt, value => faceVoice.ActiveEndpoint.Prompt = value, lines: 3, acceptsReturn: true, monospace: false, tooltip: "Backend realtime instructions for the active Face. This is speech behavior, not memory authority.")
                 .TextBox("Say", () => faceVoiceText, value => faceVoiceText = value, lines: 2, acceptsReturn: false, submit: SendFaceVoiceText, monospace: false, tooltip: "Send one text utterance through the active Face route.")
                 .Button("Start Active", faceVoice.StartActive, "Starts the active thread-scoped realtime session with audio output.")
+                .Button("Start Enabled", faceVoice.StartAll, "Starts every enabled Face endpoint so rumination loops can speak regardless of user proximity.")
                 .Button("Stop Active", faceVoice.StopActive, "Stops the active realtime Face voice session.")
                 .Button("Clear Voice Log", faceVoice.ClearActiveLog, "Clears local transcript and audio counters for the active Face.")
                 .Readout("Error", () => faceVoice.LastError, "Last realtime transport error for the active Face.")
@@ -111,6 +114,12 @@ public sealed class AquariumRuntime : IAquariumRuntime
                     return $"Face voice stopping: {faceVoice.ActiveSummary}";
                 }
 
+                if (verb == "startall")
+                {
+                    faceVoice.StartAll();
+                    return "Enabled Face voice sessions starting";
+                }
+
                 if (verb == "stopall")
                 {
                     faceVoice.StopAll();
@@ -132,6 +141,12 @@ public sealed class AquariumRuntime : IAquariumRuntime
                 {
                     faceVoice.AutoSelect = autoSelect;
                     return $"Face voice auto route {faceVoice.AutoSelect}";
+                }
+
+                if (verb == "radius" && args.Count > 1 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var radius))
+                {
+                    faceVoice.AudibleRadius = radius;
+                    return $"Face voice audible radius {faceVoice.AudibleRadius:0.0}";
                 }
 
                 if (verb == "select" && args.Count > 1)
@@ -167,7 +182,7 @@ public sealed class AquariumRuntime : IAquariumRuntime
                         : $"Face voice endpoint {args[1]} was not removed";
                 }
 
-                return "facevoice start | stop | stopall | say <text> | list | auto <true|false> | select <id> | add <id> <thread> <x> <y> [voice] | move <x> <y> | movehere | remove <id>";
+                return "facevoice start | startall | stop | stopall | say <text> | list | auto <true|false> | radius <meters> | select <id> | add <id> <thread> <x> <y> [voice] | move <x> <y> | movehere | remove <id>";
             }, "Controls the Face realtime voice session.");
     }
 
@@ -272,7 +287,8 @@ public sealed class AquariumRuntime : IAquariumRuntime
             FaceVoiceVoice = faceVoice.ActiveEndpoint.Voice,
             FaceVoicePrompt = faceVoice.ActiveEndpoint.Prompt,
             FaceVoiceEndpoints = faceVoice.ExportState(),
-            FaceVoiceAutoSelect = faceVoice.AutoSelect
+            FaceVoiceAutoSelect = faceVoice.AutoSelect,
+            FaceVoiceAudibleRadius = faceVoice.AudibleRadius
         });
     }
 

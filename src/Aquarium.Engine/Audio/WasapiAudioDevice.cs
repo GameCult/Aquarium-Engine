@@ -23,6 +23,11 @@ internal sealed class WasapiAudioDevice : IDisposable
 
     public void Play(ReadOnlySpan<float> monoSamples, int sourceSampleRate)
     {
+        Play(monoSamples, sourceSampleRate, 1.0f, 1.0f);
+    }
+
+    public void Play(ReadOnlySpan<float> monoSamples, int sourceSampleRate, float leftGain, float rightGain)
+    {
         if (monoSamples.Length == 0)
         {
             return;
@@ -33,7 +38,7 @@ internal sealed class WasapiAudioDevice : IDisposable
             : Resample(monoSamples, sourceSampleRate, outputSampleRate);
         lock (sync)
         {
-            voices.Add(new Voice(copy));
+            voices.Add(new Voice(copy, Math.Clamp(leftGain, 0.0f, 4.0f), Math.Clamp(rightGain, 0.0f, 4.0f)));
             if (voices.Count > 64)
             {
                 voices.RemoveRange(0, voices.Count - 64);
@@ -167,7 +172,7 @@ internal sealed class WasapiAudioDevice : IDisposable
             var sample = NextSample();
             for (var channel = 0; channel < channels; channel++)
             {
-                *output++ = sample;
+                *output++ = SampleForChannel(sample, channel, channels);
             }
         }
     }
@@ -177,10 +182,10 @@ internal sealed class WasapiAudioDevice : IDisposable
         var output = (short*)buffer;
         for (var frame = 0; frame < frameCount; frame++)
         {
-            var sample = (short)Math.Clamp(NextSample() * short.MaxValue, short.MinValue, short.MaxValue);
+            var sample = NextSample();
             for (var channel = 0; channel < channels; channel++)
             {
-                *output++ = sample;
+                *output++ = (short)Math.Clamp(SampleForChannel(sample, channel, channels) * short.MaxValue, short.MinValue, short.MaxValue);
             }
         }
     }
@@ -191,9 +196,25 @@ internal sealed class WasapiAudioDevice : IDisposable
         new Span<byte>((void*)buffer, bytes).Clear();
     }
 
-    private float NextSample()
+    private static float SampleForChannel(StereoSample sample, int channel, int channelCount)
     {
-        var sample = 0.0f;
+        if (channelCount == 1)
+        {
+            return (sample.Left + sample.Right) * 0.5f;
+        }
+
+        return channel switch
+        {
+            0 => sample.Left,
+            1 => sample.Right,
+            _ => (sample.Left + sample.Right) * 0.5f
+        };
+    }
+
+    private StereoSample NextSample()
+    {
+        var left = 0.0f;
+        var right = 0.0f;
         lock (sync)
         {
             for (var index = voices.Count - 1; index >= 0; index--)
@@ -205,11 +226,13 @@ internal sealed class WasapiAudioDevice : IDisposable
                     continue;
                 }
 
-                sample += voice.Samples[voice.Position++];
+                var sample = voice.Samples[voice.Position++];
+                left += sample * voice.LeftGain;
+                right += sample * voice.RightGain;
             }
         }
 
-        return Math.Clamp(sample, -1.0f, 1.0f);
+        return new StereoSample(Math.Clamp(left, -1.0f, 1.0f), Math.Clamp(right, -1.0f, 1.0f));
     }
 
     private static float[] Resample(ReadOnlySpan<float> source, int sourceSampleRate, int targetSampleRate)
@@ -234,9 +257,13 @@ internal sealed class WasapiAudioDevice : IDisposable
         return target;
     }
 
-    private sealed class Voice(float[] samples)
+    private readonly record struct StereoSample(float Left, float Right);
+
+    private sealed class Voice(float[] samples, float leftGain, float rightGain)
     {
         public readonly float[] Samples = samples;
+        public readonly float LeftGain = leftGain;
+        public readonly float RightGain = rightGain;
         public int Position;
     }
 

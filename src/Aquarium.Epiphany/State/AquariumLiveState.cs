@@ -52,6 +52,9 @@ public sealed class AquariumLiveState
 
     [Key(13)]
     public bool FaceVoiceAutoSelect { get; set; } = true;
+
+    [Key(14)]
+    public float FaceVoiceAudibleRadius { get; set; } = 24.0f;
 }
 
 [MessagePackObject]

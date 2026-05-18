@@ -9,12 +9,14 @@ public sealed class FaceVoiceRouter : IDisposable
     private readonly AquariumAudioDocument audio;
     private readonly List<FaceVoiceEndpoint> endpoints = [];
     private int activeIndex;
+    private float audibleRadius = 24.0f;
 
     public FaceVoiceRouter(AquariumAudioDocument audio, AquariumLiveState state)
     {
         this.audio = audio;
         AppServerUri = state.FaceVoiceAppServerUri;
         AutoSelect = state.FaceVoiceAutoSelect;
+        AudibleRadius = state.FaceVoiceAudibleRadius;
 
         var endpointStates = state.FaceVoiceEndpoints.Count > 0
             ? state.FaceVoiceEndpoints
@@ -34,6 +36,12 @@ public sealed class FaceVoiceRouter : IDisposable
 
     public bool AutoSelect { get; set; } = true;
 
+    public float AudibleRadius
+    {
+        get => audibleRadius;
+        set => audibleRadius = Math.Clamp(value, 1.0f, 128.0f);
+    }
+
     public Vector2 ListenerWorld { get; private set; }
 
     public IReadOnlyList<FaceVoiceEndpoint> Endpoints => endpoints;
@@ -46,7 +54,7 @@ public sealed class FaceVoiceRouter : IDisposable
         {
             var endpoint = ActiveEndpoint;
             var distance = Vector2.Distance(ListenerWorld, endpoint.Anchor);
-            return $"{endpoint.DisplayName} ({endpoint.Id}) {distance:0.0}m";
+            return $"{endpoint.DisplayName} ({endpoint.Id}) {distance:0.0}m gain {endpoint.SpatialGain:0.00} pan {endpoint.SpatialPan:0.00}";
         }
     }
 
@@ -62,12 +70,17 @@ public sealed class FaceVoiceRouter : IDisposable
         {
             var mark = ReferenceEquals(endpoint, ActiveEndpoint) ? "*" : "";
             var distance = Vector2.Distance(ListenerWorld, endpoint.Anchor);
-            return $"{mark}{endpoint.Id}:{distance:0.0}";
+            return $"{mark}{endpoint.Id}:{distance:0.0} g{endpoint.SpatialGain:0.00} p{endpoint.SpatialPan:0.00}";
         }));
 
     public void UpdateListener(Vector2 listenerWorld)
     {
         ListenerWorld = listenerWorld;
+        foreach (var endpoint in endpoints)
+        {
+            endpoint.UpdateSpatial(listenerWorld, AudibleRadius);
+        }
+
         if (!AutoSelect || endpoints.Count <= 1)
         {
             return;
@@ -109,6 +122,7 @@ public sealed class FaceVoiceRouter : IDisposable
                 },
                 AppServerUri);
             endpoints.Add(endpoint);
+            endpoint.UpdateSpatial(ListenerWorld, AudibleRadius);
             activeIndex = endpoints.Count - 1;
             AutoSelect = false;
             return endpoint;
@@ -122,6 +136,7 @@ public sealed class FaceVoiceRouter : IDisposable
         }
 
         endpoint.ApplySessionSettings(AppServerUri);
+        endpoint.UpdateSpatial(ListenerWorld, AudibleRadius);
         activeIndex = endpoints.IndexOf(endpoint);
         AutoSelect = false;
         return endpoint;
@@ -151,6 +166,16 @@ public sealed class FaceVoiceRouter : IDisposable
     {
         ActiveEndpoint.ApplySessionSettings(AppServerUri);
         ActiveEndpoint.Session.Start();
+    }
+
+    public void StartAll()
+    {
+        foreach (var endpoint in endpoints.Where(endpoint => endpoint.Enabled))
+        {
+            endpoint.ApplySessionSettings(AppServerUri);
+            endpoint.UpdateSpatial(ListenerWorld, AudibleRadius);
+            endpoint.Session.Start();
+        }
     }
 
     public void StopActive()

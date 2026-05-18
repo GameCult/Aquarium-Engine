@@ -8,7 +8,7 @@ public sealed class AquariumAudioDocument
 
     public static AquariumAudioDocument Empty { get; } = new();
 
-    public void EnqueuePcm16Base64(string base64Data, int sampleRate, int channels, float gain = 1.0f)
+    public void EnqueuePcm16Base64(string base64Data, int sampleRate, int channels, float gain = 1.0f, float pan = 0.0f)
     {
         if (string.IsNullOrWhiteSpace(base64Data) || sampleRate <= 0 || channels <= 0)
         {
@@ -47,7 +47,10 @@ public sealed class AquariumAudioDocument
             mono[frame] = Math.Clamp(sum / channels * safeGain, -1.0f, 1.0f);
         }
 
-        pcmChunks.Enqueue(new AquariumPcmAudioChunk(mono, sampleRate));
+        var safePan = Math.Clamp(pan, -1.0f, 1.0f);
+        var leftGain = safeGain * MathF.Sqrt((1.0f - safePan) * 0.5f);
+        var rightGain = safeGain * MathF.Sqrt((1.0f + safePan) * 0.5f);
+        pcmChunks.Enqueue(new AquariumPcmAudioChunk(mono, sampleRate, leftGain, rightGain));
     }
 
     public IReadOnlyList<AquariumPcmAudioChunk> DrainPcmChunks(int maxChunks = 64)
@@ -62,4 +65,4 @@ public sealed class AquariumAudioDocument
     }
 }
 
-public sealed record AquariumPcmAudioChunk(float[] MonoSamples, int SampleRate);
+public sealed record AquariumPcmAudioChunk(float[] MonoSamples, int SampleRate, float LeftGain = 1.0f, float RightGain = 1.0f);
