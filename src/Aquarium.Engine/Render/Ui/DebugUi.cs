@@ -44,6 +44,9 @@ internal sealed class DebugUi
     private Rect panelBounds;
     private Vector2 mousePosition;
     private int lastViewportHeight = 720;
+    private float bodyScrollOffset;
+    private float bodyContentHeight;
+    private Rect bodyClipBounds;
 
     public DebugUi(string title)
         : this(title, DefaultPanelLeft, DefaultPanelTop, DefaultPanelWidth, [], () => 0, _ => { })
@@ -145,6 +148,7 @@ internal sealed class DebugUi
             WantsKeyboard = false;
             activeSliderId = null;
             focusedTextId = null;
+            bodyScrollOffset = 0.0f;
             return;
         }
 
@@ -163,7 +167,7 @@ internal sealed class DebugUi
         closeButtonActive = closeButtonHovered && input.LeftMouseDown;
         foreach (var control in controls.Where(control => control.IsVisible))
         {
-            control.UpdateHover(mousePosition);
+            control.UpdateHover(mousePosition, bodyClipBounds);
             control.IsActive = control.Id == activeControlId && input.LeftMouseDown;
         }
 
@@ -195,6 +199,12 @@ internal sealed class DebugUi
                 {
                     return;
                 }
+            }
+
+            if (Contains(panelBounds, mousePosition) && ScrollBody(input.WheelDelta))
+            {
+                Layout();
+                return;
             }
         }
 
@@ -272,7 +282,7 @@ internal sealed class DebugUi
                 continue;
             }
 
-            if (!control.HitTest(mousePosition))
+            if (!Contains(bodyClipBounds, mousePosition) || !control.HitTest(mousePosition))
             {
                 continue;
             }
@@ -397,7 +407,8 @@ internal sealed class DebugUi
 
         DrawTabs(target, smallFormat, rowBrush, hoverRowBrush, activeRowBrush, outlineBrush, primaryBrush, quietBrush, accentBrush);
 
-        foreach (var control in controls.Where(control => control.IsVisible))
+        target.PushAxisAlignedClip(bodyClipBounds, AntialiasMode.Aliased);
+        foreach (var control in controls.Where(control => control.IsVisible && Intersects(control.Bounds, bodyClipBounds)))
         {
             control.IsFocused = control.Id == focusedTextId;
             control.Draw(
@@ -417,6 +428,9 @@ internal sealed class DebugUi
                 trackHoverBrush,
                 trackActiveBrush);
         }
+        target.PopAxisAlignedClip();
+
+        DrawBodyScrollbar(target, quietBrush, accentBrush);
 
         OpenOptionControl()?.DrawPopup(
             target,
@@ -438,18 +452,73 @@ internal sealed class DebugUi
 
     private void Layout()
     {
-        var y = panelTop + HeaderHeight + (tabs.Count > 0 ? TabRowHeight : 0.0f) + 10.0f;
-        foreach (var control in controls.Where(control => control.IsVisible))
+        var bodyTop = panelTop + HeaderHeight + (tabs.Count > 0 ? TabRowHeight : 0.0f) + 10.0f;
+        var maxPanelBottom = MathF.Max(bodyTop + RowHeight, lastViewportHeight - ScreenMargin);
+        var visibleControls = controls.Where(control => control.IsVisible).ToArray();
+        bodyContentHeight = ContentHeight(visibleControls);
+        var desiredBottom = bodyTop + bodyContentHeight + 12.0f;
+        var bottom = lastViewportHeight > 0 ? Math.Min(desiredBottom, maxPanelBottom) : desiredBottom;
+        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, bottom);
+        bodyClipBounds = RectFromEdges(panelBounds.Left, bodyTop, panelBounds.Right, MathF.Max(bodyTop, panelBounds.Bottom - 8.0f));
+        bodyScrollOffset = Math.Clamp(bodyScrollOffset, 0.0f, MaxBodyScrollOffset());
+
+        var y = bodyTop - bodyScrollOffset;
+        foreach (var control in visibleControls)
         {
             var height = control.LayoutHeight;
             control.Bounds = RectFromEdges(panelLeft + 10.0f, y, panelLeft + panelWidth - 10.0f, y + height);
             y += height + (control is SectionControl ? 2.0f : RowGap);
         }
+    }
 
-        var bottom = lastViewportHeight > 0
-            ? Math.Max(y + 12.0f, lastViewportHeight - panelLeft)
-            : y + 12.0f;
-        panelBounds = RectFromEdges(panelLeft, panelTop, panelLeft + panelWidth, bottom);
+    private static float ContentHeight(IReadOnlyList<DebugUiControl> visibleControls)
+    {
+        var height = 0.0f;
+        for (var index = 0; index < visibleControls.Count; index++)
+        {
+            var control = visibleControls[index];
+            height += control.LayoutHeight;
+            if (index < visibleControls.Count - 1)
+            {
+                height += control is SectionControl ? 2.0f : RowGap;
+            }
+        }
+
+        return height;
+    }
+
+    private bool ScrollBody(float wheelDelta)
+    {
+        var maxOffset = MaxBodyScrollOffset();
+        if (maxOffset <= 0.0f)
+        {
+            bodyScrollOffset = 0.0f;
+            return false;
+        }
+
+        var previous = bodyScrollOffset;
+        bodyScrollOffset = Math.Clamp(bodyScrollOffset + (wheelDelta > 0.0f ? -72.0f : 72.0f), 0.0f, maxOffset);
+        return MathF.Abs(bodyScrollOffset - previous) > 0.001f;
+    }
+
+    private float MaxBodyScrollOffset()
+    {
+        return MathF.Max(0.0f, bodyContentHeight - bodyClipBounds.Height + 12.0f);
+    }
+
+    private void DrawBodyScrollbar(ID2D1RenderTarget target, ID2D1SolidColorBrush trackBrush, ID2D1SolidColorBrush thumbBrush)
+    {
+        var maxOffset = MaxBodyScrollOffset();
+        if (maxOffset <= 0.0f || bodyClipBounds.Height <= 0.0f)
+        {
+            return;
+        }
+
+        var track = RectFromEdges(panelBounds.Right - 7.0f, bodyClipBounds.Top + 2.0f, panelBounds.Right - 4.0f, bodyClipBounds.Bottom - 2.0f);
+        var thumbHeight = MathF.Max(24.0f, track.Height * bodyClipBounds.Height / MathF.Max(bodyContentHeight + 12.0f, bodyClipBounds.Height));
+        var thumbTop = track.Top + (track.Height - thumbHeight) * bodyScrollOffset / maxOffset;
+        target.FillRectangle(track, trackBrush);
+        target.FillRectangle(RectFromEdges(track.Left, thumbTop, track.Right, thumbTop + thumbHeight), thumbBrush);
     }
 
     private Rect CloseButtonBounds()
@@ -578,6 +647,14 @@ internal sealed class DebugUi
             && point.Y <= bounds.Bottom;
     }
 
+    private static bool Intersects(Rect a, Rect b)
+    {
+        return a.Left < b.Right
+            && a.Right > b.Left
+            && a.Top < b.Bottom
+            && a.Bottom > b.Top;
+    }
+
     private static Rect RectFromEdges(float left, float top, float right, float bottom)
     {
         return new Rect(left, top, Math.Max(0.0f, right - left), Math.Max(0.0f, bottom - top));
@@ -686,9 +763,9 @@ internal sealed class DebugUi
 
         public virtual bool HitTest(Vector2 mouse) => Contains(Bounds, mouse);
 
-        public virtual void UpdateHover(Vector2 mouse)
+        public virtual void UpdateHover(Vector2 mouse, Rect clipBounds)
         {
-            IsHovered = IsInteractive && HitTest(mouse);
+            IsHovered = IsInteractive && Contains(clipBounds, mouse) && HitTest(mouse);
         }
 
         public virtual void Click(Vector2 mouse)
@@ -849,10 +926,10 @@ internal sealed class DebugUi
 
         public bool IsOpen => isOpen;
 
-        public override void UpdateHover(Vector2 mouse)
+        public override void UpdateHover(Vector2 mouse, Rect clipBounds)
         {
             hoveredOptionIndex = -1;
-            IsHovered = HitTest(mouse);
+            IsHovered = Contains(clipBounds, mouse) && HitTest(mouse);
         }
 
         public void UpdatePopupHover(Vector2 mouse, int viewportHeight)
@@ -1786,10 +1863,10 @@ internal sealed class DebugUi
             return Contains(SliderInteractionBounds(), mouse);
         }
 
-        public override void UpdateHover(Vector2 mouse)
+        public override void UpdateHover(Vector2 mouse, Rect clipBounds)
         {
-            thumbHovered = Contains(ThumbInteractionBounds(), mouse);
-            trackHovered = !thumbHovered && Contains(TrackInteractionBounds(), mouse);
+            thumbHovered = Contains(clipBounds, mouse) && Contains(ThumbInteractionBounds(), mouse);
+            trackHovered = Contains(clipBounds, mouse) && !thumbHovered && Contains(TrackInteractionBounds(), mouse);
             IsHovered = trackHovered || thumbHovered;
         }
 
