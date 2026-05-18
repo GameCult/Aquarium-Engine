@@ -182,11 +182,11 @@ Goal: replace circular brush thinking with compact-support anisotropic fields.
 
 Tasks:
 
-- [ ] Add CPU `FractalBrushEnvelope2D`.
+- [x] Add CPU `FractalBrushEnvelope2D`.
 - [ ] Add HLSL packed envelope row.
-- [ ] Implement compact-support ellipse evaluator.
+- [x] Implement compact-support ellipse evaluator.
 - [ ] Add CPU/HLSL parity fixture.
-- [ ] Add brush bounds and support rejection tests.
+- [x] Add brush bounds and support rejection tests.
 - [ ] Add a small adapter that lowers one claim into the current height brush path.
 - [ ] Add debug overlay for envelope bounds and weight.
 
