@@ -34,12 +34,13 @@ diegetic scene content.
 
 `Aquarium.LocalCast` is the first concrete live client for this contract. It
 reads `localcast.visual.render_frame` from LocalCastBridge's typed CultCache
-MessagePack document. The older CPU path can still map point claims into
-`TemporalGaussianObservation` rows for accumulator smoothing, but the live
-LocalCast path now prefers `AquariumGpuFusionField`: compact fusion seeds enter
-the D3D12 backend, `D3D12LocalCastFusion.hlsl` dispatches over them, and the
-compute shader writes the temporal Gaussian buffer consumed by the SDF Gaussian
-draw. It does not downsample the document in client space.
+MessagePack document. That point/seed route is now explicitly a fallback and
+debug harness: it proves the million-slot temporal Gaussian draw and keeps OBS
+fed while the live capture path moves into Aquarium. The production ownership
+line is `AquariumGpuSensorFrame`: camera and Leap inputs arrive as calibrated
+sensor records plus shared GPU texture handles, the D3D12 backend owns their
+metadata buffers, and fusion kernels lower those GPU-resident inputs into the
+temporal Gaussian buffer consumed by the SDF Gaussian draw.
 
 LocalCast GPU fusion also has its own live-history accumulator. New frames
 update stable-key tracks, stale tracks expire after a bounded horizon, and the
@@ -57,8 +58,9 @@ instead of a scrapbook with a power cord.
   backend output and do not invent identity.
 - The compact support kernel has a finite bound. Renderer cost must scale from
   declared bounds, not from infinite translucent fog.
-- Client code may construct observations or a field, but Aquarium owns packet
-  layout, root binding, shader evaluation, and temporal-control metadata.
+- Client code may construct observations or a field for diagnostics, but
+  Aquarium owns live sensor texture import, packet layout, root binding, shader
+  evaluation, fusion, and temporal-control metadata.
 - JSON is not a renderer boundary. CultCache/CultNet producers should lower into
   typed contract rows before Aquarium sees the data.
 
@@ -67,18 +69,21 @@ instead of a scrapbook with a power cord.
 This cut deliberately claims million-slot ingestion, not a finished million-splat
 renderer architecture. The live D3D12 path can draw up to 1,048,576 temporal
 Gaussians through instanced proxy quads, only uploads the active seed/packet
-span, and now owns the GPU lowering step from LocalCast fusion seeds to Gaussian
-packets. The next scaling cut belongs to the Aquarium renderer: packed camera
-planes, selected-cut residency, tiled/bin dispatch, GPU accumulation, and
-clustered visibility. Do not push that scheduler into LocalCastBridge.
+span, and now owns the GPU lowering step. Python/LocalCastBridge may still
+produce calibration artifacts and reference captures, but it must not own
+per-frame dense stereo, feature tracking, or reconstruction compute. The next
+scaling cut belongs to the Aquarium renderer: shared texture import, packed
+camera planes, Leap packed-map channel extraction, selected-cut residency,
+tiled/bin dispatch, GPU accumulation, and clustered visibility.
 
 ## GPU Fusion Spine
 
 The active GPU boundary is deliberately narrow:
 
 ```text
-LocalCast typed visual frame
--> AquariumGpuFusionSeed[]
+LocalCast calibration/device metadata
+-> AquariumGpuSensorFrame { calibrated cameras + shared GPU textures }
+-> D3D12 sensor metadata buffers + imported texture SRVs
 -> D3D12 LocalCast fusion compute shader
 -> RWStructuredBuffer<TemporalGaussian>
 -> instanced SDF Gaussian draw
@@ -87,18 +92,23 @@ LocalCast typed visual frame
 
 Ownership:
 
-- `AquariumGpuFusionField` is the renderer contract for GPU-owned fusion input.
+- `AquariumGpuSensorFrame` is the live renderer contract for GPU-owned fusion
+  input.
+- `AquariumGpuFusionField` remains a temporary fallback/debug contract for
+  already-derived point claims.
 - `LocalCastGpuFusionMapper` converts typed LocalCast point claims into compact
-  seeds without client downsampling.
-- `LocalCastGpuFusionAccumulator` owns the bounded live history buffer for
+  seeds only for that fallback path.
+- `LocalCastGpuFusionAccumulator` owns the bounded history buffer for fallback
   stable seeds before GPU lowering.
 - `D3D12LocalCastFusion.hlsl` owns the first compute lowering pass.
-- `D3D12Renderer` owns UAV-capable temporal Gaussian storage, dispatch, and the
-  transition back to shader-resource state for the draw.
+- `D3D12Renderer` owns GPU sensor camera metadata storage, UAV-capable temporal
+  Gaussian storage, dispatch, and the transition back to shader-resource state
+  for the draw.
 
-Next cut: replace point-claim seeds with packed camera planes and Leap packed
-maps so the compute shader performs stereo/flow/feature extraction directly on
-GPU-resident sensor data.
+Current Aquarium cut: the contract and D3D12 camera metadata buffer exist, and
+the fusion root now accepts that buffer beside fallback seeds. Next cut: import
+the external texture handles as SRVs, bind packed camera planes and Leap packed
+maps, then move stereo/flow/feature extraction directly into GPU kernels.
 
 The first shader pass also uses camera-facing proxy planes to evaluate each
 kernel. True ray-integrated volume compositing, Gaussian depth sorting, and

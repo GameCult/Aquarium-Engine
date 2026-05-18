@@ -277,6 +277,64 @@ public readonly record struct AquariumGpuFusionSeed(
     float ShapePower,
     int FieldId);
 
+public enum AquariumGpuSensorKind
+{
+    Unknown,
+    RgbCamera,
+    HighRateTracker,
+    LeapPackedMap,
+}
+
+public enum AquariumGpuSensorPixelFormat
+{
+    Unknown,
+    Bgra8Unorm,
+    Rgba8Unorm,
+    R8Unorm,
+    R16Unorm,
+    R16Float,
+    Rg8Unorm,
+    LeapPackedMap,
+}
+
+public readonly record struct AquariumExternalGpuTexture(
+    TextureHandle Handle,
+    IntPtr SharedHandle,
+    int Width,
+    int Height,
+    AquariumGpuSensorPixelFormat PixelFormat,
+    long TimestampNs,
+    int PlaneIndex = 0);
+
+public readonly record struct AquariumGpuSensorCamera(
+    string SensorId,
+    AquariumGpuSensorKind Kind,
+    Matrix4x4 WorldFromSensor,
+    Matrix4x4 SensorFromWorld,
+    Vector4 Intrinsics,
+    Vector4 Distortion01,
+    Vector4 Distortion23,
+    int Width,
+    int Height,
+    int FirstTextureIndex,
+    int TextureCount,
+    long TimestampNs);
+
+public sealed class AquariumGpuSensorFrame
+{
+    public static AquariumGpuSensorFrame Empty { get; } = new();
+
+    public IReadOnlyList<AquariumGpuSensorCamera> Cameras { get; init; } = [];
+
+    public IReadOnlyList<AquariumExternalGpuTexture> ExternalTextures { get; init; } = [];
+
+    public float AccumulationWindowSeconds { get; init; }
+
+    public float PresentationDelaySeconds { get; init; }
+
+    public bool HasInput => Cameras.Count > 0 || ExternalTextures.Count > 0;
+}
+
 public sealed class AquariumGpuFusionField
 {
     public static AquariumGpuFusionField Empty { get; } = new();
@@ -314,6 +372,8 @@ public sealed class AquariumSceneState
     public IReadOnlyList<AquariumSdfLight> SdfLights { get; init; } = [];
 
     public AquariumTemporalGaussianField TemporalGaussianField { get; init; } = AquariumTemporalGaussianField.Empty;
+
+    public AquariumGpuSensorFrame GpuSensorFrame { get; init; } = AquariumGpuSensorFrame.Empty;
 
     public AquariumGpuFusionField GpuFusionField { get; init; } = AquariumGpuFusionField.Empty;
 }
