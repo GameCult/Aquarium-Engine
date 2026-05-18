@@ -64,6 +64,26 @@ public sealed class FractalDslCompilerTests
     }
 
     [Fact]
+    public void DslPreservesMultipleTileRoots()
+    {
+        const string source = """
+            domain Planetary demo/planet - 1 0.56 0 0
+            tile PositiveZ 0 0 0 zyphos/continent demo/planet
+            height basin 0 0 30 30 0 3 1 -0.18 7 basin
+            tile NegativeX 2 2 1 zyphos/leaf demo/planet
+            ifs leaf 2 2 9 9 1.8 0.72 0.42 2.8 0.61 6.0 0.58 0.018 101 leaf
+            """;
+
+        var tree = FractalDslCompiler.Compile(source);
+
+        Assert.Equal(2, tree.Nodes.Count);
+        Assert.Contains(tree.Nodes, node => node.DomainKey.Value == "cube/PositiveZ/L00/0/0:zyphos/continent" && node.ClaimCount == 1);
+        Assert.Contains(tree.Nodes, node => node.DomainKey.Value == "cube/NegativeX/L02/2/1:zyphos/leaf" && node.ClaimCount == 3);
+        Assert.Contains(tree.Claims, claim => claim.DomainKey.Value == "cube/PositiveZ/L00/0/0:zyphos/continent");
+        Assert.Contains(tree.Claims, claim => claim.DomainKey.Value == "cube/NegativeX/L02/2/1:zyphos/leaf");
+    }
+
+    [Fact]
     public void DslRejectsClaimsBeforeTile()
     {
         const string source = "height orphan 0 0 1 1 0 3 1 1 0 tag";

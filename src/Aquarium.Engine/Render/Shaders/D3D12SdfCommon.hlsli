@@ -24,6 +24,14 @@ cbuffer AquariumFrame : register(b0)
     float4 cursorWorlds;
 };
 
+cbuffer HeightFieldBrushes : register(b1)
+{
+    float4 brushCenterRadius[64];
+    float4 brushShape[64];
+    float4 brushWave[64];
+    float4 brushDomain[64];
+};
+
 TextureCube<float4> studioPmremTexture : register(t22);
 TextureCube<float4> studioIrradianceTexture : register(t23);
 SamplerState linearSampler : register(s0);

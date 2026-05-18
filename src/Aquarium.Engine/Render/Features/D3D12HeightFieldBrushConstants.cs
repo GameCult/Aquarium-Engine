@@ -9,7 +9,7 @@ internal struct D3D12HeightFieldBrushConstants
 {
     public const int MaxBrushCount = 64;
 
-    private const int VectorCount = MaxBrushCount * 3;
+    private const int VectorCount = MaxBrushCount * 4;
 
     private VectorTable values;
 
@@ -25,13 +25,14 @@ internal struct D3D12HeightFieldBrushConstants
                 index,
                 new Vector4(brush.Center, brush.Radius, radiusY),
                 new Vector4(brush.Power, brush.Amplitude, brush.RotationRadians, brush.EnvelopeFalloff),
-                new Vector4(brush.WaveAmplitude, brush.WaveFrequency, brush.WaveSpeed, brush.WaveSinePower));
+                new Vector4(brush.WaveAmplitude, brush.WaveFrequency, brush.WaveSpeed, brush.WaveSinePower),
+                new Vector4(brush.DomainFace, brush.DomainLevel, brush.DomainX, brush.DomainY));
         }
 
         return constants;
     }
 
-    private void Set(int brushIndex, Vector4 centerRadius, Vector4 shape, Vector4 wave)
+    private void Set(int brushIndex, Vector4 centerRadius, Vector4 shape, Vector4 wave, Vector4 domain)
     {
         if ((uint)brushIndex >= MaxBrushCount)
         {
@@ -41,6 +42,7 @@ internal struct D3D12HeightFieldBrushConstants
         SetVector(brushIndex, centerRadius);
         SetVector(MaxBrushCount + brushIndex, shape);
         SetVector(MaxBrushCount * 2 + brushIndex, wave);
+        SetVector(MaxBrushCount * 3 + brushIndex, domain);
     }
 
     private void SetVector(int index, Vector4 value)

@@ -47,6 +47,103 @@ float zyHash21(float2 p)
     return frac(p.x * p.y);
 }
 
+float zyCompactBrush(float2 delta, float2 radii, float rotation, float falloff, float shapePower)
+{
+    float c = cos(rotation);
+    float s = sin(rotation);
+    float2 local = float2(delta.x * c + delta.y * s, -delta.x * s + delta.y * c);
+    float2 normalized = local / max(radii, float2(0.001, 0.001));
+    float r2 = dot(normalized, normalized);
+    if (r2 >= 1.0)
+    {
+        return 0.0;
+    }
+
+    float edgeValue = exp(-falloff);
+    float gaussianValue = exp(-falloff * r2);
+    float compactValue = (gaussianValue - edgeValue) / max(1.0 - edgeValue, 0.000001);
+    return pow(saturate(compactValue), shapePower);
+}
+
+float2 zyCubeFaceUv(float3 dir, out float face)
+{
+    float3 a = abs(dir);
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        if (dir.x >= 0.0)
+        {
+            face = 0.0;
+            return float2(-dir.z, dir.y) / max(a.x, 0.0001);
+        }
+
+        face = 1.0;
+        return float2(dir.z, dir.y) / max(a.x, 0.0001);
+    }
+
+    if (a.y >= a.z)
+    {
+        if (dir.y >= 0.0)
+        {
+            face = 2.0;
+            return float2(dir.x, -dir.z) / max(a.y, 0.0001);
+        }
+
+        face = 3.0;
+        return float2(dir.x, dir.z) / max(a.y, 0.0001);
+    }
+
+    if (dir.z >= 0.0)
+    {
+        face = 4.0;
+        return dir.xy / max(a.z, 0.0001);
+    }
+
+    face = 5.0;
+    return float2(-dir.x, dir.y) / max(a.z, 0.0001);
+}
+
+float2 zyTileBrushPlane(float2 faceUv, float level, float tileX, float tileY, out float inTile)
+{
+    float axisTiles = exp2(level);
+    float2 local01 = (faceUv * 0.5 + 0.5) * axisTiles - float2(tileX, tileY);
+    float2 inside = step(float2(0.0, 0.0), local01) * step(local01, float2(1.0, 1.0));
+    inTile = inside.x * inside.y;
+    return (local01 * 2.0 - 1.0) * 30.0;
+}
+
+float zyAuthoredBrushTerrain(float3 dir, out float materialMask)
+{
+    float face;
+    float2 faceUv = zyCubeFaceUv(dir, face);
+    float height = 0.0;
+    materialMask = 0.0;
+
+    for (int index = 0; index < 64; index++)
+    {
+        float4 centerRadius = brushCenterRadius[index];
+        float4 shape = brushShape[index];
+        float4 domain = brushDomain[index];
+        if (centerRadius.z <= 0.0 || abs(domain.x - face) > 0.25)
+        {
+            continue;
+        }
+
+        float inTile;
+        float2 plane = zyTileBrushPlane(faceUv, domain.y, domain.z, domain.w, inTile);
+        if (inTile <= 0.0)
+        {
+            continue;
+        }
+
+        float2 radii = float2(centerRadius.z, centerRadius.w > 0.0 ? centerRadius.w : centerRadius.z);
+        float weight = zyCompactBrush(plane - centerRadius.xy, radii, shape.z, max(shape.w, 0.001), max(shape.x, 0.001));
+        height += shape.y * weight;
+        materialMask = max(materialMask, abs(shape.y) * weight);
+    }
+
+    return height;
+}
+
 float zyTileRelief(float2 uv, float level, float amplitude, float ridgeBias)
 {
     float scale = exp2(level);
@@ -126,6 +223,8 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float land = smoothstep(seaLevel - 0.03, seaLevel + 0.06, field);
     float mountain = smoothstep(seaLevel + 0.12, seaLevel + 0.28, field);
     float tileRelief = zyQuadtreeSdfRelief(dir);
+    float authoredMaterial;
+    float authoredHeight = zyAuthoredBrushTerrain(dir, authoredMaterial);
     float leafCluster = zyLeafCluster(dir);
     float pebbleCluster = zyPebbleCluster(dir);
     float polar = smoothstep(0.72, 0.92, abs(dir.z));
@@ -138,6 +237,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float3 landColor = lerp(lowland, highland, mountain);
     landColor = lerp(landColor, snow, saturate(polar + mountain * 0.38));
     landColor = lerp(landColor, float3(0.62, 0.54, 0.36), saturate(tileRelief * 14.0));
+    landColor = lerp(landColor, float3(0.78, 0.56, 0.30), saturate(authoredMaterial * 2.6 + authoredHeight * 5.0));
     landColor = lerp(landColor, float3(0.025, 0.24, 0.08), leafCluster * 0.82);
     landColor = lerp(landColor, float3(0.42, 0.39, 0.34), pebbleCluster * 0.65);
 

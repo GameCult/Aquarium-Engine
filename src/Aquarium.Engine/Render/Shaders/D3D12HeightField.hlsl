@@ -29,6 +29,7 @@ cbuffer HeightFieldBrushes : register(b1)
     float4 brushCenterRadius[64];
     float4 brushShape[64];
     float4 brushWave[64];
+    float4 brushDomain[64];
 };
 
 struct VertexOut

@@ -227,7 +227,11 @@ public readonly record struct AquariumHeightFieldBrush(
     float WaveSinePower,
     float RadiusY = 0.0f,
     float RotationRadians = 0.0f,
-    float EnvelopeFalloff = 0.0f);
+    float EnvelopeFalloff = 0.0f,
+    float DomainFace = -1.0f,
+    float DomainLevel = 0.0f,
+    float DomainX = 0.0f,
+    float DomainY = 0.0f);
 
 public sealed class AquariumSceneState
 {

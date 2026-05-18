@@ -1,6 +1,7 @@
 using System.Numerics;
 using Aquarium.Engine.Fractal;
 using Aquarium.Engine.Fractal.Brushes;
+using Aquarium.Engine.Fractal.Grammar;
 
 namespace Aquarium.Engine.Fractal.Tests;
 
@@ -53,5 +54,38 @@ public sealed class FractalHeightBrushCompilerTests
             Tags: "material");
 
         Assert.Throws<ArgumentException>(() => FractalHeightBrushCompiler.Compile(claim));
+    }
+
+    [Fact]
+    public void TreeCompilePreservesCubeTileDomainMetadata()
+    {
+        var domain = new AquariumFractalDomain(
+            new AquariumFractalKey("cube/NegativeX/L02/2/1:zyphos/leaf"),
+            AquariumFractalDomainKind.CubeSphereTile,
+            default,
+            new Vector4((float)CubeFace.NegativeX, 2.0f, 2.0f, 1.0f),
+            Vector4.Zero);
+        var rootKey = new AquariumFractalKey("cube/NegativeX/L02/2/1:zyphos/leaf/root");
+        var claim = new AquariumBrushClaim(
+            new AquariumFractalKey("claim/leaf"),
+            domain.Key,
+            rootKey,
+            AquariumFractalPayloadKind.Height,
+            Vector2.Zero,
+            Vector2.One,
+            RotationRadians: 0.0f,
+            Falloff: 3.0f,
+            ShapePower: 1.0f,
+            Amplitude: 0.25f,
+            Seed: 3,
+            Tags: "leaf");
+        var tree = FractalOwnershipTreeBuilder.BuildFlatUnion(domain, rootKey, [claim]);
+
+        var brush = Assert.Single(FractalHeightBrushCompiler.CompileTree(tree));
+
+        Assert.Equal((float)CubeFace.NegativeX, brush.DomainFace);
+        Assert.Equal(2.0f, brush.DomainLevel);
+        Assert.Equal(2.0f, brush.DomainX);
+        Assert.Equal(1.0f, brush.DomainY);
     }
 }

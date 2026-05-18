@@ -219,6 +219,8 @@ Tasks:
 - [ ] Implement operation bounds.
 - [x] Add flattening compiler to shaped 2D brush packets.
 - [x] Add debug dump for authored tree and flattened packets.
+- [x] Preserve multiple `.aquageo` tile roots in the ownership tree instead of
+  collapsing every claim under the final tile.
 
 Tests:
 
@@ -362,7 +364,9 @@ Tasks:
 - [x] Add Zyphos cube-sphere domain root.
 - [x] Add first tile grammar: ridges, craters, and material bands.
 - [x] Lower selected cut to shaped 2D height/material brush packets.
-- [ ] Feed planet shader from tile-local domain.
+- [x] Feed planet shader from tile-local cube-face domains for post-hit
+  material/detail evaluation.
+- [ ] Feed traced planet geometry from selected-cut/resident tile packets.
 - [ ] Add face/tile/LOD/cache debug modes.
 - [ ] Remove or quarantine old spherical noise path as baseline fixture.
 

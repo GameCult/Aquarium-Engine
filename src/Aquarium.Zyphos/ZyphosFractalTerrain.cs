@@ -15,7 +15,7 @@ public static class ZyphosFractalTerrain
     private static readonly Lazy<FractalOwnershipTree> Tree = new(() => FractalDslCompiler.Compile(PatchSource.Value));
     private static readonly Lazy<AquariumFractalSummary[]> Summaries = new(() => FractalSummaryBuilder.Build(Tree.Value));
     private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 8.0f));
-    private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileMany(Tree.Value.Claims));
+    private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileTree(Tree.Value));
 
     public static string PatchPath => Path.Combine(AppContext.BaseDirectory, PatchRelativePath);
 
@@ -23,8 +23,12 @@ public static class ZyphosFractalTerrain
 
     public static AquariumHeightFieldBrush[] HeightBrushes => Brushes.Value;
 
+    public static AquariumFractalSummary[] NodeSummaries => Summaries.Value;
+
+    public static AquariumSelectedCut[] SelectedCuts => SelectedCut.Value;
+
     public static string DebugDump => FractalDebugDump.Build(OwnershipTree, Summaries.Value, SelectedCut.Value);
 
     public static string Summary =>
-        $"{Path.GetFileName(PatchPath)} / {OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} node / {SelectedCut.Value.Length} cuts / {HeightBrushes.Length} shaped brushes";
+        $"{Path.GetFileName(PatchPath)} / {OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} tile nodes / {SelectedCut.Value.Length} cuts / {HeightBrushes.Length} shaped brushes";
 }

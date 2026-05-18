@@ -1200,6 +1200,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             context.CommandList.SetGraphicsRootSignature(fullscreenRootSignature);
             context.CommandList.SetGraphicsRootDescriptorTable(RootFrameConstants, frameResources.FrameConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootSourceTexture, frameResources.HeightFieldDescriptor.Gpu);
+            context.CommandList.SetGraphicsRootDescriptorTable(RootHeightFieldBrushes, frameResources.HeightFieldBrushConstantsDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootSdfLights, frameResources.SdfLightDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootStudioPmrem, frameResources.StudioPmremDescriptor.Gpu);
             context.CommandList.SetGraphicsRootDescriptorTable(RootStudioIrradiance, frameResources.StudioIrradianceDescriptor.Gpu);

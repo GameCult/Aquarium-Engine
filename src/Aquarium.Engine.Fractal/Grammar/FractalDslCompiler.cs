@@ -13,8 +13,10 @@ public static class FractalDslCompiler
         var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         AquariumFractalDomain? domain = null;
         AquariumFractalKey rootKey = default;
+        NodeDraft? currentNode = null;
         var domains = new List<AquariumFractalDomain>();
         var claims = new List<AquariumBrushClaim>();
+        var nodes = new List<NodeDraft>();
 
         for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
         {
@@ -44,16 +46,26 @@ public static class FractalDslCompiler
                         new Vector4((float)tile.Face, tile.Level, tile.X, tile.Y),
                         Vector4.Zero);
                     domains.Add(domain.Value);
+                    rootKey = FractalStableKeyBuilder.Child(domainKey, "root");
+                    currentNode = new NodeDraft(rootKey, domainKey, claims.Count);
+                    nodes.Add(currentNode);
                     break;
                 case "height":
                     EnsureDomain(domain, lineIndex);
+                    EnsureNode(currentNode, lineIndex);
                     EnsureTokenCount(tokens, 12, lineIndex);
-                    claims.Add(ParseHeight(tokens, rootKey, lineIndex, claims.Count));
+                    var heightDomain = domain!.Value;
+                    claims.Add(ParseHeight(tokens, heightDomain.Key, currentNode!.Key, lineIndex, claims.Count - currentNode.FirstClaimIndex));
+                    currentNode.ClaimCount++;
                     break;
                 case "ifs":
                     EnsureDomain(domain, lineIndex);
+                    EnsureNode(currentNode, lineIndex);
                     EnsureTokenCount(tokens, 15, lineIndex);
-                    AddIfsClaims(tokens, rootKey, lineIndex, claims);
+                    var ifsDomain = domain!.Value;
+                    var beforeIfs = claims.Count;
+                    AddIfsClaims(tokens, ifsDomain.Key, currentNode!.Key, lineIndex, claims);
+                    currentNode.ClaimCount += claims.Count - beforeIfs;
                     break;
                 default:
                     throw new FormatException($"Unknown fractal DSL command `{tokens[0]}` at line {lineIndex + 1}.");
@@ -65,7 +77,7 @@ public static class FractalDslCompiler
             throw new FormatException("Fractal DSL must declare a `tile <face> <level> <x> <y> <path>` line before claims.");
         }
 
-        return FractalOwnershipTreeBuilder.BuildFlatUnion(domain.Value, domains, rootKey, claims);
+        return new FractalOwnershipTree(domain.Value, domains, BuildNodes(nodes, claims), claims);
     }
 
     private static AquariumFractalDomain ParseDomain(string[] tokens, int lineIndex)
@@ -90,11 +102,12 @@ public static class FractalDslCompiler
             new Vector4(parameters[4], parameters[5], parameters[6], parameters[7]));
     }
 
-    private static AquariumBrushClaim ParseHeight(string[] tokens, AquariumFractalKey rootKey, int lineIndex, int claimIndex)
+    private static AquariumBrushClaim ParseHeight(string[] tokens, AquariumFractalKey domainKey, AquariumFractalKey nodeKey, int lineIndex, int claimIndex)
     {
         var name = tokens[1];
         return HeightClaim(
-            rootKey,
+            domainKey,
+            nodeKey,
             name,
             claimIndex,
             new Vector2(ParseFloat(tokens[2], lineIndex), ParseFloat(tokens[3], lineIndex)),
@@ -107,7 +120,7 @@ public static class FractalDslCompiler
             tokens[11]);
     }
 
-    private static void AddIfsClaims(string[] tokens, AquariumFractalKey rootKey, int lineIndex, List<AquariumBrushClaim> claims)
+    private static void AddIfsClaims(string[] tokens, AquariumFractalKey domainKey, AquariumFractalKey nodeKey, int lineIndex, List<AquariumBrushClaim> claims)
     {
         var name = tokens[1];
         var levels = ParsePositiveInt(tokens[2], lineIndex);
@@ -128,11 +141,12 @@ public static class FractalDslCompiler
             throw new FormatException($"IFS child scale must be below 1 at line {lineIndex + 1}.");
         }
 
-        EmitIfsLevel(rootKey, name, center, radii, levels, branches, childScale, spread, rotationStep, falloff, shapePower, amplitude, seed, tags, claims);
+        EmitIfsLevel(domainKey, nodeKey, name, center, radii, levels, branches, childScale, spread, rotationStep, falloff, shapePower, amplitude, seed, tags, claims);
     }
 
     private static void EmitIfsLevel(
-        AquariumFractalKey rootKey,
+        AquariumFractalKey domainKey,
+        AquariumFractalKey nodeKey,
         string name,
         Vector2 center,
         Vector2 radii,
@@ -149,7 +163,7 @@ public static class FractalDslCompiler
         List<AquariumBrushClaim> claims)
     {
         var level = claims.Count;
-        claims.Add(HeightClaim(rootKey, $"{name}/{level}", claims.Count, center, radii, rotationStep * level, falloff, shapePower, amplitude, seed + level, tags));
+        claims.Add(HeightClaim(domainKey, nodeKey, $"{name}/{level}", claims.Count, center, radii, rotationStep * level, falloff, shapePower, amplitude, seed + level, tags));
 
         if (levelsRemaining <= 1)
         {
@@ -162,7 +176,8 @@ public static class FractalDslCompiler
             var phase = ((MathF.Tau * branch) / branches) + rotationStep * level + HashAngle(seed, level, branch);
             var offset = new Vector2(MathF.Cos(phase), MathF.Sin(phase)) * spread * MathF.Max(nextRadii.X, nextRadii.Y);
             EmitIfsLevel(
-                rootKey,
+                domainKey,
+                nodeKey,
                 name,
                 center + offset,
                 nextRadii,
@@ -181,7 +196,8 @@ public static class FractalDslCompiler
     }
 
     private static AquariumBrushClaim HeightClaim(
-        AquariumFractalKey rootKey,
+        AquariumFractalKey domainKey,
+        AquariumFractalKey nodeKey,
         string name,
         int claimIndex,
         Vector2 center,
@@ -194,9 +210,9 @@ public static class FractalDslCompiler
         string tags)
     {
         return new AquariumBrushClaim(
-            FractalStableKeyBuilder.Child(rootKey, $"claim/{claimIndex:0000}/{name}"),
-            rootKey,
-            rootKey,
+            FractalStableKeyBuilder.Child(nodeKey, $"claim/{claimIndex:0000}/{name}"),
+            domainKey,
+            nodeKey,
             AquariumFractalPayloadKind.Height,
             center,
             radii,
@@ -228,6 +244,61 @@ public static class FractalDslCompiler
         {
             throw new FormatException($"Fractal DSL claim at line {lineIndex + 1} appears before a tile declaration.");
         }
+    }
+
+    private static void EnsureNode(NodeDraft? node, int lineIndex)
+    {
+        if (node is null)
+        {
+            throw new FormatException($"Fractal DSL claim at line {lineIndex + 1} appears before a tile root was created.");
+        }
+    }
+
+    private static AquariumFractalNode[] BuildNodes(IReadOnlyList<NodeDraft> drafts, IReadOnlyList<AquariumBrushClaim> claims)
+    {
+        var nodes = new AquariumFractalNode[drafts.Count];
+        for (var nodeIndex = 0; nodeIndex < drafts.Count; nodeIndex++)
+        {
+            var draft = drafts[nodeIndex];
+            nodes[nodeIndex] = new AquariumFractalNode(
+                draft.Key,
+                draft.DomainKey,
+                default,
+                AquariumFractalOperation.Union,
+                FirstChildIndex: 0,
+                ChildCount: 0,
+                draft.FirstClaimIndex,
+                draft.ClaimCount,
+                BoundsForClaims(claims, draft.FirstClaimIndex, draft.ClaimCount),
+                Seed: 0);
+        }
+
+        return nodes;
+    }
+
+    private static Vector4 BoundsForClaims(IReadOnlyList<AquariumBrushClaim> claims, int firstClaimIndex, int claimCount)
+    {
+        if (claimCount == 0)
+        {
+            return Vector4.Zero;
+        }
+
+        var minX = float.PositiveInfinity;
+        var minY = float.PositiveInfinity;
+        var maxX = float.NegativeInfinity;
+        var maxY = float.NegativeInfinity;
+
+        for (var index = firstClaimIndex; index < firstClaimIndex + claimCount; index++)
+        {
+            var claim = claims[index];
+            var radius = MathF.Max(claim.Radii.X, claim.Radii.Y);
+            minX = MathF.Min(minX, claim.Center.X - radius);
+            minY = MathF.Min(minY, claim.Center.Y - radius);
+            maxX = MathF.Max(maxX, claim.Center.X + radius);
+            maxY = MathF.Max(maxY, claim.Center.Y + radius);
+        }
+
+        return new Vector4(minX, minY, maxX, maxY);
     }
 
     private static CubeFace ParseFace(string value, int lineIndex)
@@ -290,5 +361,16 @@ public static class FractalDslCompiler
         value ^= value >> 16;
         var normalized = (value & 0xFFFF) / 65535.0f;
         return (normalized - 0.5f) * 0.35f;
+    }
+
+    private sealed class NodeDraft(AquariumFractalKey key, AquariumFractalKey domainKey, int firstClaimIndex)
+    {
+        public AquariumFractalKey Key { get; } = key;
+
+        public AquariumFractalKey DomainKey { get; } = domainKey;
+
+        public int FirstClaimIndex { get; } = firstClaimIndex;
+
+        public int ClaimCount { get; set; }
     }
 }
