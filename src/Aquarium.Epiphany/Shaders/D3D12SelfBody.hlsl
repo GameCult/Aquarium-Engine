@@ -151,6 +151,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.emission = selfLight * (isGate * 0.08)
         + stripeColor * isStripe * (0.92 + sdfObject.state.y * 0.16)
         + gateColor * isGate * (0.42 + sdfObject.state.y * 0.12);
+    surface.temporalDetail = 0.0;
     return surface;
 }
 

@@ -123,6 +123,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.metallic = 0.0;
     surface.roughness = isCalyx > 0.5 ? 0.46 : 0.22;
     surface.emission = surface.baseColor * (isCalyx > 0.5 ? 0.05 : 0.56);
+    surface.temporalDetail = 0.0;
     return surface;
 }
 

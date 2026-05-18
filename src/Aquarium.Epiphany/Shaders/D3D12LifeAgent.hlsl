@@ -363,6 +363,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + pearlColor * pearlMask * 0.040
         + gold * seamMask * 0.090
         + emberColor * emberMask * (3.2 + heartbeat * 1.1 + domain.pressure * 0.8);
+    surface.temporalDetail = 0.0;
     return surface;
 }
 

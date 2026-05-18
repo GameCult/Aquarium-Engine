@@ -71,6 +71,7 @@ bool traceSdf(float3 origin, float3 direction, int sdfIndex, out float travel, o
     surface.metallic = 0.0;
     surface.roughness = 0.0;
     surface.emission = 0.0;
+    surface.temporalDetail = 0.0;
     float previousTravel = travel;
     float previousDistance = sdfDistance(origin + direction * travel, sdfIndex);
     float maxStep = max(sdfObject.centerRadius.w * SDF_TRACE_MAX_STEP_RADIUS_SCALE, SDF_TRACE_MIN_STEP);
@@ -127,7 +128,7 @@ SceneOut D3D12SdfProxyPS(SdfObjectProxyVertexOut input)
     SceneOut output;
     output.colorTravel = float4(shadeSdf(uv, travel, p, normal, sdfIndex, surface), min(travel, farDistance + 1.0));
     output.metadata = float4(fieldId, normal);
-    output.control = float4(1.0, stepCount / (float)SDF_TRACE_STEPS, 0.0, 0.0);
+    output.control = float4(1.0, stepCount / (float)SDF_TRACE_STEPS, saturate(surface.temporalDetail), 0.0);
     output.depth = saturate(travel / max(farDistance, 0.001));
     return output;
 }

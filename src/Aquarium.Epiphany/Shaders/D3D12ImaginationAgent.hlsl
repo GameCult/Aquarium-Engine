@@ -168,6 +168,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + rimColor * isRim * (0.55 + sdfObject.state.y * 0.20)
         + sparkColor * (isSpark * 1.35 + isTendril * 0.85)
         + shadowColor * isShadow * 0.015;
+    surface.temporalDetail = 0.0;
     return surface;
 }
 

@@ -82,6 +82,7 @@ struct SdfSurface
     float metallic;
     float roughness;
     float3 emission;
+    float temporalDetail;
 };
 
 void cameraBasis(float3 camera, float3 target, out float3 forward, out float3 right, out float3 up)

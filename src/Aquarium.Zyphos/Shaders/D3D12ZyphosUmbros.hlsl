@@ -84,6 +84,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.metallic = 0.0;
     surface.roughness = 0.92;
     surface.emission = 0.0;
+    surface.temporalDetail = 0.0;
     return surface;
 }
 

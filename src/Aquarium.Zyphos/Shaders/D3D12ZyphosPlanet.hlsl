@@ -247,6 +247,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.metallic = 0.0;
     surface.roughness = lerp(0.34, 0.84, land);
     surface.emission = 0.0;
+    surface.temporalDetail = saturate(authoredMaterial * 3.0);
     return surface;
 }
 

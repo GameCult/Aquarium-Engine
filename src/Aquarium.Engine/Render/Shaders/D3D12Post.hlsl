@@ -328,6 +328,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float3 currentNormal = currentMetadata.yzw;
     float currentCoverage = saturate(currentControl.x);
     float currentStepRatio = saturate(currentControl.y);
+    float currentTemporalDetail = saturate(currentControl.z);
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
@@ -348,6 +349,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float previousTravel = previous.a;
             float3 previousNormal = previousMetadata.yzw;
             float previousCoverage = saturate(previousControl.x);
+            float previousTemporalDetail = saturate(previousControl.z);
             float previousHistoryAge = max(previousControl.w, 0.0);
             float expectedPreviousTravel = distance(previousCameraPosition, previousWorldPosition);
             float travelDelta = abs(previousTravel - expectedPreviousTravel);
@@ -372,8 +374,10 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             colorWeight = max(colorWeight, hotSdfCurrent * 0.82);
             float coverageWeight = smoothstep(0.02, 0.55, currentCoverage);
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
+            float temporalDetailWeight = 1.0 - smoothstep(0.08, 0.45, abs(previousTemporalDetail - currentTemporalDetail));
+            temporalDetailWeight = max(temporalDetailWeight, 1.0 - smoothstep(0.02, 0.12, max(previousTemporalDetail, currentTemporalDetail)));
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
-            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight;
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight * temporalDetailWeight;
 
             historyColor = clampedHistory;
             historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
@@ -404,7 +408,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     }
     else if (renderDebugMode >= 4.5 && renderDebugMode < 5.5)
     {
-        finalColor = saturate(float3(currentCoverage, currentStepRatio, 0.0));
+        finalColor = saturate(float3(currentCoverage, currentStepRatio, currentTemporalDetail));
     }
     else if (renderDebugMode >= 5.5 && renderDebugMode < 6.5)
     {
@@ -432,6 +436,6 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     output.finalColor = float4(finalColor, 1.0);
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
-    output.historyControl = float4(currentControl.xy, 0.0, combinedHistoryAge);
+    output.historyControl = float4(currentControl.xyz, combinedHistoryAge);
     return output;
 }
