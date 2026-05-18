@@ -13,6 +13,7 @@ public static class FractalDslCompiler
         var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         AquariumFractalDomain? domain = null;
         AquariumFractalKey rootKey = default;
+        var domains = new List<AquariumFractalDomain>();
         var claims = new List<AquariumBrushClaim>();
 
         for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
@@ -26,17 +27,23 @@ public static class FractalDslCompiler
             var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             switch (tokens[0])
             {
+                case "domain":
+                    EnsureTokenCount(tokens, 4, lineIndex);
+                    domains.Add(ParseDomain(tokens, lineIndex));
+                    break;
                 case "tile":
                     EnsureTokenCount(tokens, 6, lineIndex);
                     var tile = new CubeTileKey(ParseFace(tokens[1], lineIndex), ParseInt(tokens[2], lineIndex), ParseInt(tokens[3], lineIndex), ParseInt(tokens[4], lineIndex));
                     var domainKey = FractalStableKeyBuilder.ForCubeTile(tile, tokens[5]);
+                    var parentKey = tokens.Length >= 7 ? new AquariumFractalKey(tokens[6]) : default;
                     rootKey = FractalStableKeyBuilder.Child(domainKey, "root");
                     domain = new AquariumFractalDomain(
                         domainKey,
                         AquariumFractalDomainKind.CubeSphereTile,
-                        default,
+                        parentKey,
                         new Vector4((float)tile.Face, tile.Level, tile.X, tile.Y),
                         Vector4.Zero);
+                    domains.Add(domain.Value);
                     break;
                 case "height":
                     EnsureDomain(domain, lineIndex);
@@ -58,7 +65,29 @@ public static class FractalDslCompiler
             throw new FormatException("Fractal DSL must declare a `tile <face> <level> <x> <y> <path>` line before claims.");
         }
 
-        return FractalOwnershipTreeBuilder.BuildFlatUnion(domain.Value, rootKey, claims);
+        return FractalOwnershipTreeBuilder.BuildFlatUnion(domain.Value, domains, rootKey, claims);
+    }
+
+    private static AquariumFractalDomain ParseDomain(string[] tokens, int lineIndex)
+    {
+        if (!Enum.TryParse<AquariumFractalDomainKind>(tokens[1], ignoreCase: true, out var kind))
+        {
+            throw new FormatException($"Invalid domain kind `{tokens[1]}` at line {lineIndex + 1}.");
+        }
+
+        var parent = tokens[3] == "-" ? default : new AquariumFractalKey(tokens[3]);
+        var parameters = new float[8];
+        for (var index = 4; index < tokens.Length && index < 12; index++)
+        {
+            parameters[index - 4] = ParseFloat(tokens[index], lineIndex);
+        }
+
+        return new AquariumFractalDomain(
+            new AquariumFractalKey(tokens[2]),
+            kind,
+            parent,
+            new Vector4(parameters[0], parameters[1], parameters[2], parameters[3]),
+            new Vector4(parameters[4], parameters[5], parameters[6], parameters[7]));
     }
 
     private static AquariumBrushClaim ParseHeight(string[] tokens, AquariumFractalKey rootKey, int lineIndex, int claimIndex)

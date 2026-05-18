@@ -17,7 +17,11 @@ public static class FractalDebugDump
         ArgumentNullException.ThrowIfNull(selectedCut);
 
         var builder = new StringBuilder();
-        builder.AppendLine($"domain {tree.Domain.Key} kind={tree.Domain.Kind}");
+        foreach (var domain in tree.Domains)
+        {
+            builder.AppendLine($"domain {domain.Key} kind={domain.Kind} parent={domain.ParentKey}");
+        }
+
         builder.AppendLine($"nodes {tree.Nodes.Count} claims {tree.Claims.Count} summaries {summaries.Count} cut {selectedCut.Count}");
         foreach (var node in tree.Nodes)
         {

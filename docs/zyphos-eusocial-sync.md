@@ -13,8 +13,16 @@ Aquarium into a second lore repository.
 
 - Eusocial Interbeing stores canon and design inference in Obsidian notes under
   `Eusocial Interbeing/`.
-- Aquarium.Zyphos renders a spherical planet, atmosphere, night-side glints, and
-  moon through the shared Aquarium host and SDF renderer path.
+- Aquarium.Zyphos renders Zyphos, fixed-sky Umbros, atmosphere, night-side
+  glints, and first-pass eclipse cadence through the shared Aquarium host and
+  SDF renderer path.
+- `ZyphosUmbrosSystem` owns the current render-scale binary constants:
+  Zyphos radius, Umbros radius ratio, 8-Zyphos-radii separation, sea level, and
+  star phase used by the shader.
+- `Worlds/zyphos-first-fractal-terrain.aquageo` owns the first semantic world
+  patch: solar, orbital, planetary, and lat/long domains wrap the tile terrain
+  so later fractal grammar nodes have real nested reference frames instead of
+  undocumented coordinate folklore.
 - No automatic sync exists. Changes cross the boundary by explicit notes and
   state-map updates.
 

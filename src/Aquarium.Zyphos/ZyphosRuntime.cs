@@ -48,10 +48,12 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Readout("Runtime", () => $"{timeSeconds:0.0}s");
                 panel.Readout("Camera", () => $"{orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
-                panel.Readout("Objects", () => "fractal height DSL, atmosphere, moon");
+                panel.Readout("Binary", () => $"Umbros {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} deg / {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Rz");
+                panel.Readout("Objects", () => "fractal height DSL, atmosphere, Umbros");
             })
             .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.")
-            .Command("zyphos-fractal", _ => ZyphosFractalTerrain.DebugDump, "Dump the compiled Zyphos fractal terrain grammar.");
+            .Command("zyphos-fractal", _ => ZyphosFractalTerrain.DebugDump, "Dump the compiled Zyphos fractal terrain grammar.")
+            .Command("zyphos-system", _ => $"Zyphos-Umbros: separation {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Zyphos radii, Umbros radius {ZyphosUmbrosSystem.UmbrosRadiusRatio:0.00} Zyphos, apparent diameter {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} degrees.", "Report the modeled Zyphos/Umbros/star baseline.");
     }
 
     public AquariumFrame ComposeFrame(AquariumFrame frame, AquariumFrameInput input)

@@ -10,7 +10,17 @@ public static class FractalOwnershipTreeBuilder
         AquariumFractalKey rootKey,
         IReadOnlyList<AquariumBrushClaim> claims)
     {
+        return BuildFlatUnion(domain, [domain], rootKey, claims);
+    }
+
+    public static FractalOwnershipTree BuildFlatUnion(
+        AquariumFractalDomain domain,
+        IReadOnlyList<AquariumFractalDomain> domains,
+        AquariumFractalKey rootKey,
+        IReadOnlyList<AquariumBrushClaim> claims)
+    {
         ArgumentNullException.ThrowIfNull(claims);
+        ArgumentNullException.ThrowIfNull(domains);
 
         var bounds = BoundsForClaims(claims);
         var root = new AquariumFractalNode(
@@ -25,7 +35,7 @@ public static class FractalOwnershipTreeBuilder
             bounds,
             Seed: 0);
 
-        return new FractalOwnershipTree(domain, [root], claims);
+        return new FractalOwnershipTree(domain, domains, [root], claims);
     }
 
     private static Vector4 BoundsForClaims(IReadOnlyList<AquariumBrushClaim> claims)

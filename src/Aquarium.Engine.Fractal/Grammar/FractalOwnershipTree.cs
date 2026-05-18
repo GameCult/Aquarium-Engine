@@ -8,13 +8,25 @@ public sealed class FractalOwnershipTree
         AquariumFractalDomain domain,
         IReadOnlyList<AquariumFractalNode> nodes,
         IReadOnlyList<AquariumBrushClaim> claims)
+        : this(domain, [domain], nodes, claims)
+    {
+    }
+
+    public FractalOwnershipTree(
+        AquariumFractalDomain domain,
+        IReadOnlyList<AquariumFractalDomain> domains,
+        IReadOnlyList<AquariumFractalNode> nodes,
+        IReadOnlyList<AquariumBrushClaim> claims)
     {
         Domain = domain;
+        Domains = domains;
         Nodes = nodes;
         Claims = claims;
     }
 
     public AquariumFractalDomain Domain { get; }
+
+    public IReadOnlyList<AquariumFractalDomain> Domains { get; }
 
     public IReadOnlyList<AquariumFractalNode> Nodes { get; }
 

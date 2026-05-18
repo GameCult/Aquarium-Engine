@@ -24,6 +24,10 @@ public readonly record struct AquariumFractalKey
 
 public enum AquariumFractalDomainKind
 {
+    Solar,
+    Orbital,
+    Planetary,
+    LatLong,
     CubeSphereTile,
     Surface2D,
     Object3D,

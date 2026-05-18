@@ -15,6 +15,18 @@ float3 zyPlanetDir(float3 local, SdfObject sdfObject)
     return normalize(zyRotateZ(local, -sdfObject.state.y));
 }
 
+float3 zyPrimaryStarDirectionLocal(SdfObject sdfObject)
+{
+    return normalize(float3(cos(sdfObject.state.w), sin(sdfObject.state.w), 0.18));
+}
+
+float zyUmbrosEclipse(float3 starDirectionLocal)
+{
+    const float umbrosAngularRadius = 0.1127;
+    float alignment = dot(normalize(starDirectionLocal), float3(1.0, 0.0, 0.0));
+    return smoothstep(cos(umbrosAngularRadius * 1.45), cos(umbrosAngularRadius * 0.45), alignment);
+}
+
 float zySphericalField(float3 dir)
 {
     float latitude = asin(saturate(abs(dir.z)) * 2.0 - 1.0);
@@ -80,17 +92,19 @@ float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, 
     SdfObject sdfObject = sdfObjects[sdfIndex];
     float3 dir = zyPlanetDir(p - sdfObject.centerRadius.xyz, sdfObject);
     float3 viewDirection = normalize(cameraPosition - p);
-    float3 sunDirection = normalize(float3(-0.46, -0.72, 0.52));
-    float daylight = saturate(dot(normal, sunDirection) * 0.74 + 0.34);
-    float night = saturate(-dot(normal, sunDirection) * 1.7 - 0.20);
+    float3 starDirectionLocal = zyPrimaryStarDirectionLocal(sdfObject);
+    float eclipse = zyUmbrosEclipse(starDirectionLocal);
+    float daylight = saturate(dot(dir, starDirectionLocal) * 0.74 + 0.24) * (1.0 - eclipse * 0.86);
+    float night = saturate(-dot(dir, starDirectionLocal) * 1.7 - 0.20 + eclipse * 0.55);
     float citySeed = sin(dir.x * 43.0 + sin(dir.y * 19.0) * 4.0 + dir.z * 31.0);
     float cityWeb = smoothstep(0.82, 0.96, citySeed * 0.5 + 0.5);
     float coast = 1.0 - smoothstep(0.020, 0.070, abs(zySphericalField(dir) - sdfObject.state.z));
     float fresnel = pow(1.0 - saturate(dot(normal, viewDirection)), 3.2);
     float3 city = float3(1.0, 0.54, 0.14) * cityWeb * coast * night * 1.25;
+    float3 eclipseTint = float3(0.15, 0.19, 0.26) * eclipse * saturate(dot(dir, starDirectionLocal) * 0.5 + 0.5);
     float3 atmosphere = float3(0.07, 0.38, 0.78) * (fresnel * 1.35 + pow(fresnel, 6.0) * 2.6);
 
-    return shadeSdfPbr(p, normal, surface) * daylight + city + atmosphere;
+    return shadeSdfPbr(p, normal, surface) * daylight + city + atmosphere + eclipseTint;
 }
 
 #include "D3D12SdfProxy.hlsli"

@@ -5,7 +5,7 @@ namespace Aquarium.Zyphos;
 public static class ZyphosRenderPlan
 {
     public const int PlanetIndex = 0;
-    public const int MoonIndex = 1;
+    public const int UmbrosIndex = 1;
     public const int SdfObjectCount = 2;
 
     public static AquariumRenderPlan Create()
@@ -14,7 +14,7 @@ public static class ZyphosRenderPlan
         app.Shaders
             .Core("D3D12HeightField.hlsl", "D3D12Scene.hlsl", "D3D12Post.hlsl")
             .SdfShader("D3D12ZyphosPlanet.hlsl")
-            .SdfShader("D3D12ZyphosMoon.hlsl");
+            .SdfShader("D3D12ZyphosUmbros.hlsl");
 
         var heightField = app.RenderTargets.Create("height-field")
             .FixedSize(128, 128)
