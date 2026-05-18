@@ -359,9 +359,9 @@ Goal: replace spherical terrain demo path with cube-sphere domain proof.
 
 Tasks:
 
-- [ ] Add Zyphos cube-sphere domain root.
-- [ ] Add first tile grammar: ridges, craters, and material bands.
-- [ ] Lower selected cut to shaped 2D height/material brush packets.
+- [x] Add Zyphos cube-sphere domain root.
+- [x] Add first tile grammar: ridges, craters, and material bands.
+- [x] Lower selected cut to shaped 2D height/material brush packets.
 - [ ] Feed planet shader from tile-local domain.
 - [ ] Add face/tile/LOD/cache debug modes.
 - [ ] Remove or quarantine old spherical noise path as baseline fixture.
@@ -369,7 +369,7 @@ Tasks:
 Tests:
 
 - face seams render continuously;
-- tile keys remain stable under camera movement;
+- [x] tile keys remain stable under camera movement;
 - debug modes show selected depth and cache state;
 - headless Zyphos smoke render passes.
 

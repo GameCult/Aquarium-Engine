@@ -47,9 +47,10 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Slider("Orbit Distance", () => orbitDistance, value => orbitDistance = value, 9.0f, 24.0f, "0.0");
                 panel.Readout("Runtime", () => $"{timeSeconds:0.0}s");
                 panel.Readout("Camera", () => $"{orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
-                panel.Readout("Objects", () => "spherical terrain, atmosphere, moon");
+                panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
+                panel.Readout("Objects", () => "fractal height DSL, atmosphere, moon");
             })
-            .Command("zyphos", _ => "Zyphos: planetary-scale client demo loaded.", "Report Zyphos demo status.");
+            .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.");
     }
 
     public AquariumFrame ComposeFrame(AquariumFrame frame, AquariumFrameInput input)

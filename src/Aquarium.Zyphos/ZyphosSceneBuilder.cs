@@ -22,18 +22,7 @@ public static class ZyphosSceneBuilder
 
     private static AquariumHeightFieldBrush[] BuildHeightFieldBrushes()
     {
-        return
-        [
-            new AquariumHeightFieldBrush(
-                Vector2.Zero,
-                30.0f,
-                2.6f,
-                -0.18f,
-                0.03f,
-                1.9f,
-                0.22f,
-                1.1f)
-        ];
+        return ZyphosFractalTerrain.HeightBrushes;
     }
 
     private static AquariumSdfObject[] BuildSdfObjects(float timeSeconds, float previousTimeSeconds)

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aquarium.Engine.Fractal\Aquarium.Engine.Fractal.csproj" />
     <ProjectReference Include="..\..\src\Aquarium.Engine.Contracts\Aquarium.Engine.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Aquarium.Zyphos\Aquarium.Zyphos.csproj" />
   </ItemGroup>
 
 </Project>
