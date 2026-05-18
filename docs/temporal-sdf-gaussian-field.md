@@ -24,12 +24,19 @@ compact-kernel controls, and field id.
 - smoothed velocity predicts the presented center
 - history weight is confidence scaled by age inside the window
 
-The D3D12 renderer lowers the field into `D3D12TemporalGaussianPacket`, uploads a
-4096-entry structured buffer, and renders an instanced proxy-quad pass from
+The D3D12 renderer lowers the field into `D3D12TemporalGaussianPacket`, uploads
+the active packet span into a 1,048,576-entry structured buffer, and renders an
+instanced proxy-quad pass from
 `D3D12TemporalGaussian.hlsl`. The pixel shader evaluates a compact anisotropic
 Gaussian kernel in world space, writes HDR scene color/travel, field metadata,
 normal, and temporal-control coverage so the existing resolve sees the field as
 diegetic scene content.
+
+`Aquarium.LocalCast` is the first concrete live client for this contract. It
+reads `localcast.visual.render_frame` from LocalCastBridge's typed CultCache
+MessagePack document, maps every point claim into `TemporalGaussianObservation`
+rows, and lets the accumulator own smoothing, history, and presentation delay.
+It does not downsample the document in client space.
 
 ## Invariants
 
@@ -46,11 +53,12 @@ diegetic scene content.
 
 ## Cut Line
 
-This cut deliberately does not claim million-splat residency yet. The live D3D12
-path draws up to 4096 temporal Gaussians through instanced proxy quads. Scaling
-past that belongs to the Aquarium renderer: selected-cut residency, tiled/bin
-dispatch, or Aquarium/Aquarium-like compute lowering. Do not push that scheduler
-into LocalCastBridge.
+This cut deliberately claims million-slot ingestion, not a finished million-splat
+renderer architecture. The live D3D12 path can draw up to 1,048,576 temporal
+Gaussians through instanced proxy quads and only uploads the active packet span.
+The next scaling cut belongs to the Aquarium renderer: selected-cut residency,
+tiled/bin dispatch, GPU accumulation, and clustered visibility. Do not push that
+scheduler into LocalCastBridge.
 
 The first shader pass also uses camera-facing proxy planes to evaluate each
 kernel. True ray-integrated volume compositing, Gaussian depth sorting, and

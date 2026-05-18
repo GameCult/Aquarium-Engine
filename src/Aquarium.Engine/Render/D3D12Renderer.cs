@@ -31,7 +31,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const Format SceneDepthFormat = Format.D32_Float;
     private const int MaxSdfLightCount = 64;
     private const int MaxSdfObjectCount = 64;
-    private const int MaxTemporalGaussianCount = 4096;
+    private const int MaxTemporalGaussianCount = 1_048_576;
     private const float SurfaceTransparentMinZ = -1.85f;
     private const float SurfaceTransparentMaxZ = 0.45f;
     private const int BloomLevelCount = 3;
@@ -1386,7 +1386,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             sdfLightBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfLights);
             sdfObjectBuffer.Upload(activeCommandList, frameResources.UploadRing, sdfObjects);
-            temporalGaussianBuffer.Upload(activeCommandList, frameResources.UploadRing, temporalGaussians);
+            temporalGaussianBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, temporalGaussians.AsSpan(0, temporalGaussianCount));
         }
         finally
         {
@@ -1427,7 +1427,6 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         Array.Clear(sdfObjects);
         Array.Clear(sdfLights);
-        Array.Clear(temporalGaussians);
         temporalGaussianCount = 0;
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
 
@@ -1922,7 +1921,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     {
         var commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
         commandAllocator.Name = $"Aquarium D3D12 Frame {index} Command Allocator";
-        var uploadRing = new D3D12UploadRing(device, 64 * 1024 * 1024, $"Aquarium D3D12 Frame {index} Upload Ring");
+        var uploadRing = new D3D12UploadRing(device, 160 * 1024 * 1024, $"Aquarium D3D12 Frame {index} Upload Ring");
         var transientDescriptors = new D3D12DescriptorArena(
             device,
             DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,

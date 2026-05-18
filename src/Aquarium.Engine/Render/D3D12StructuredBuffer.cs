@@ -53,6 +53,29 @@ internal sealed class D3D12StructuredBuffer : IDisposable
         Transition(commandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
     }
 
+    public void UploadPartial<T>(ID3D12GraphicsCommandList commandList, D3D12UploadRing uploadRing, ReadOnlySpan<T> values)
+        where T : unmanaged
+    {
+        if (values.Length > elementCount)
+        {
+            throw new ArgumentException($"Structured buffer holds {elementCount} elements but received {values.Length}.", nameof(values));
+        }
+
+        var actualStride = Unsafe.SizeOf<T>();
+        if (actualStride != strideBytes)
+        {
+            throw new ArgumentException($"Structured buffer stride mismatch. Expected {strideBytes} bytes but received {actualStride}.", nameof(values));
+        }
+
+        var upload = uploadRing.WriteArray(values);
+        Transition(commandList, ResourceStates.CopyDest);
+        if (upload.DataBytes > 0)
+        {
+            commandList.CopyBufferRegion(Resource, 0, uploadRing.Resource, (ulong)upload.OffsetBytes, (ulong)upload.DataBytes);
+        }
+        Transition(commandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
+    }
+
     public void CreateShaderResourceView(ID3D12Device device, D3D12DescriptorSlot descriptor)
     {
         device.CreateShaderResourceView(
