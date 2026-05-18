@@ -212,7 +212,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
 
         CreateRenderTargetViews();
         CreateBackBufferOverlays();
-        debugUi = CreateDebugUi();
+        debugUi = CreateDebugUi([]);
         heightFieldRenderTarget = CreateHeightFieldRenderTarget();
         sceneRenderTarget = CreateSceneRenderTarget();
         sceneMetadataRenderTarget = CreateSceneAuxiliaryRenderTarget("scene-metadata-target", "Aquarium D3D12 Scene Metadata Target");
@@ -285,10 +285,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
         {
             currentClientUi = clientUi;
             clientCommands = clientUi.Commands;
-            debugTabTitles = ["Aquarium", "Terminal", "Synth"];
+            var debugPanels = clientUi.Panels.Where(panel => !panel.FadeWhenMouseDistant).ToArray();
+            var floatingPanels = clientUi.Panels.Where(panel => panel.FadeWhenMouseDistant).ToArray();
+            debugTabTitles = ["Aquarium", "Terminal", "Synth", .. debugPanels.Select(panel => panel.Title)];
             activeDebugTab = Math.Clamp(activeDebugTab, 0, debugTabTitles.Length - 1);
-            debugUi = CreateDebugUi();
-            clientUiPanels = clientUi.Panels.Select(DebugUi.FromContract).ToArray();
+            debugUi = CreateDebugUi(debugPanels);
+            clientUiPanels = floatingPanels.Select(DebugUi.FromContract).ToArray();
         }
 
         debugUi.Update(input);
@@ -313,7 +315,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         settings = graphicsSettings.Normalized();
     }
 
-    private DebugUi CreateDebugUi()
+    private DebugUi CreateDebugUi(IReadOnlyList<AquariumUiPanel> clientDebugPanels)
     {
         var ui = new DebugUi("Debug", 18.0f, 18.0f, 520.0f, debugTabTitles, () => activeDebugTab, SelectDebugTab)
             .Panel(panel =>
@@ -335,6 +337,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 .Slider("Gain", () => synthPlaygroundGain, value => synthPlaygroundGain = Math.Clamp(value, 0.0f, 1.0f), 0.0f, 1.0f, "0.###", "Playground patch gain.", () => activeDebugTab == 2)
                 .Button("Play", () => synthPlaygroundPlayRevision++, "Triggers the compiled playground patch.", () => activeDebugTab == 2);
             });
+        for (var panelIndex = 0; panelIndex < clientDebugPanels.Count; panelIndex++)
+        {
+            var tabIndex = panelIndex + 3;
+            foreach (var control in clientDebugPanels[panelIndex].Controls)
+            {
+                ui.AddContractControl(control with { IsVisible = ComposeVisibility(control.IsVisible, () => activeDebugTab == tabIndex) });
+            }
+        }
 
         return ui;
     }
@@ -342,6 +352,11 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private void SelectDebugTab(int index)
     {
         activeDebugTab = Math.Clamp(index, 0, Math.Max(0, debugTabTitles.Length - 1));
+    }
+
+    private static Func<bool> ComposeVisibility(Func<bool>? source, Func<bool> tabVisible)
+    {
+        return () => tabVisible() && (source?.Invoke() ?? true);
     }
 
     private string TerminalDisplay()
