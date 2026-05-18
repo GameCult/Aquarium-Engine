@@ -23,8 +23,11 @@ public sealed class LocalCastRuntime : IAquariumRuntime
     private float timeSeconds;
     private float sceneTimelineSeconds;
     private long lastFrameId = -1;
+    private long lastClapFrameId = -1;
     private int latestPointCount;
+    private int latestClapCount;
     private string latestStatus = "waiting";
+    private AquariumCalibrationEventFrame latestCalibrationEvents = AquariumCalibrationEventFrame.Empty;
 
     public LocalCastRuntime(AquariumRuntimeOptions options)
     {
@@ -36,6 +39,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
                 panel.Section("Camera Field");
                 panel.Readout("Cache", () => reader.Path);
                 panel.Readout("Frame", () => lastFrameId >= 0 ? $"{lastFrameId} / {latestPointCount} splats" : latestStatus);
+                panel.Readout("Claps", () => lastClapFrameId >= 0 ? $"{lastClapFrameId} / {latestClapCount} events" : "none");
                 panel.Readout("History", () => $"{gpuFusionAccumulator.TrackCount} tracked seeds");
                 panel.Readout("Timeline", () => $"{sceneTimelineSeconds:0.000}s");
             });
@@ -66,6 +70,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
                 TemporalGaussianField = gpuFusionField.Seeds.Count == 0
                     ? temporalField
                     : AquariumTemporalGaussianField.Empty,
+                CalibrationEventFrame = latestCalibrationEvents,
                 GpuFusionField = gpuFusionField,
             };
 
@@ -109,6 +114,13 @@ public sealed class LocalCastRuntime : IAquariumRuntime
             latestStatus = "live";
         }
 
+        if (reader.TryReadLatestClapEvents(out var clapFrame) && clapFrame.FrameId != lastClapFrameId)
+        {
+            latestCalibrationEvents = MapClapEvents(clapFrame);
+            lastClapFrameId = clapFrame.FrameId;
+            latestClapCount = clapFrame.Events.Count;
+        }
+
         sceneTimelineSeconds = MathF.Max(
             sceneTimelineSeconds + Math.Max(deltaSeconds, 0.0f),
             gpuFusionMapper.ToTimelineSeconds(frame.PresentTimeNs));
@@ -145,6 +157,23 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         return float.TryParse(raw, out var seconds) && float.IsFinite(seconds) && seconds > 0.0f
             ? Math.Clamp(seconds, 1.0f, 120.0f)
             : 18.0f;
+    }
+
+    private static AquariumCalibrationEventFrame MapClapEvents(LocalCastClapCalibrationFrame frame)
+    {
+        return new AquariumCalibrationEventFrame
+        {
+            ClapEvents = frame.Events
+                .Select(item => new AquariumClapCalibrationEvent(
+                    item.StableKey,
+                    item.PositionMeters,
+                    item.AcousticOracleNs,
+                    item.VisualObservedNs,
+                    item.TimingUncertaintyMicroseconds,
+                    item.VisualConfidence,
+                    item.AcousticConfidence))
+                .ToArray(),
+        };
     }
 }
 

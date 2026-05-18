@@ -34,3 +34,23 @@ public readonly record struct LocalCastVisualPoint(
     Vector4 ColorOpacity,
     float Confidence,
     long SourceTimestampNs);
+
+public sealed class LocalCastClapCalibrationFrame
+{
+    public required string SchemaVersion { get; init; }
+
+    public required long FrameId { get; init; }
+
+    public required long CreatedMonotonicNs { get; init; }
+
+    public required IReadOnlyList<LocalCastClapCalibrationEvent> Events { get; init; }
+}
+
+public readonly record struct LocalCastClapCalibrationEvent(
+    string StableKey,
+    Vector3 PositionMeters,
+    long AcousticOracleNs,
+    long VisualObservedNs,
+    float TimingUncertaintyMicroseconds,
+    float VisualConfidence,
+    float AcousticConfidence);
