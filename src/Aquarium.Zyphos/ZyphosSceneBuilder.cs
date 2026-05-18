@@ -28,6 +28,8 @@ public static class ZyphosSceneBuilder
         var rotation = ZyphosUmbrosSystem.MutualPhase(timeSeconds);
         var umbrosCenter = ZyphosUmbrosSystem.UmbrosCenter(timeSeconds);
         var previousUmbrosCenter = ZyphosUmbrosSystem.UmbrosCenter(previousTimeSeconds);
+        var starCenter = ZyphosUmbrosSystem.PrimaryStarCenter(timeSeconds);
+        var previousStarCenter = ZyphosUmbrosSystem.PrimaryStarCenter(previousTimeSeconds);
 
         var objects = new AquariumSdfObject[ZyphosRenderPlan.SdfObjectCount];
         objects[ZyphosRenderPlan.PlanetIndex] = new AquariumSdfObject(
@@ -38,6 +40,10 @@ public static class ZyphosSceneBuilder
             new Vector4(umbrosCenter, ZyphosUmbrosSystem.UmbrosBoundRadius),
             new Vector4(previousUmbrosCenter, 0.0f),
             new Vector4(ZyphosUmbrosSystem.UmbrosSurfaceRadius, rotation, ZyphosUmbrosSystem.CenterSeparation, 0.0f));
+        objects[ZyphosRenderPlan.StarIndex] = new AquariumSdfObject(
+            new Vector4(starCenter, ZyphosUmbrosSystem.PrimaryStarVisualRadius),
+            new Vector4(previousStarCenter, 0.0f),
+            new Vector4(ZyphosUmbrosSystem.PrimaryStarVisualRadius, rotation, 0.0f, 0.0f));
 
         return objects;
     }
@@ -48,7 +54,7 @@ public static class ZyphosSceneBuilder
         return
         [
             new AquariumSdfLight(
-                new Vector4(starCenter, 5.5f),
+                new Vector4(starCenter, ZyphosUmbrosSystem.PrimaryStarVisualRadius),
                 new Vector4(3.2f, 2.5f, 1.8f, -100.0f)),
             new AquariumSdfLight(
                 new Vector4(ZyphosUmbrosSystem.UmbrosCenter(timeSeconds), ZyphosUmbrosSystem.UmbrosSurfaceRadius),

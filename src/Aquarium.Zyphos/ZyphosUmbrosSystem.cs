@@ -10,6 +10,7 @@ public static class ZyphosUmbrosSystem
     public const float SeparationInZyphosRadii = 8.0f;
     public const float SeaLevel = 0.56f;
     public const float MutualPhaseRate = 0.032f;
+    public const float PrimaryStarVisualRadius = 3.2f;
 
     public static float UmbrosSurfaceRadius => ZyphosSurfaceRadius * UmbrosRadiusRatio;
 

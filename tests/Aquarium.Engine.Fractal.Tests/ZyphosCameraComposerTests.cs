@@ -25,7 +25,8 @@ public sealed class ZyphosCameraComposerTests
         Assert.Equal(orbitalCenter, shot.CameraTarget);
         Assert.Equal(orbitalCenter, shot.ParentAnchor);
         Assert.Equal(ZyphosUmbrosSystem.UmbrosCenter(0.0f), shot.TrackedCenter);
-        Assert.True(shot.EffectiveDistance > ZyphosUmbrosSystem.CenterSeparation);
+        Assert.True(shot.EffectiveDistance > ZyphosUmbrosSystem.CenterSeparation * 0.5f);
+        Assert.True(shot.EffectiveDistance < ZyphosUmbrosSystem.CenterSeparation);
     }
 
     [Fact]
@@ -36,6 +37,25 @@ public sealed class ZyphosCameraComposerTests
 
         Assert.Equal(ZyphosUmbrosSystem.PrimaryStarCenter(0.0f), shot.CameraTarget);
         Assert.Equal(midpoint, shot.TrackedCenter);
+    }
+
+    [Fact]
+    public void SolarFrameTargetsVisibleParentStar()
+    {
+        var shot = ZyphosCameraComposer.Compose(ZyphosSpatialDomainCatalog.Solar, 0.1f, 0.4f, 16.0f, 0.0f);
+
+        Assert.Equal(ZyphosUmbrosSystem.PrimaryStarCenter(0.0f), shot.CameraTarget);
+        Assert.Equal(ZyphosUmbrosSystem.PrimaryStarCenter(0.0f), shot.TrackedCenter);
+        Assert.Null(shot.ParentDomainKey);
+    }
+
+    [Fact]
+    public void LeafScaleDomainsCanZoomBelowPlanetaryDistance()
+    {
+        var shot = ZyphosCameraComposer.Compose(ZyphosSpatialDomainCatalog.CanopyLeaf, 0.1f, 0.4f, 0.1f, 0.0f);
+
+        Assert.True(shot.MinimumDistance < 0.25f);
+        Assert.True(shot.EffectiveDistance < 1.0f);
     }
 
     [Fact]

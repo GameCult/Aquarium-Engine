@@ -45,7 +45,7 @@ public static class ZyphosSpatialDomainCatalog
 
     private static readonly ZyphosSpatialDomain[] DomainList =
     [
-        new(Solar, null, "Parent Star", "solar", "Solar", ZyphosUmbrosSystem.CenterSeparation * 5.4f, time => new ZyphosSpatialDomainPose(ZyphosUmbrosSystem.PrimaryStarCenter(time), ZyphosUmbrosSystem.CenterSeparation * 0.28f)),
+        new(Solar, null, "Parent Star", "sun", "Solar", ZyphosUmbrosSystem.CenterSeparation * 0.9f, time => new ZyphosSpatialDomainPose(ZyphosUmbrosSystem.PrimaryStarCenter(time), ZyphosUmbrosSystem.PrimaryStarVisualRadius)),
         new(Orbital, Solar, "Zyphos-Umbros Orbit", "orbital", "Orbital", ZyphosUmbrosSystem.CenterSeparation * 1.9f, time => new ZyphosSpatialDomainPose(BinaryCenter(time), ZyphosUmbrosSystem.CenterSeparation * 0.5f)),
         new(Planet, Orbital, "Zyphos", "planet", "Planetary", ZyphosUmbrosSystem.ZyphosBoundRadius * 2.6f, _ => new ZyphosSpatialDomainPose(ZyphosUmbrosSystem.ZyphosCenter, ZyphosUmbrosSystem.ZyphosBoundRadius)),
         new(Umbros, Orbital, "Umbros", "twin", "Planetary", ZyphosUmbrosSystem.CenterSeparation * 1.35f, time => new ZyphosSpatialDomainPose(ZyphosUmbrosSystem.UmbrosCenter(time), ZyphosUmbrosSystem.UmbrosBoundRadius)),

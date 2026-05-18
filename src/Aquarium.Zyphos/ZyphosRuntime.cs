@@ -52,8 +52,12 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         get
         {
             var shot = CurrentShot();
+            var starPose = ZyphosSpatialDomainCatalog.GetRequired(ZyphosSpatialDomainCatalog.Solar).Pose(timeSeconds);
+            var viewRadius = MathF.Max(
+                MathF.Max(32.0f, shot.EffectiveDistance * 1.15f),
+                Vector3.Distance(shot.CameraTarget, starPose.Center) + starPose.Radius * 1.6f);
             return new AquariumFrame(
-                new ViewFrame(new Vector2(shot.CameraTarget.X, shot.CameraTarget.Y), MathF.Max(32.0f, shot.EffectiveDistance * 1.15f)),
+                new ViewFrame(new Vector2(shot.CameraTarget.X, shot.CameraTarget.Y), viewRadius),
                 shot.CameraPosition,
                 shot.CameraTarget,
                 timeSeconds,
@@ -70,9 +74,9 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Section("Planetary Demo");
                 panel.Toggle("Auto Orbit", () => autoOrbit, value => autoOrbit = value);
                 panel.Slider("Time Scale", () => timeScale, value => timeScale = value, 0.0f, 4.0f, "0.00");
-                panel.Slider("Orbit Distance", () => orbitDistance, value => orbitDistance = value, 9.0f, 72.0f, "0.0");
+                panel.Slider("Orbit Distance", () => orbitDistance, value => orbitDistance = ClampOrbitDistance(value), 0.04f, 180.0f, "0.00");
                 panel.Readout("Runtime", () => $"{timeSeconds:0.0}s");
-                panel.Readout("Camera", () => $"{ZyphosCameraComposer.DisplayName(selectedDomainKey)} / {orbitDistance:0.0} wu / yaw {orbitYaw:0.00}");
+                panel.Readout("Camera", () => $"{ZyphosCameraComposer.DisplayName(selectedDomainKey)} / {CurrentShot().EffectiveDistance:0.00} wu / yaw {orbitYaw:0.00}");
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
                 panel.Readout("Binary", () => $"Umbros {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} deg / {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Rz");
                 panel.Readout("Objects", () => "fractal height DSL, atmosphere, Umbros");
@@ -83,6 +87,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Toggle("Auto Orbit", () => autoOrbit, value => autoOrbit = value);
                 panel.Readout("Mode", () => ZyphosCameraComposer.DisplayName(selectedDomainKey));
                 panel.Readout("Pivot", CurrentPivotLabel);
+                panel.Readout("Zoom", () => $"{CurrentShot().MinimumDistance:0.00}-{CurrentShot().MaximumDistance:0.0} wu");
                 panel.Readout("Mouse", () => "drag orbit / wheel zoom");
                 panel.Section("Spatial Domains");
                 foreach (var domain in ZyphosSpatialDomainCatalog.Domains)
@@ -149,7 +154,8 @@ public sealed class ZyphosRuntime : IAquariumRuntime
 
         if (MathF.Abs(input.WheelDelta) > 0.0f)
         {
-            orbitDistance = Math.Clamp(orbitDistance - input.WheelDelta * 1.4f, 8.0f, 84.0f);
+            var zoomScale = MathF.Max(CurrentShot().EffectiveDistance * 0.12f, 0.035f);
+            orbitDistance = ClampOrbitDistance(orbitDistance - input.WheelDelta * zoomScale);
         }
 
         if (input.LeftMouseDown && input.MouseDelta != Vector2.Zero)
@@ -163,7 +169,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         {
             autoOrbit = false;
             orbitYaw -= input.MouseDelta.X * 0.0025f;
-            orbitDistance = Math.Clamp(orbitDistance + input.MouseDelta.Y * 0.055f, 8.0f, 84.0f);
+            orbitDistance = ClampOrbitDistance(orbitDistance + input.MouseDelta.Y * MathF.Max(CurrentShot().EffectiveDistance * 0.006f, 0.01f));
         }
 
         if (input.IsKeyPressed(KeyCode.Digit1))
@@ -206,7 +212,8 @@ public sealed class ZyphosRuntime : IAquariumRuntime
     {
         selectedDomainKey = key;
         var domain = ZyphosSpatialDomainCatalog.GetRequired(key);
-        orbitDistance = Math.Clamp(orbitDistance, 8.0f, MathF.Max(84.0f, domain.NavigationRadius * 2.0f));
+        var shot = CurrentShot();
+        orbitDistance = Math.Clamp(MathF.Min(orbitDistance, domain.NavigationRadius * 2.0f), shot.MinimumDistance, shot.MaximumDistance);
         while (ZyphosSpatialDomainCatalog.ParentOf(domain) is { } parent)
         {
             expandedDomains[parent.Key] = true;
@@ -244,6 +251,12 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         }
 
         return true;
+    }
+
+    private float ClampOrbitDistance(float value)
+    {
+        var shot = CurrentShot();
+        return Math.Clamp(value, shot.MinimumDistance, shot.MaximumDistance);
     }
 }
 
