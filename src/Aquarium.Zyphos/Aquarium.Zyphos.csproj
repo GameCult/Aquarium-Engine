@@ -17,6 +17,7 @@
   <ItemGroup>
     <Content Include="Shaders\**\*.hlsl" CopyToOutputDirectory="PreserveNewest" TargetPath="Render\Shaders\%(RecursiveDir)%(Filename)%(Extension)" />
     <Content Include="Shaders\**\*.hlsli" CopyToOutputDirectory="PreserveNewest" TargetPath="Render\Shaders\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Include="Worlds\**\*.aquageo" CopyToOutputDirectory="PreserveNewest" TargetPath="Worlds\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

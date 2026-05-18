@@ -10,6 +10,8 @@ public sealed class ZyphosFractalTerrainTests
         var tree = ZyphosFractalTerrain.OwnershipTree;
         var brushes = ZyphosFractalTerrain.HeightBrushes;
 
+        Assert.EndsWith(".aquageo", ZyphosFractalTerrain.PatchPath, StringComparison.Ordinal);
+        Assert.True(File.Exists(ZyphosFractalTerrain.PatchPath), $"Expected copied aquageo patch at {ZyphosFractalTerrain.PatchPath}.");
         Assert.Equal(12, tree.Claims.Count);
         Assert.Equal(tree.Claims.Count, brushes.Length);
         Assert.Contains(tree.Claims, claim => claim.Tags == "crater");
