@@ -65,6 +65,11 @@ pressure constraints. The accepted physical baseline lives in the vault note
 `Eusocial Interbeing/World/Zyphos Umbros Binary System.md`.
 The accepted biosphere baseline lives in
 `Eusocial Interbeing/Ecology/Mutable Memory Endosymbiosis.md`.
+First concrete biosphere handles live in
+`Eusocial Interbeing/Ecology/Zyphos Biosphere Examples.md`.
+Future inhabitant-language names should be coordinated through Weksa at
+`E:\Projects\weksa`, with names derived from language-project state rather than
+English label substitution.
 
 ## Feedback Path
 
