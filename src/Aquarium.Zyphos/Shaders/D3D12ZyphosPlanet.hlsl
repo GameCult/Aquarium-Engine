@@ -40,6 +40,39 @@ float zySphericalField(float3 dir)
     return 0.50 + plates + equatorialWarmth;
 }
 
+float zyHash21(float2 p)
+{
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
+
+float zyTileRelief(float2 uv, float level, float amplitude, float ridgeBias)
+{
+    float scale = exp2(level);
+    float2 cell = floor(uv * scale);
+    float2 local = frac(uv * scale) - 0.5;
+    float seed = zyHash21(cell + level * 17.0);
+    float angle = seed * 6.2831853;
+    float2 axis = float2(cos(angle), sin(angle));
+    float ridge = 1.0 - smoothstep(0.035, 0.18, abs(dot(local, axis) + (seed - 0.5) * 0.16));
+    float pit = 1.0 - smoothstep(0.06, 0.32, length(local - axis * 0.18));
+    return (ridge * ridgeBias - pit * (1.0 - ridgeBias)) * amplitude;
+}
+
+float zyQuadtreeSdfRelief(float3 dir)
+{
+    float2 equatorial = dir.xy * 0.5 + 0.5;
+    float2 polar = float2(atan2(dir.y, dir.x) * 0.15915494 + 0.5, abs(dir.z));
+    float polarBlend = smoothstep(0.58, 0.92, abs(dir.z));
+    float2 uv = lerp(equatorial, polar, polarBlend);
+    float relief = 0.0;
+    relief += zyTileRelief(uv + 0.07, 2.0, 0.030, 0.68);
+    relief += zyTileRelief(uv * 1.37 + 0.31, 3.0, 0.019, 0.55);
+    relief += zyTileRelief(uv * 2.13 - 0.19, 4.0, 0.010, 0.45);
+    return relief;
+}
+
 float zyTerrainOffset(float3 dir, SdfObject sdfObject)
 {
     float field = zySphericalField(dir);
@@ -47,7 +80,8 @@ float zyTerrainOffset(float3 dir, SdfObject sdfObject)
     float land = smoothstep(seaLevel - 0.04, seaLevel + 0.08, field);
     float mountain = pow(saturate(field - seaLevel), 1.65);
     float polarCap = pow(abs(dir.z), 8.0) * 0.035;
-    return (field - seaLevel) * 0.10 + mountain * 0.13 + polarCap * land;
+    float tileRelief = zyQuadtreeSdfRelief(dir) * land;
+    return (field - seaLevel) * 0.10 + mountain * 0.13 + polarCap * land + tileRelief;
 }
 
 float sdfDistance(float3 p, int sdfIndex)
@@ -68,6 +102,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float seaLevel = sdfObject.state.z;
     float land = smoothstep(seaLevel - 0.03, seaLevel + 0.06, field);
     float mountain = smoothstep(seaLevel + 0.12, seaLevel + 0.28, field);
+    float tileRelief = zyQuadtreeSdfRelief(dir);
     float polar = smoothstep(0.72, 0.92, abs(dir.z));
     float cloud = smoothstep(0.73, 0.91, sin(dir.x * 18.0 + dir.y * 13.0 + dir.z * 9.0 + timeSeconds * 0.19) * 0.5 + 0.5);
 
@@ -77,6 +112,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float3 snow = float3(0.800, 0.865, 0.830);
     float3 landColor = lerp(lowland, highland, mountain);
     landColor = lerp(landColor, snow, saturate(polar + mountain * 0.38));
+    landColor = lerp(landColor, float3(0.62, 0.54, 0.36), saturate(tileRelief * 14.0));
 
     SdfSurface surface;
     surface.baseColor = lerp(ocean, landColor, land);

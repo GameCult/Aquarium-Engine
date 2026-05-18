@@ -28,4 +28,13 @@ public sealed class ZyphosSpatialDomainCatalogTests
             }
         }
     }
+
+    [Fact]
+    public void ZyphosAndUmbrosBothExposeSurfaceAndTileChildren()
+    {
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.Planet), domain => domain.Key == ZyphosSpatialDomainCatalog.PlanetLatLong);
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.Umbros), domain => domain.Key == ZyphosSpatialDomainCatalog.UmbrosLatLong);
+        Assert.True(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.PlanetLatLong).Count >= 2);
+        Assert.True(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.UmbrosLatLong).Count >= 2);
+    }
 }

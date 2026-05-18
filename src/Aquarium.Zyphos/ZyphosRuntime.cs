@@ -23,6 +23,8 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         [ZyphosSpatialDomainCatalog.Orbital] = true,
         [ZyphosSpatialDomainCatalog.Planet] = true,
         [ZyphosSpatialDomainCatalog.PlanetLatLong] = true,
+        [ZyphosSpatialDomainCatalog.Umbros] = true,
+        [ZyphosSpatialDomainCatalog.UmbrosLatLong] = true,
     };
 
     public AquariumRuntimeOptions Options { get; private set; }

@@ -16,11 +16,16 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.Orbital && domain.Key.Value == "zyphos/zyphos-umbros-orbit");
         Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.Planetary && domain.Key.Value == "zyphos/umbros");
         Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.LatLong && domain.Key.Value == "zyphos/planet-latlong");
-        Assert.Equal(new AquariumFractalKey("zyphos/planet-latlong"), tree.Domain.ParentKey);
-        Assert.Equal(12, tree.Claims.Count);
+        Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.LatLong && domain.Key.Value == "zyphos/umbros-latlong");
+        Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.CubeSphereTile && domain.ParentKey.Value == "zyphos/planet-latlong");
+        Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.CubeSphereTile && domain.ParentKey.Value == "zyphos/umbros-latlong");
+        Assert.Equal(new AquariumFractalKey("zyphos/umbros-latlong"), tree.Domain.ParentKey);
+        Assert.Equal(31, tree.Claims.Count);
         Assert.Equal(tree.Claims.Count, brushes.Length);
         Assert.Contains(tree.Claims, claim => claim.Tags == "crater");
         Assert.Contains(tree.Claims, claim => claim.Tags == "ridge");
+        Assert.Contains(tree.Claims, claim => claim.Tags == "shard");
+        Assert.Contains(tree.Claims, claim => claim.Tags == "crown");
         Assert.Contains(brushes, brush => brush.EnvelopeFalloff > 0.0f && brush.RadiusY > 0.0f);
     }
 }
