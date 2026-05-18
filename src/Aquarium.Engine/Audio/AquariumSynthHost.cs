@@ -8,7 +8,7 @@ internal sealed class AquariumSynthHost : IDisposable
 
     private readonly Dictionary<string, PatchRuntime> patches = new(StringComparer.Ordinal);
     private readonly WasapiAudioDevice audioDevice = new();
-    private readonly AquaSynthRenderSession renderSession = new(new AquaSynthNativeOptions(DspSourceDirectory: Path.Combine(AppContext.BaseDirectory, "Synth")));
+    private readonly AquaSynthPatchCompiler patchCompiler = new(new AquaSynthNativeOptions(DspSourceDirectory: Path.Combine(AppContext.BaseDirectory, "Synth")));
     private float timeSeconds;
 
     public void Update(AquariumSynthDocument synth, AquariumAudioDocument audio, float deltaSeconds)
@@ -105,7 +105,7 @@ internal sealed class AquariumSynthHost : IDisposable
         {
             try
             {
-                if (!renderSession.TryCompileScript(identity, out var compiled, out var error))
+                if (!patchCompiler.TryCompileScript(identity, out var compiled, out var error))
                 {
                     lock (runtime.Sync)
                     {
@@ -115,7 +115,7 @@ internal sealed class AquariumSynthHost : IDisposable
                         runtime.FailedKey = compileKey;
                         runtime.SoundCache.Clear();
                         runtime.CompileTask = null;
-                        runtime.SetStatus(AquariumSynthPatchCompileState.Failed, error ?? "AquaSynth render session unavailable", revision, timeSeconds);
+                        runtime.SetStatus(AquariumSynthPatchCompileState.Failed, error ?? "AquaSynth patch compiler unavailable", revision, timeSeconds);
                     }
 
                     Console.WriteLine($"Aquarium synth patch `{patchId}` AquaSynth compile failed: {error}");
@@ -242,7 +242,7 @@ internal sealed class AquariumSynthHost : IDisposable
         }
 
         audioDevice.Dispose();
-        renderSession.Dispose();
+        patchCompiler.Dispose();
     }
 
     private sealed class PatchRuntime(string id)

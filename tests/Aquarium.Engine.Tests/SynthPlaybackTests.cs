@@ -6,7 +6,7 @@ namespace Aquarium.Engine.Tests;
 public sealed class SynthPlaybackTests
 {
     [Fact]
-    public void AquaSynthRenderSessionCanRenderAudiblePatchForEnginePlayback()
+    public void AquaSynthPatchCompilerCanRenderAudiblePatchForEnginePlayback()
     {
         const string script = """
             voice
@@ -18,8 +18,8 @@ public sealed class SynthPlaybackTests
                 decay=0.12
             """;
 
-        using var session = new AquaSynthRenderSession();
-        if (!session.TryRenderScript("engine_synth_smoke", script, 1.0f, out var samples, out var error))
+        using var compiler = new AquaSynthPatchCompiler();
+        if (!compiler.TryCompileScript(new AquaSynthCompileIdentity("engine_synth_smoke", "engine_synth_smoke", script), out var patch, out var error))
         {
             if (error?.Contains("Faust toolchain not found", StringComparison.OrdinalIgnoreCase) == true ||
                 error?.Contains("Faust DLL not found", StringComparison.OrdinalIgnoreCase) == true)
@@ -27,11 +27,15 @@ public sealed class SynthPlaybackTests
                 return;
             }
 
-            Assert.Fail($"AquaSynth render session failed to render a tiny patch: {error}");
+            Assert.Fail($"AquaSynth patch compiler failed to render a tiny patch: {error}");
         }
 
-        Assert.True(samples.Length > 2048, $"Rendered too few samples: {samples.Length}.");
-        Assert.Contains(samples, sample => MathF.Abs(sample) > 0.001f);
-        Assert.InRange(samples.Max(sample => MathF.Abs(sample)), 0.001f, 1.0f);
+        using (patch)
+        {
+            var samples = patch!.Render(1.0f);
+            Assert.True(samples.Length > 2048, $"Rendered too few samples: {samples.Length}.");
+            Assert.Contains(samples, sample => MathF.Abs(sample) > 0.001f);
+            Assert.InRange(samples.Max(sample => MathF.Abs(sample)), 0.001f, 1.0f);
+        }
     }
 }

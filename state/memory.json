@@ -95,8 +95,8 @@
       "Scene/diegetic labels should use renderer-owned MSDF/SDF billboards when they live in world space. Overlay text should not be shoved into HDR for convenience."
     ],
     "audio": [
-      "Aquarium exposes an optional audio/synth hosting boundary through contracts; clients declare intent, Aquarium schedules playback and owns device/toolchain integration.",
-      "Aquarium consumes AquaSynth.Faust as a pinned repo-local NuGet package, with AquaSynth.Core arriving transitively for the built-in patch editor/parser surface. AquaSynth owns synth internals, native Faust compilation, generated DSP manifests, and tests; update the package only by deliberate version bump so visual/renderer work can continue while synth construction changes underneath."
+      "Aquarium exposes an optional audio/synth hosting boundary through contracts; clients declare intent, Aquarium schedules playback and owns device output.",
+      "Aquarium consumes AquaSynth.Faust as a pinned repo-local NuGet package, with AquaSynth.Core arriving transitively for the built-in patch editor/parser surface. AquaSynth owns synth internals, live patch compilation, native Faust factory lifetime, generated DSP manifests, and tests; AquariumSynthHost owns debounce, trigger scheduling, rendered-buffer caching, and WASAPI playback. Update the package only by deliberate version bump so visual/renderer work can continue while synth construction changes underneath."
     ],
     "state_and_reload": [
       "CultCache is the client memory organ. Runtime state, camera, renderer knobs, body state, UI state, and future Epiphany connection state should be typed Cult documents.",

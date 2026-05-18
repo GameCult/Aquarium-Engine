@@ -56,8 +56,8 @@ current_model:
   dependencies:
     cult_math: E:\Projects\CultMath
     cult_lib: E:\Projects\CultLib
-    aqua_synth_faust: NuGet package AquaSynth.Faust 0.1.0-alpha.2 from repo-local packages feed
-    aqua_synth_core: transitive NuGet package AquaSynth.Core 0.1.0-alpha.2 from repo-local packages feed
+    aqua_synth_faust: NuGet package AquaSynth.Faust 0.1.0-alpha.3 from repo-local packages feed
+    aqua_synth_core: transitive NuGet package AquaSynth.Core 0.1.0-alpha.3 from repo-local packages feed
   docs:
     doctrine: docs/aquarium-engine-doctrine.md
     engine_client_boundary: docs/engine-client-boundary.md
@@ -103,7 +103,7 @@ renderer_state:
     - DirectWrite/Direct2D debug panels own body scrolling and clipping; overflowing client controls must stay inside the panel with a visible scrollbar.
     - Client-declared UI panels are folded into the unified Debug tab strip by default; panels that opt into proximity fading render as independent floating overlays. Floating panels can right-anchor with negative left offsets and fade to 10% opacity when the mouse is not near.
     - Aquarium UI exposes generic selectable tree rows with disclosure arrows. Clients use them for hierarchy navigation without teaching DebugUi about client-specific spatial domains.
-    - Aquarium exposes an optional synth/audio hosting boundary through AquariumSynthDocument; Aquarium consumes AquaSynth.Faust as a pinned repo-local NuGet package so synth-agent construction cannot break Aquarium builds until the package is intentionally updated. AquaSynth.Core arrives transitively for patch editor/parser surfaces.
+    - Aquarium exposes an optional synth/audio hosting boundary through AquariumSynthDocument; Aquarium consumes AquaSynth.Faust as a pinned repo-local NuGet package so synth-agent construction cannot break Aquarium builds until the package is intentionally updated. AquaSynth.Core arrives transitively for patch editor/parser surfaces. AquaSynth owns live patch compilation and native Faust factory lifetime; Aquarium owns debounce, playback scheduling, cached rendered buffers, and WASAPI output.
     - Aquarium now exposes a generic queued PCM audio lane through AquariumAudioDocument. Epiphany Face voice uses it to play streamed Codex realtime output without reaching into the engine's WASAPI internals.
     - Epiphany owns the first native Face realtime voice session controller. It stores loopback app-server URI, thread id, voice, and speech prompt in CultCache live state; starts `thread/realtime/start` with audio output over the experimental Codex app-server WebSocket JSON-RPC edge; sends text utterances; reflects ephemeral transcript/error/audio counters in the debug UI; and treats speech as transient Face surface, not durable memory or project authority.
     - Face voice routing is no longer a singleton. Epiphany persists typed FaceVoiceEndpoint rows with id, display name, thread id, voice, prompt, enabled flag, XY proximity anchor, and an audible-radius scale. FaceVoiceRouter uses proximity only to choose the addressed endpoint for user input; enabled endpoints can all run concurrently so active rumination loops may speak regardless of listener distance. Distance shapes PCM output gain and stereo pan through AquariumAudioDocument/WasapiAudioDevice.
