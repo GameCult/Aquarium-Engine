@@ -194,6 +194,112 @@ float3 studioPmremConeSample(float3 worldDirection, float lod, float cone)
     return sum * 0.125;
 }
 
+float hash11(float value)
+{
+    return frac(sin(value * 127.1) * 43758.5453123);
+}
+
+float hash31(float3 p)
+{
+    return frac(sin(dot(p, float3(12.9898, 78.233, 37.719))) * 43758.5453);
+}
+
+float valueNoise3(float3 p)
+{
+    float3 cell = floor(p);
+    float3 local = frac(p);
+    local = local * local * (3.0 - 2.0 * local);
+
+    float c000 = hash31(cell + float3(0.0, 0.0, 0.0));
+    float c100 = hash31(cell + float3(1.0, 0.0, 0.0));
+    float c010 = hash31(cell + float3(0.0, 1.0, 0.0));
+    float c110 = hash31(cell + float3(1.0, 1.0, 0.0));
+    float c001 = hash31(cell + float3(0.0, 0.0, 1.0));
+    float c101 = hash31(cell + float3(1.0, 0.0, 1.0));
+    float c011 = hash31(cell + float3(0.0, 1.0, 1.0));
+    float c111 = hash31(cell + float3(1.0, 1.0, 1.0));
+
+    float x00 = lerp(c000, c100, local.x);
+    float x10 = lerp(c010, c110, local.x);
+    float x01 = lerp(c001, c101, local.x);
+    float x11 = lerp(c011, c111, local.x);
+    float y0 = lerp(x00, x10, local.y);
+    float y1 = lerp(x01, x11, local.y);
+    return lerp(y0, y1, local.z);
+}
+
+float fractalNoise3(float3 p)
+{
+    float sum = 0.0;
+    float amplitude = 0.5;
+    [unroll]
+    for (int octave = 0; octave < 5; octave++)
+    {
+        sum += valueNoise3(p) * amplitude;
+        p = p * 2.03 + float3(13.7, 5.1, 9.3);
+        amplitude *= 0.52;
+    }
+
+    return sum;
+}
+
+float3 ifsFoldSky(float3 p)
+{
+    [unroll]
+    for (int index = 0; index < 5; index++)
+    {
+        p = abs(p) / max(dot(p, p), 0.18) - float3(0.72, 0.58, 0.49);
+        p = p.yzx * float3(0.91, 1.07, 0.98);
+    }
+
+    return p;
+}
+
+float3 nebulaRadiance(float3 direction)
+{
+    float3 p = direction * 1.75 + float3(0.17, -0.41, 0.29);
+    float3 folded = ifsFoldSky(p);
+    float filaments = exp(-2.2 * length(folded.xy)) * 0.42;
+    filaments += exp(-3.8 * abs(folded.x + folded.z * 0.28)) * 0.16;
+    float cloud = pow(saturate(fractalNoise3(direction * 4.0 + folded * 0.22) - 0.22), 2.2);
+    float veil = pow(saturate(1.0 - abs(direction.z * 1.18 + direction.x * 0.26)), 2.6);
+
+    float3 cold = float3(0.025, 0.11, 0.28);
+    float3 violet = float3(0.34, 0.08, 0.45);
+    float3 ember = float3(0.86, 0.28, 0.10);
+    float thermal = saturate(fractalNoise3(direction.zxy * 5.7 + 8.0));
+    float3 color = lerp(cold, violet, thermal);
+    color = lerp(color, ember, saturate(folded.z * 0.45 + 0.35));
+    return color * (filaments + cloud * 0.32 + veil * 0.10);
+}
+
+float starClusterLayer(float3 direction, float scale, float threshold, float sharpness, float seed)
+{
+    float3 cell = floor(direction * scale + seed);
+    float3 local = frac(direction * scale + seed) - 0.5;
+    float n = hash31(cell);
+    float3 offset = float3(hash31(cell + 13.0), hash31(cell + 37.0), hash31(cell + 71.0)) - 0.5;
+    float d = length(local - offset * 0.72);
+    float star = smoothstep(threshold, 1.0, n) * exp(-d * sharpness);
+
+    float parent = hash31(floor(direction * (scale * 0.09) + seed * 0.31));
+    return star * smoothstep(0.52, 0.98, parent);
+}
+
+float3 fractalStarClusters(float3 direction)
+{
+    float stars = 0.0;
+    stars += starClusterLayer(direction, 110.0, 0.965, 42.0, 3.0) * 0.55;
+    stars += starClusterLayer(direction, 360.0, 0.988, 72.0, 17.0) * 1.15;
+    stars += starClusterLayer(direction, 1140.0, 0.996, 115.0, 43.0) * 1.8;
+
+    float3 clusterP = ifsFoldSky(direction * 0.95 + float3(0.31, 0.07, -0.22));
+    float clusterCore = exp(-18.0 * dot(clusterP.xy, clusterP.xy)) * smoothstep(0.12, 0.55, clusterP.z + 0.25);
+    float3 warm = float3(1.0, 0.82, 0.55);
+    float3 blue = float3(0.55, 0.70, 1.0);
+    return lerp(blue, warm, hash11(direction.x + direction.y * 3.1)) * stars + warm * clusterCore * 2.8;
+}
+
 float3 surfaceMirrorRadiance(float3 p, float3 direction, out float3 normal)
 {
     float2 gradient = terrainGradient(p.xy);
@@ -212,12 +318,12 @@ float3 backgroundRadiance(float3 direction)
         return studio;
     }
 
-    float2 starCell = floor(direction.xy * 820.0 + direction.z * float2(131.0, 311.0));
-    float starNoise = frac(sin(dot(starCell, float2(12.9898, 78.233))) * 43758.5453);
-    float star = smoothstep(0.9972, 1.0, starNoise);
-    float galacticBand = pow(saturate(1.0 - abs(direction.z * 1.8 + direction.x * 0.22)), 3.0) * 0.12;
-    float3 space = float3(0.002, 0.006, 0.014) + galacticBand * float3(0.09, 0.11, 0.16);
-    return space + star * float3(2.4, 2.2, 1.8) + studio;
+    float3 space = float3(0.001, 0.003, 0.010);
+    float3 nebula = nebulaRadiance(direction);
+    float3 clusters = fractalStarClusters(direction);
+    float darkDust = pow(saturate(fractalNoise3(direction * 9.0 + 2.4)), 3.2);
+    nebula *= lerp(1.0, 0.34, darkDust);
+    return space + nebula + clusters + studio * 0.45;
 }
 
 RayMarchResult traverseRay(float3 origin, float3 direction)
