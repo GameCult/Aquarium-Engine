@@ -2,6 +2,7 @@ using System.Numerics;
 using Aquarium.Engine.Fractal;
 using Aquarium.Engine.Fractal.Brushes;
 using Aquarium.Engine.Fractal.Grammar;
+using Aquarium.Engine.Fractal.Lod;
 
 namespace Aquarium.Engine.Fractal.Tests;
 
@@ -87,5 +88,27 @@ public sealed class FractalHeightBrushCompilerTests
         Assert.Equal(2.0f, brush.DomainLevel);
         Assert.Equal(2.0f, brush.DomainX);
         Assert.Equal(1.0f, brush.DomainY);
+    }
+
+    [Fact]
+    public void SelectedTreeCompileOnlyLowersSelectedNodes()
+    {
+        const string source = """
+            tile PositiveZ 0 0 0 demo/a
+            height basin 0 0 30 30 0 3 1 -0.18 7 basin
+            tile PositiveX 0 0 0 demo/b
+            height ridge 1 1 4 2 0 3 1 0.08 11 ridge
+            """;
+        var tree = FractalDslCompiler.Compile(source);
+        var selectedNode = Assert.Single(tree.Nodes, node => node.DomainKey.Value.EndsWith(":demo/b", StringComparison.Ordinal));
+        var selectedCut = new[]
+        {
+            new AquariumSelectedCut(selectedNode.Key, Score: 1.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: false),
+        };
+
+        var brush = Assert.Single(FractalHeightBrushCompiler.CompileSelectedTree(tree, selectedCut));
+
+        Assert.Equal(1.0f, brush.Center.X);
+        Assert.Equal((float)CubeFace.PositiveX, brush.DomainFace);
     }
 }

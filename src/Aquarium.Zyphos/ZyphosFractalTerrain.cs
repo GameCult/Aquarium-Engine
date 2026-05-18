@@ -14,8 +14,8 @@ public static class ZyphosFractalTerrain
     private static readonly Lazy<string> PatchSource = new(() => File.ReadAllText(PatchPath));
     private static readonly Lazy<FractalOwnershipTree> Tree = new(() => FractalDslCompiler.Compile(PatchSource.Value));
     private static readonly Lazy<AquariumFractalSummary[]> Summaries = new(() => FractalSummaryBuilder.Build(Tree.Value));
-    private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 8.0f));
-    private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileTree(Tree.Value));
+    private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 64.0f));
+    private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, SelectedCut.Value));
 
     public static string PatchPath => Path.Combine(AppContext.BaseDirectory, PatchRelativePath);
 
