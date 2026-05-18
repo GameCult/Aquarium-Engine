@@ -36,6 +36,13 @@ float umQuadtreeSdfRelief(float3 dir)
     return relief;
 }
 
+float umPebbleCluster(float3 dir)
+{
+    float province = smoothstep(cos(0.34), cos(0.12), dot(dir, normalize(float3(0.88, -0.24, 0.20))));
+    float grain = sin(dir.x * 149.0 + dir.z * 47.0) * sin(dir.y * 181.0 - dir.z * 63.0);
+    return province * smoothstep(0.50, 0.96, grain * 0.5 + 0.5);
+}
+
 float zyUmbrosRelief(float3 dir)
 {
     float ridges =
@@ -44,7 +51,7 @@ float zyUmbrosRelief(float3 dir)
         sin((dir.x + dir.y + dir.z) * 34.0) * 0.006;
     float basinA = 1.0 - smoothstep(0.055, 0.115, abs(length(dir.xy - float2(0.22, -0.18)) - 0.32));
     float basinB = 1.0 - smoothstep(0.040, 0.090, abs(length(dir.yz - float2(0.30, 0.24)) - 0.22));
-    return ridges - (basinA * 0.035 + basinB * 0.026) + umQuadtreeSdfRelief(dir);
+    return ridges - (basinA * 0.035 + basinB * 0.026) + umQuadtreeSdfRelief(dir) - umPebbleCluster(dir) * 0.010;
 }
 
 float3 zyPrimaryStarDirection(float phase)
@@ -68,10 +75,12 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float relief = zyUmbrosRelief(dir);
     float dust = sin(dir.x * 31.0 + dir.y * 17.0 - dir.z * 11.0) * 0.5 + 0.5;
     float cracks = saturate(-umQuadtreeSdfRelief(dir) * 20.0);
+    float pebbles = umPebbleCluster(dir);
     SdfSurface surface;
     surface.baseColor = lerp(float3(0.18, 0.19, 0.20), float3(0.44, 0.42, 0.38), dust);
     surface.baseColor = lerp(surface.baseColor, float3(0.10, 0.11, 0.12), saturate(-relief * 18.0));
     surface.baseColor = lerp(surface.baseColor, float3(0.07, 0.075, 0.085), cracks);
+    surface.baseColor = lerp(surface.baseColor, float3(0.50, 0.49, 0.45), pebbles * 0.45);
     surface.metallic = 0.0;
     surface.roughness = 0.92;
     surface.emission = 0.0;

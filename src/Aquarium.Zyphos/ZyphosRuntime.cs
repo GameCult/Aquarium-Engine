@@ -23,8 +23,16 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         [ZyphosSpatialDomainCatalog.Orbital] = true,
         [ZyphosSpatialDomainCatalog.Planet] = true,
         [ZyphosSpatialDomainCatalog.PlanetLatLong] = true,
+        [ZyphosSpatialDomainCatalog.ContinentArchipelago] = true,
+        [ZyphosSpatialDomainCatalog.EquatorialForest] = true,
+        [ZyphosSpatialDomainCatalog.CanopyTree] = true,
+        [ZyphosSpatialDomainCatalog.ShingleCoast] = true,
+        [ZyphosSpatialDomainCatalog.PebbleField] = true,
         [ZyphosSpatialDomainCatalog.Umbros] = true,
         [ZyphosSpatialDomainCatalog.UmbrosLatLong] = true,
+        [ZyphosSpatialDomainCatalog.UmbrosCraterProvince] = true,
+        [ZyphosSpatialDomainCatalog.UmbrosBoulderField] = true,
+        [ZyphosSpatialDomainCatalog.UmbrosPebbleField] = true,
     };
 
     public AquariumRuntimeOptions Options { get; private set; }

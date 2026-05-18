@@ -34,7 +34,10 @@ public sealed class ZyphosSpatialDomainCatalogTests
     {
         Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.Planet), domain => domain.Key == ZyphosSpatialDomainCatalog.PlanetLatLong);
         Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.Umbros), domain => domain.Key == ZyphosSpatialDomainCatalog.UmbrosLatLong);
-        Assert.True(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.PlanetLatLong).Count >= 2);
-        Assert.True(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.UmbrosLatLong).Count >= 2);
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.EquatorialForest), domain => domain.Key == ZyphosSpatialDomainCatalog.CanopyTree);
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.CanopyTree), domain => domain.Key == ZyphosSpatialDomainCatalog.CanopyLeaf);
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.PebbleField), domain => domain.Key == ZyphosSpatialDomainCatalog.PebbleFieldTile);
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.UmbrosBoulderField), domain => domain.Key == ZyphosSpatialDomainCatalog.UmbrosPebbleField);
+        Assert.Contains(ZyphosSpatialDomainCatalog.ChildrenOf(ZyphosSpatialDomainCatalog.UmbrosPebbleField), domain => domain.Key == ZyphosSpatialDomainCatalog.UmbrosBoulderPebbleTile);
     }
 }

@@ -43,8 +43,8 @@ public sealed class ZyphosCameraComposerTests
     {
         var shot = ZyphosCameraComposer.Compose(ZyphosSpatialDomainCatalog.TerrainTile, 0.1f, 0.4f, 16.0f, 0.0f);
 
-        Assert.Equal(ZyphosSpatialDomainCatalog.PlanetLatLong, shot.ParentDomainKey);
-        Assert.Equal(ZyphosUmbrosSystem.ZyphosCenter, shot.CameraTarget);
+        Assert.Equal(ZyphosSpatialDomainCatalog.ContinentArchipelago, shot.ParentDomainKey);
+        Assert.NotEqual(ZyphosUmbrosSystem.ZyphosCenter, shot.CameraTarget);
         Assert.True(shot.TrackedCenter.Z > shot.CameraTarget.Z);
     }
 }

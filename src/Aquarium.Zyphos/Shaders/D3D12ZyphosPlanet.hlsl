@@ -73,6 +73,29 @@ float zyQuadtreeSdfRelief(float3 dir)
     return relief;
 }
 
+float zyDomainMask(float3 dir, float3 center, float width)
+{
+    return smoothstep(cos(width), cos(width * 0.35), dot(dir, normalize(center)));
+}
+
+float zyLeafCluster(float3 dir)
+{
+    float forest = zyDomainMask(dir, float3(0.32, 0.68, 0.16), 0.42);
+    float leafCells =
+        sin(dir.x * 91.0 + dir.y * 37.0) *
+        sin(dir.y * 113.0 - dir.z * 53.0) *
+        sin((dir.x + dir.z) * 157.0);
+    float leaf = smoothstep(0.36, 0.92, leafCells * 0.5 + 0.5);
+    return forest * leaf;
+}
+
+float zyPebbleCluster(float3 dir)
+{
+    float coast = zyDomainMask(dir, float3(0.57, -0.28, 0.10), 0.24);
+    float grains = sin(dir.x * 173.0 - dir.y * 71.0) * sin(dir.z * 127.0 + dir.y * 59.0);
+    return coast * smoothstep(0.48, 0.94, grains * 0.5 + 0.5);
+}
+
 float zyTerrainOffset(float3 dir, SdfObject sdfObject)
 {
     float field = zySphericalField(dir);
@@ -80,7 +103,7 @@ float zyTerrainOffset(float3 dir, SdfObject sdfObject)
     float land = smoothstep(seaLevel - 0.04, seaLevel + 0.08, field);
     float mountain = pow(saturate(field - seaLevel), 1.65);
     float polarCap = pow(abs(dir.z), 8.0) * 0.035;
-    float tileRelief = zyQuadtreeSdfRelief(dir) * land;
+    float tileRelief = zyQuadtreeSdfRelief(dir) * land + zyLeafCluster(dir) * 0.018 + zyPebbleCluster(dir) * 0.010;
     return (field - seaLevel) * 0.10 + mountain * 0.13 + polarCap * land + tileRelief;
 }
 
@@ -103,6 +126,8 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float land = smoothstep(seaLevel - 0.03, seaLevel + 0.06, field);
     float mountain = smoothstep(seaLevel + 0.12, seaLevel + 0.28, field);
     float tileRelief = zyQuadtreeSdfRelief(dir);
+    float leafCluster = zyLeafCluster(dir);
+    float pebbleCluster = zyPebbleCluster(dir);
     float polar = smoothstep(0.72, 0.92, abs(dir.z));
     float cloud = smoothstep(0.73, 0.91, sin(dir.x * 18.0 + dir.y * 13.0 + dir.z * 9.0 + timeSeconds * 0.19) * 0.5 + 0.5);
 
@@ -113,6 +138,8 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     float3 landColor = lerp(lowland, highland, mountain);
     landColor = lerp(landColor, snow, saturate(polar + mountain * 0.38));
     landColor = lerp(landColor, float3(0.62, 0.54, 0.36), saturate(tileRelief * 14.0));
+    landColor = lerp(landColor, float3(0.025, 0.24, 0.08), leafCluster * 0.82);
+    landColor = lerp(landColor, float3(0.42, 0.39, 0.34), pebbleCluster * 0.65);
 
     SdfSurface surface;
     surface.baseColor = lerp(ocean, landColor, land);
