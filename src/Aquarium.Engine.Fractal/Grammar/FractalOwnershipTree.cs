@@ -19,7 +19,9 @@ public sealed class FractalOwnershipTree
         IReadOnlyList<AquariumBrushClaim> claims)
     {
         Domain = domain;
-        Domains = domains;
+        DomainGraph = new FractalDomainGraph(domains);
+        DomainGraph.GetRequired(domain.Key);
+        Domains = DomainGraph.Domains;
         Nodes = nodes;
         Claims = claims;
     }
@@ -27,6 +29,8 @@ public sealed class FractalOwnershipTree
     public AquariumFractalDomain Domain { get; }
 
     public IReadOnlyList<AquariumFractalDomain> Domains { get; }
+
+    public FractalDomainGraph DomainGraph { get; }
 
     public IReadOnlyList<AquariumFractalNode> Nodes { get; }
 

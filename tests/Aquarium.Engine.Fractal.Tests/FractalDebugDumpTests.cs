@@ -22,6 +22,7 @@ public sealed class FractalDebugDumpTests
         var dump = FractalDebugDump.Build(tree, summaries, cut);
 
         Assert.Contains("domain cube/PositiveZ/L00/0/0:debug/world", dump);
+        Assert.Contains("domain-path cube/PositiveZ/L00/0/0:debug/world", dump);
         Assert.Contains("claim cube/PositiveZ/L00/0/0:debug/world/root/claim/0000/ridge", dump);
         Assert.Contains("summary cube/PositiveZ/L00/0/0:debug/world/root", dump);
         Assert.Contains("cut cube/PositiveZ/L00/0/0:debug/world/root", dump);

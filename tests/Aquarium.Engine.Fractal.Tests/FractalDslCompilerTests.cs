@@ -24,6 +24,9 @@ public sealed class FractalDslCompilerTests
         Assert.Equal(5, tree.Domains.Count);
         Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.Solar && domain.Key.Value == "demo/star");
         Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.LatLong && domain.ParentKey.Value == "demo/planet");
+        Assert.Equal(
+            ["demo/star", "demo/orbit", "demo/planet", "demo/latlong", "cube/PositiveZ/L00/0/0:zyphos/terrain"],
+            tree.DomainGraph.GetPath(tree.Domain.Key).Select(domain => domain.Key.Value).ToArray());
         Assert.Equal(2, tree.Claims.Count);
         Assert.Equal("cube/PositiveZ/L00/0/0:zyphos/terrain/root/claim/0001/ridge", tree.Claims[1].Key.Value);
         Assert.Equal(0.06f, tree.Claims[1].Amplitude);
@@ -66,5 +69,32 @@ public sealed class FractalDslCompilerTests
         const string source = "height orphan 0 0 1 1 0 3 1 1 0 tag";
 
         Assert.Throws<FormatException>(() => FractalDslCompiler.Compile(source));
+    }
+
+    [Fact]
+    public void DslRejectsMissingDomainParents()
+    {
+        const string source = """
+            domain Planetary demo/planet demo/missing 1 0.56 0 0
+            tile PositiveZ 0 0 0 zyphos/terrain demo/planet
+            height basin 0 0 30 30 0 3 1 -0.18 7 basin
+            """;
+
+        var ex = Assert.Throws<FormatException>(() => FractalDslCompiler.Compile(source));
+        Assert.Contains("demo/missing", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DslRejectsDuplicateDomainKeys()
+    {
+        const string source = """
+            domain Planetary demo/planet - 1 0.56 0 0
+            domain LatLong demo/planet - -90 90 -180 180
+            tile PositiveZ 0 0 0 zyphos/terrain demo/planet
+            height basin 0 0 30 30 0 3 1 -0.18 7 basin
+            """;
+
+        var ex = Assert.Throws<FormatException>(() => FractalDslCompiler.Compile(source));
+        Assert.Contains("Duplicate", ex.Message, StringComparison.Ordinal);
     }
 }

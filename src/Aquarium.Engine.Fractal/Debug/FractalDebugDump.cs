@@ -22,6 +22,7 @@ public static class FractalDebugDump
             builder.AppendLine($"domain {domain.Key} kind={domain.Kind} parent={domain.ParentKey}");
         }
 
+        builder.AppendLine($"domain-path {string.Join(" -> ", tree.DomainGraph.GetPath(tree.Domain.Key).Select(domain => domain.Key.ToString()))}");
         builder.AppendLine($"nodes {tree.Nodes.Count} claims {tree.Claims.Count} summaries {summaries.Count} cut {selectedCut.Count}");
         foreach (var node in tree.Nodes)
         {
