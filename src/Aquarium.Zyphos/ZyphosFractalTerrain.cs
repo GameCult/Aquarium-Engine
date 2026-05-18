@@ -29,6 +29,24 @@ public static class ZyphosFractalTerrain
 
     public static string DebugDump => FractalDebugDump.Build(OwnershipTree, Summaries.Value, SelectedCut.Value);
 
+    public static ZyphosFractalRenderPlan BuildRenderPlan(ZyphosCameraShot shot)
+    {
+        var pixelsPerWorld = Math.Clamp(72.0f / MathF.Max(shot.EffectiveDistance, 0.001f), 0.25f, 48.0f);
+        var selectedCut = FractalSelectedCutBuilder.Build(Summaries.Value, _ => pixelsPerWorld, maxEstimatedCost: 64.0f);
+        var brushes = FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut);
+        return new ZyphosFractalRenderPlan(
+            brushes,
+            selectedCut,
+            pixelsPerWorld,
+            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {pixelsPerWorld:0.00} px-wu");
+    }
+
     public static string Summary =>
         $"{Path.GetFileName(PatchPath)} / {OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} tile nodes / {SelectedCut.Value.Length} cuts / {HeightBrushes.Length} shaped brushes";
 }
+
+public readonly record struct ZyphosFractalRenderPlan(
+    AquariumHeightFieldBrush[] HeightBrushes,
+    AquariumSelectedCut[] SelectedCuts,
+    float PixelsPerWorld,
+    string Summary);

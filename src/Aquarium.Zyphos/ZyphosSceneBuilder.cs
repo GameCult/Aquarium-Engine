@@ -5,21 +5,16 @@ namespace Aquarium.Zyphos;
 
 public static class ZyphosSceneBuilder
 {
-    public static AquariumSceneState Build(float timeSeconds, float previousTimeSeconds)
+    public static AquariumSceneState Build(float timeSeconds, float previousTimeSeconds, ZyphosFractalRenderPlan fractalPlan)
     {
         return new AquariumSceneState
         {
             TraceHeightFieldSurface = false,
             UseStarfieldBackground = true,
-            HeightFieldBrushes = BuildHeightFieldBrushes(),
+            HeightFieldBrushes = fractalPlan.HeightBrushes,
             SdfObjects = BuildSdfObjects(timeSeconds, previousTimeSeconds),
             SdfLights = BuildSdfLights(timeSeconds),
         };
-    }
-
-    private static AquariumHeightFieldBrush[] BuildHeightFieldBrushes()
-    {
-        return ZyphosFractalTerrain.HeightBrushes;
     }
 
     private static AquariumSdfObject[] BuildSdfObjects(float timeSeconds, float previousTimeSeconds)

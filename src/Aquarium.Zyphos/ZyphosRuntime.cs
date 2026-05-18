@@ -52,6 +52,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
         get
         {
             var shot = CurrentShot();
+            var fractalPlan = ZyphosFractalTerrain.BuildRenderPlan(shot);
             var starPose = ZyphosSpatialDomainCatalog.GetRequired(ZyphosSpatialDomainCatalog.Solar).Pose(timeSeconds);
             var viewRadius = MathF.Max(
                 MathF.Max(32.0f, shot.EffectiveDistance * 1.15f),
@@ -62,7 +63,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 shot.CameraTarget,
                 timeSeconds,
                 Vector2.Zero,
-                ZyphosSceneBuilder.Build(timeSeconds, previousTimeSeconds));
+                ZyphosSceneBuilder.Build(timeSeconds, previousTimeSeconds, fractalPlan));
         }
     }
 
@@ -78,6 +79,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Readout("Runtime", () => $"{timeSeconds:0.0}s");
                 panel.Readout("Camera", () => $"{ZyphosCameraComposer.DisplayName(selectedDomainKey)} / {CurrentShot().EffectiveDistance:0.00} wu / yaw {orbitYaw:0.00}");
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
+                panel.Readout("Fractal Cut", () => ZyphosFractalTerrain.BuildRenderPlan(CurrentShot()).Summary);
                 panel.Readout("Binary", () => $"Umbros {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} deg / {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Rz");
                 panel.Readout("Objects", () => "fractal height DSL, atmosphere, Umbros");
             })

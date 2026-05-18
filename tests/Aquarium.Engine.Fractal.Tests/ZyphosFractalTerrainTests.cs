@@ -34,4 +34,19 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains(tree.Claims, claim => claim.Tags == "pebble");
         Assert.Contains(brushes, brush => brush.EnvelopeFalloff > 0.0f && brush.RadiusY > 0.0f);
     }
+
+    [Fact]
+    public void ZyphosFractalRenderPlanUsesCameraContributionPressure()
+    {
+        var nearShot = ZyphosCameraComposer.Compose(ZyphosSpatialDomainCatalog.CanopyLeaf, 0.1f, 0.4f, 0.1f, 0.0f);
+        var farShot = ZyphosCameraComposer.Compose(ZyphosSpatialDomainCatalog.Solar, 0.1f, 0.4f, 80.0f, 0.0f);
+
+        var near = ZyphosFractalTerrain.BuildRenderPlan(nearShot);
+        var far = ZyphosFractalTerrain.BuildRenderPlan(farShot);
+
+        Assert.True(near.PixelsPerWorld > far.PixelsPerWorld);
+        Assert.Equal(ZyphosFractalTerrain.SelectedCuts.Length, near.SelectedCuts.Length);
+        Assert.Equal(ZyphosFractalTerrain.HeightBrushes.Length, near.HeightBrushes.Length);
+        Assert.Contains("px-wu", near.Summary, StringComparison.Ordinal);
+    }
 }
