@@ -243,10 +243,10 @@ Goal: make every LOD subtree renderable without its children.
 
 Tasks:
 
-- [ ] Add summary builder for 2D brush tree nodes.
-- [ ] Track max height/form error.
-- [ ] Track max material delta placeholder.
-- [ ] Track coverage and estimated cost.
+- [x] Add summary builder for 2D brush tree nodes.
+- [x] Track max height/form error.
+- [x] Track max material delta placeholder.
+- [x] Track coverage and estimated cost.
 - [ ] Add parent fallback payload.
 - [ ] Add summary serialization.
 - [ ] Add debug overlay for summary bounds/error.
