@@ -218,7 +218,7 @@ Tasks:
 - [x] Implement operations: `Union`, `Subtract`, `Common`, `Repeat`, `Refine`, `Capture`, `Bind`.
 - [ ] Implement operation bounds.
 - [x] Add flattening compiler to shaped 2D brush packets.
-- [ ] Add debug dump for authored tree and flattened packets.
+- [x] Add debug dump for authored tree and flattened packets.
 
 Tests:
 
@@ -277,7 +277,7 @@ Tasks:
 - [x] Add selected-cut builder.
 - [x] Add hysteresis fade weights.
 - [x] Add budget clamp.
-- [ ] Add debug channels: score, depth, fade, estimated cost.
+- [x] Add debug channels: score, depth, fade, estimated cost.
 
 Tests:
 
@@ -336,7 +336,7 @@ Tasks:
 - [x] Add child request queue.
 - [ ] Add score/cost eviction policy.
 - [x] Add parent-summary fallback path.
-- [ ] Add debug channels: residency, requests, evictions.
+- [x] Add debug channels: residency, requests, evictions.
 
 Tests:
 

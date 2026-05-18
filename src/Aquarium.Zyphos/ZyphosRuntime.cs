@@ -50,7 +50,8 @@ public sealed class ZyphosRuntime : IAquariumRuntime
                 panel.Readout("Terrain DSL", () => ZyphosFractalTerrain.Summary);
                 panel.Readout("Objects", () => "fractal height DSL, atmosphere, moon");
             })
-            .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.");
+            .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.")
+            .Command("zyphos-fractal", _ => ZyphosFractalTerrain.DebugDump, "Dump the compiled Zyphos fractal terrain grammar.");
     }
 
     public AquariumFrame ComposeFrame(AquariumFrame frame, AquariumFrameInput input)

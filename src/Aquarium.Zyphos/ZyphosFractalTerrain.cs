@@ -1,5 +1,8 @@
+using Aquarium.Engine.Fractal;
 using Aquarium.Engine.Fractal.Brushes;
+using Aquarium.Engine.Fractal.Debug;
 using Aquarium.Engine.Fractal.Grammar;
+using Aquarium.Engine.Fractal.Lod;
 using Aquarium.Engine.Render;
 
 namespace Aquarium.Zyphos;
@@ -15,12 +18,16 @@ public static class ZyphosFractalTerrain
         """;
 
     private static readonly Lazy<FractalOwnershipTree> Tree = new(() => FractalDslCompiler.Compile(Grammar));
+    private static readonly Lazy<AquariumFractalSummary[]> Summaries = new(() => FractalSummaryBuilder.Build(Tree.Value));
+    private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 8.0f));
     private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileMany(Tree.Value.Claims));
 
     public static FractalOwnershipTree OwnershipTree => Tree.Value;
 
     public static AquariumHeightFieldBrush[] HeightBrushes => Brushes.Value;
 
+    public static string DebugDump => FractalDebugDump.Build(OwnershipTree, Summaries.Value, SelectedCut.Value);
+
     public static string Summary =>
-        $"{OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} node / {HeightBrushes.Length} shaped brushes";
+        $"{OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} node / {SelectedCut.Value.Length} cuts / {HeightBrushes.Length} shaped brushes";
 }
