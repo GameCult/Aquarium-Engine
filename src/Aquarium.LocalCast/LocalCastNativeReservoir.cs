@@ -193,6 +193,12 @@ public sealed class LocalCastNativeRuntime : ILocalCastNativeRuntime
         return new LocalCastNativeProducer(this, kind, sensorIdHash, initialSequence);
     }
 
+    public LocalCastNativeProducer CreateProducer(LocalCastNativeSampleKind kind, string sourceId, ulong initialSequence = 0)
+    {
+        EnsureNotDisposed();
+        return new LocalCastNativeProducer(this, kind, sourceId, initialSequence);
+    }
+
     public void Dispose()
     {
         if (handle == IntPtr.Zero)
@@ -219,6 +225,17 @@ public sealed class LocalCastNativeProducer : ILocalCastNativeProducer
     {
         this.runtime = runtime;
         handle = LocalCastNativeMethods.ProducerCreate((uint)kind, sensorIdHash, initialSequence);
+        if (handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("LocalCast native producer creation failed.");
+        }
+    }
+
+    internal LocalCastNativeProducer(LocalCastNativeRuntime runtime, LocalCastNativeSampleKind kind, string sourceId, ulong initialSequence)
+    {
+        this.runtime = runtime;
+        var bytes = Encoding.UTF8.GetBytes(sourceId);
+        handle = LocalCastNativeMethods.ProducerCreateForSource((uint)kind, bytes, (UIntPtr)bytes.Length, initialSequence);
         if (handle == IntPtr.Zero)
         {
             throw new InvalidOperationException("LocalCast native producer creation failed.");
@@ -320,6 +337,9 @@ internal static class LocalCastNativeMethods
 
     [DllImport(LibraryName, EntryPoint = "localcast_producer_create")]
     internal static extern IntPtr ProducerCreate(uint sampleKind, ulong sensorIdHash, ulong initialSequence);
+
+    [DllImport(LibraryName, EntryPoint = "localcast_producer_create_for_source")]
+    internal static extern IntPtr ProducerCreateForSource(uint sampleKind, byte[] sourceIdBytes, UIntPtr sourceIdByteLen, ulong initialSequence);
 
     [DllImport(LibraryName, EntryPoint = "localcast_producer_destroy")]
     internal static extern void ProducerDestroy(IntPtr producer);
