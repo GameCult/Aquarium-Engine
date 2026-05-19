@@ -335,10 +335,12 @@ Tasks:
   and feeds the next resource plan.
 - [x] Convert contribution-cache refresh into a candidate generator that submits
   weighted candidates to the resampled-importance core.
-- [ ] Add fractal SDF probe candidate records: domain key, local frame, bound,
+- [x] Add fractal SDF probe candidate records: domain key, local frame, bound,
   projected contribution target, source PDF, payload handle, and material delta.
 - [ ] Add temporal reuse validation: camera motion, domain ancestry, local-frame
-  error, bounds, and disocclusion/material compatibility.
+  error, bounds, and disocclusion/material compatibility. Domain ancestry and
+  local-shift checks exist; camera/disocclusion/material validation still need
+  renderer inputs.
 - [ ] Add spatial reuse validation across screen tiles and cube-sphere neighbor
   domains.
 - [ ] Feed reservoir confidence, selected target, candidate count, sample age,
@@ -360,8 +362,8 @@ Tests:
 - near-threshold nodes keep nonzero update probability;
 - stale wrong score recovers after observations;
 - fixed camera path converges within tolerance;
-- temporal reuse rejects mismatched domain ancestry;
-- spatial reuse rejects invalid local-frame shifts;
+- [x] temporal reuse rejects mismatched domain ancestry;
+- [x] spatial reuse rejects invalid local-frame shifts;
 - TAA history confidence drops when reservoir validity changes;
 - update cost respects budget.
 

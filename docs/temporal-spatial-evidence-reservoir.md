@@ -124,12 +124,18 @@ Built:
   frames scheduled update nodes as weighted reservoir candidates with a
   per-frame reservoir snapshot for debug and tests. It is the candidate source,
   not the full temporal/spatial reuse pass.
+- `FractalProbeSample` is the first typed fractal SDF/detail sample shape for
+  the ReSTIR/GRIS path. It carries domain key, node key, local center, bound
+  radius, target contribution, source PDF, material delta, and payload handle.
+  `FractalProbeReuseValidator` currently proves domain lineage and local-shift
+  compatibility; renderer-facing camera, disocclusion, material, and visibility
+  checks still need to be added before temporal/spatial reuse is complete.
 
 Not built yet:
 
 - GPU reservoir buffers;
-- temporal reprojection validation for fractal/SDF reservoirs;
-- spatial neighbor reuse for fractal/SDF reservoirs;
+- camera/disocclusion/material validation for fractal/SDF reservoirs;
+- spatial neighbor reuse across screen tiles and cube-sphere neighbor domains;
 - GRIS-style domain shift mappings for nested `.aquageo` domains;
 - TAA guide-buffer weaving of reservoir confidence, age, and domain validity;
 - SSD/RAM residency queues driven by reservoir contribution estimates.
