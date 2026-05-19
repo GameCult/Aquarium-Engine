@@ -75,6 +75,7 @@ current_model:
     cube_sphere_fractal_brushes: research/rendering/cube-sphere-fractal-brushes.md
     fractal_brush_architecture_plan: research/rendering/fractal-brush-architecture-plan.md
     fractal_brush_implementation_roadmap: research/rendering/fractal-brush-implementation-roadmap.md
+    perfect_machine_architecture: docs/perfect-machine-architecture.md
 
 invariants:
   - The camera target is the Grid center on the global XY plane.
@@ -134,6 +135,7 @@ renderer_state:
     - Contribution weights cannot all be refreshed every frame; the cache needs a probabilistic online estimator that samples nodes under budget, updates mean/uncertainty/sample age/confidence, preserves nonzero exploration for visible or near-threshold nodes, and can later become a learned predictor without replacing conservative SDF bounds.
     - Fractal resource planning is explicit: one plan coordinates CPU contribution updates, GPU selected-cut estimated cost, RAM resident payload budget, and SSD request pressure before backend packet compilation. This same budget language should generalize to Mimir-style sensor fusion because both fractal SDF probes and camera/microphone feature detections accumulate confidence-weighted spatial samples into temporal reservoirs.
     - The consolidated fractal brush architecture plan defines the intended pipeline: client intent -> domain roots -> semantic IFS brush grammar -> ownership tree -> node summaries -> contribution cache/residency scheduler -> backend packets -> renderer passes -> debug/evidence, with explicit module boundaries and mockable unit-test seams.
+    - The Perfect Machine architecture lives in docs/perfect-machine-architecture.md. It is the current waterfall design authority for fast 2D SDF splats, 3D SDF splats, 2D-projected-to-3D surface splats, IFS `.aquageo` structural probes, Mimir-style camera/audio evidence candidates, ReSTIR/GRIS reservoir reuse, heuristic occupancy graph updates, resource-tier residency, and TAA guide-buffer integration.
     - The actionable fractal brush implementation roadmap lives in research/rendering/fractal-brush-implementation-roadmap.md and is the execution authority for the first pass.
     - Bundled blue-noise texture assets are retained for future dithering/noise work even though the removed medium path no longer samples them.
     - D3D11 scene renderer, runtime volumetrics, cloud/fog research, medium/froxel render targets, and the SDF-field renderer plan are shelved and removed from live repo state.
@@ -163,6 +165,7 @@ next_actions:
   - Follow research/rendering/hdr-pbr-presentation.md before changing HDR exposure, bloom, tonemapping, or display transforms.
   - Follow research/rendering/cube-sphere-fractal-brushes.md before replacing planetary terrain addressing, height brushes, or agent/body detail grammars.
   - Follow research/rendering/fractal-brush-architecture-plan.md before implementing the fractal brush DSL, IFS LOD cache, recursive detail residency, or learned contribution scoring.
+  - Follow docs/perfect-machine-architecture.md before expanding SDF splat backends, sensor-fusion candidate adapters, reservoir guide buffers, occupancy graph state, or stochastic learned priority.
   - Use research/rendering/fractal-brush-implementation-roadmap.md as the actionable execution checklist for fractal brush work.
   - Follow docs/zyphos-eusocial-sync.md and E:\Projects\Eusocial Interbeing\Eusocial Interbeing\World\Zyphos Simulation Brief.md before turning Zyphos visual choices into setting claims.
   - Follow docs/tsr-inspired-taa-spec.md when changing current temporal diagnostics.
