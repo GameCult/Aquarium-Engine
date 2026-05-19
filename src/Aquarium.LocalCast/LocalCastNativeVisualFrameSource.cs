@@ -1,8 +1,78 @@
+using System.Runtime.InteropServices;
+
 namespace Aquarium.LocalCast;
 
 public delegate bool LocalCastNativeRenderPayloadDecoder(
     LocalCastNativeSampleHandle sample,
     out LocalCastVisualFrame frame);
+
+public delegate bool LocalCastNativeRenderPointBufferDecoder(
+    in LocalCastNativeRenderPacketDescriptor descriptor,
+    LocalCastNativeSampleHandle sample,
+    out IReadOnlyList<LocalCastVisualPoint> points);
+
+public sealed class LocalCastNativeRenderDescriptorDecoder
+{
+    private readonly LocalCastNativeRenderPointBufferDecoder decodePointBuffer;
+    private readonly string spoutSenderName;
+
+    public LocalCastNativeRenderDescriptorDecoder(
+        LocalCastNativeRenderPointBufferDecoder decodePointBuffer,
+        string spoutSenderName = "LocalCastBridge Point Cloud")
+    {
+        this.decodePointBuffer = decodePointBuffer;
+        this.spoutSenderName = spoutSenderName;
+    }
+
+    public bool TryDecode(LocalCastNativeSampleHandle sample, out LocalCastVisualFrame frame)
+    {
+        frame = EmptyFrame();
+        if (!sample.IsLive || sample.PayloadHandle == 0)
+        {
+            return false;
+        }
+
+        var descriptor = Marshal.PtrToStructure<LocalCastNativeRenderPacketDescriptor>((IntPtr)sample.PayloadHandle);
+        if (!decodePointBuffer(in descriptor, sample, out var points))
+        {
+            return false;
+        }
+
+        frame = new LocalCastVisualFrame
+        {
+            SchemaVersion = LocalCastVisualStateReader.RenderFrameSchemaId,
+            FrameId = checked((long)sample.Sequence),
+            CreatedMonotonicNs = checked((long)sample.ArrivalNs),
+            SourceTimeMinNs = checked((long)descriptor.SourceTimeMinNs),
+            SourceTimeMaxNs = checked((long)descriptor.SourceTimeMaxNs),
+            PresentTimeNs = checked((long)descriptor.PresentTimeNs),
+            AudioAlignmentTimeNs = checked((long)descriptor.AudioAlignmentTimeNs),
+            SpoutSenderName = spoutSenderName,
+            TargetWidth = checked((int)descriptor.TargetWidth),
+            TargetHeight = checked((int)descriptor.TargetHeight),
+            Points = points,
+        };
+        return true;
+    }
+
+    private static LocalCastVisualFrame EmptyFrame()
+    {
+        return new LocalCastVisualFrame
+        {
+            SchemaVersion = LocalCastVisualStateReader.RenderFrameSchemaId,
+            FrameId = -1,
+            CreatedMonotonicNs = 0,
+            SourceTimeMinNs = 0,
+            SourceTimeMaxNs = 0,
+            PresentTimeNs = 0,
+            AudioAlignmentTimeNs = 0,
+            SpoutSenderName = string.Empty,
+            TargetWidth = 0,
+            TargetHeight = 0,
+            Points = [],
+        };
+    }
+}
 
 public sealed class LocalCastNativeVisualFrameSource : ILocalCastVisualFrameSource
 {
