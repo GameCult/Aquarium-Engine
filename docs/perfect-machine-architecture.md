@@ -509,6 +509,11 @@ resource-tier residency fields remain open.
 Build cached 2D SDF/height/material pages for cube-sphere and torus domains.
 Use parent summaries while child pages stream.
 
+Current state: `AquariumFractalSurfacePageKey` and
+`AquariumFractalSurfacePage` define renderer-agnostic page metadata for height,
+2D signed-distance, material, and confidence pages. The page store and D3D12
+lowering remain open.
+
 ### Phase F: 3D SDF Splat Backend
 
 Build compact-support 3D SDF splat packets for object/volume domains. Keep

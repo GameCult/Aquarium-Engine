@@ -47,6 +47,67 @@ public enum AquariumFractalPayloadKind
     SignedDistance,
 }
 
+public enum AquariumFractalSurfacePageKind
+{
+    Height,
+    SignedDistance2D,
+    Material,
+    Confidence,
+}
+
+public readonly record struct AquariumFractalSurfacePageKey
+{
+    public AquariumFractalSurfacePageKey(
+        AquariumFractalKey domainKey,
+        AquariumFractalKey nodeKey,
+        AquariumFractalSurfacePageKind kind,
+        int mipLevel)
+    {
+        if (domainKey.Value is null)
+        {
+            throw new ArgumentException("Surface page domain key must not be empty.", nameof(domainKey));
+        }
+
+        if (nodeKey.Value is null)
+        {
+            throw new ArgumentException("Surface page node key must not be empty.", nameof(nodeKey));
+        }
+
+        if (mipLevel < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(mipLevel), mipLevel, "Surface page mip level must not be negative.");
+        }
+
+        DomainKey = domainKey;
+        NodeKey = nodeKey;
+        Kind = kind;
+        MipLevel = mipLevel;
+    }
+
+    public AquariumFractalKey DomainKey { get; }
+
+    public AquariumFractalKey NodeKey { get; }
+
+    public AquariumFractalSurfacePageKind Kind { get; }
+
+    public int MipLevel { get; }
+
+    public string Value => $"{DomainKey.Value}:{NodeKey.Value}:{Kind}:mip{MipLevel:D2}";
+
+    public override string ToString()
+    {
+        return Value;
+    }
+}
+
+public readonly record struct AquariumFractalSurfacePage(
+    AquariumFractalSurfacePageKey Key,
+    Vector4 BoundsMinMax,
+    int Width,
+    int Height,
+    int PayloadHandle,
+    float MaxError);
+
 public readonly record struct AquariumBrushClaim(
     AquariumFractalKey Key,
     AquariumFractalKey DomainKey,

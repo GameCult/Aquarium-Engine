@@ -400,6 +400,8 @@ Goal: prove page/key semantics before real SSD/GPU streaming.
 
 Tasks:
 
+- [x] Add renderer-agnostic surface page key/metadata contracts for height,
+  2D signed-distance, material, and confidence pages.
 - [x] Add fake payload store with resident/missing states.
 - [x] Add child request queue.
 - [ ] Add score/cost eviction policy.
