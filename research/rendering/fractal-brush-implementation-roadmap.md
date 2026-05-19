@@ -404,6 +404,8 @@ Tasks:
   2D signed-distance, material, and confidence pages.
 - [x] Add CPU surface page planner that lowers selected IFS cuts into stable
   page metadata.
+- [x] Add mockable surface page store boundary with resident/request/evict
+  decisions under a byte budget.
 - [x] Add fake payload store with resident/missing states.
 - [x] Add child request queue.
 - [x] Add score/cost eviction policy.

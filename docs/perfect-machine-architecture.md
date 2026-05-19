@@ -516,8 +516,10 @@ Current state: `AquariumFractalSurfacePageKey` and
 2D signed-distance, material, and confidence pages. `FractalSurfacePagePlanner`
 turns a selected IFS cut into stable page metadata, and the Zyphos render plan
 now exposes height, 2D signed-distance, material, and confidence pages beside
-its structural probe reservoir. The page store, eviction policy, atlas, and
-D3D12 lowering remain open.
+its structural probe reservoir. `FractalSurfacePageResidencyPlanner` adds a
+mockable page-store boundary with byte-budgeted resident, missing, requested,
+and evicted page decisions. The real page store, atlas, and D3D12 lowering
+remain open.
 
 ### Phase F: 3D SDF Splat Backend
 
