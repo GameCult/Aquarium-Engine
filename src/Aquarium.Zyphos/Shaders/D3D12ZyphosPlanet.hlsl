@@ -1,4 +1,5 @@
 static const int SDF_INDEX = 0;
+static const int ZYPHOS_GEOMETRY_BRUSH_LIMIT = 4;
 
 #include "D3D12SdfCommon.hlsli"
 #include "D3D12SdfMath.hlsli"
@@ -111,14 +112,15 @@ float2 zyTileBrushPlane(float2 faceUv, float level, float tileX, float tileY, ou
     return (local01 * 2.0 - 1.0) * 30.0;
 }
 
-float zyAuthoredBrushTerrain(float3 dir, out float materialMask)
+float zyAuthoredBrushTerrainLimited(float3 dir, int brushLimit, out float materialMask)
 {
     float face;
     float2 faceUv = zyCubeFaceUv(dir, face);
     float height = 0.0;
     materialMask = 0.0;
 
-    for (int index = 0; index < 64; index++)
+    [loop]
+    for (int index = 0; index < brushLimit; index++)
     {
         float4 centerRadius = brushCenterRadius[index];
         float4 shape = brushShape[index];
@@ -142,6 +144,11 @@ float zyAuthoredBrushTerrain(float3 dir, out float materialMask)
     }
 
     return height;
+}
+
+float zyAuthoredBrushTerrain(float3 dir, out float materialMask)
+{
+    return zyAuthoredBrushTerrainLimited(dir, 64, materialMask);
 }
 
 float zyTileRelief(float2 uv, float level, float amplitude, float ridgeBias)
@@ -200,8 +207,10 @@ float zyTerrainOffset(float3 dir, SdfObject sdfObject)
     float land = smoothstep(seaLevel - 0.04, seaLevel + 0.08, field);
     float mountain = pow(saturate(field - seaLevel), 1.65);
     float polarCap = pow(abs(dir.z), 8.0) * 0.035;
+    float authoredMaterial;
+    float authoredGeometry = zyAuthoredBrushTerrainLimited(dir, ZYPHOS_GEOMETRY_BRUSH_LIMIT, authoredMaterial);
     float tileRelief = zyQuadtreeSdfRelief(dir) * land + zyLeafCluster(dir) * 0.018 + zyPebbleCluster(dir) * 0.010;
-    return (field - seaLevel) * 0.10 + mountain * 0.13 + polarCap * land + tileRelief;
+    return (field - seaLevel) * 0.10 + mountain * 0.13 + polarCap * land + tileRelief + authoredGeometry * 0.52;
 }
 
 float sdfDistance(float3 p, int sdfIndex)

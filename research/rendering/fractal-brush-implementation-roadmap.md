@@ -378,7 +378,8 @@ Tasks:
 - [x] Route Zyphos render-plan construction through the resource budget planner.
 - [x] Update Zyphos contribution cache every render-plan request while reusing
   compiled brush packets for equivalent selected cuts.
-- [ ] Feed traced planet geometry from selected-cut/resident tile packets.
+- [x] Feed traced planet geometry from a hard-budgeted top-influence subset of
+  selected tile packets.
 - [ ] Add face/tile/LOD/cache debug modes.
 - [ ] Remove or quarantine old spherical noise path as baseline fixture.
 

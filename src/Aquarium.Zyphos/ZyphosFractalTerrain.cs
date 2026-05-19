@@ -60,7 +60,7 @@ public static class ZyphosFractalTerrain
         {
             if (!BrushCache.TryGetValue(cutKey, out brushes!))
             {
-                brushes = FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut);
+                brushes = OrderBrushesForGeometry(FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut));
                 BrushCache[cutKey] = brushes;
             }
         }
@@ -76,6 +76,17 @@ public static class ZyphosFractalTerrain
     private static string CutCacheKey(IReadOnlyList<AquariumSelectedCut> selectedCut)
     {
         return string.Join("|", selectedCut.Select(cut => cut.NodeKey.Value));
+    }
+
+    private static AquariumHeightFieldBrush[] OrderBrushesForGeometry(AquariumHeightFieldBrush[] brushes)
+    {
+        return brushes
+            .OrderByDescending(brush => MathF.Abs(brush.Amplitude) * MathF.Max(brush.Radius, brush.RadiusY))
+            .ThenBy(brush => brush.DomainFace)
+            .ThenBy(brush => brush.DomainLevel)
+            .ThenBy(brush => brush.Center.X)
+            .ThenBy(brush => brush.Center.Y)
+            .ToArray();
     }
 
     public static string Summary =>

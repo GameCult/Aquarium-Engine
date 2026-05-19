@@ -53,6 +53,8 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("gpu cost", near.Summary, StringComparison.Ordinal);
         Assert.Contains("resident", near.Summary, StringComparison.Ordinal);
         Assert.Empty(near.ResourcePlan.Residency.RequestedNodes);
+        Assert.True(MathF.Abs(near.HeightBrushes[0].Amplitude) * MathF.Max(near.HeightBrushes[0].Radius, near.HeightBrushes[0].RadiusY) >=
+            MathF.Abs(near.HeightBrushes[^1].Amplitude) * MathF.Max(near.HeightBrushes[^1].Radius, near.HeightBrushes[^1].RadiusY));
     }
 
     [Fact]
