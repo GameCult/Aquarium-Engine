@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Aquarium.Engine.Fractal;
 
@@ -159,6 +160,14 @@ public readonly record struct AquariumFractalSdfSplat3D(
     float DistanceOffset,
     float MaterialValue,
     float Confidence);
+
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct AquariumPackedFractalSdfSplat3D(
+    Vector4 CenterRadius,
+    Vector4 Orientation,
+    Vector4 RadiiFalloff,
+    Vector4 MaterialConfidence,
+    Vector4 Key);
 
 public readonly record struct AquariumBrushClaim(
     AquariumFractalKey Key,

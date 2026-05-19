@@ -529,6 +529,40 @@ Cut line:
 
 - If it does not beat the estimator clearly, delete it. No ornamental oracle.
 
+## Phase 11: GPU-Resident Splat Receipt
+
+Goal: prove hot fractal splat population belongs on the GPU, not in managed
+object graphs.
+
+Tasks:
+
+- [x] Add packed GPU splat buffer contract with no per-splat strings or object
+  ownership.
+- [x] Add native packed CPU buffer helper for the rare staging/readback paths
+  that genuinely need C# memory.
+- [x] Add D3D12 compute receipt harness that writes millions of splats directly
+  into a GPU-resident UAV.
+- [x] Measure with GPU timestamp queries and read back only a tiny checksum
+  sample.
+
+Receipt:
+
+- GTX 1070, `2,000,000` splats, `120` measured frames, `80` bytes/splat.
+- GPU time: `3.362 ms/frame`.
+- Equivalent throughput: `297.5 FPS`, about `594.9M` splats/sec.
+- Command: `.\scripts\fractal-splat-receipt.ps1 -Splats 2000000 -Frames 120`.
+
+Exit gate:
+
+- Receipt must show plural-millions of GPU-resident splats populated at hundreds
+  of FPS equivalent on the target tired GTX 1070.
+
+Cut line:
+
+- This is compute-side population throughput, not final shaded visibility. Do
+  not sell it as renderer completion until the draw/raster/resolve path consumes
+  the same packed buffer.
+
 ## First Work Packet
 
 Start here:

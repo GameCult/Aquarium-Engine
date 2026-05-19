@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Aquarium.Engine.Fractal;
 
 namespace Aquarium.Engine.Fractal.Tests;
@@ -43,5 +44,11 @@ public sealed class FractalSdfSplat3DContractTests
 
         Assert.Equal(new Vector3(4.0f, 5.0f, 6.0f), splat.Radii);
         Assert.Equal(0.8f, splat.Confidence);
+    }
+
+    [Fact]
+    public void PackedSdfSplat3DIsFixedSizeGpuPacket()
+    {
+        Assert.Equal(80, Marshal.SizeOf<AquariumPackedFractalSdfSplat3D>());
     }
 }
