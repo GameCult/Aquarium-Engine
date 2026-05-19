@@ -39,6 +39,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.roughness = 0.72;
     surface.emission = surface.baseColor * lerp(3.8, 7.5, hot);
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 

@@ -169,6 +169,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + sparkColor * (isSpark * 1.35 + isTendril * 0.85)
         + shadowColor * isShadow * 0.015;
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 

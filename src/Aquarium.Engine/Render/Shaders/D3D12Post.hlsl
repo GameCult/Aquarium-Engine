@@ -330,6 +330,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float currentCoverage = saturate(currentControl.x);
     float currentStepRatio = saturate(currentControl.y);
     float currentTemporalDetail = saturate(currentControl.z);
+    float currentReservoirConfidence = currentControl.w > 0.0 ? saturate(currentControl.w) : 1.0;
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
@@ -377,8 +378,9 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float temporalDetailWeight = 1.0 - smoothstep(0.08, 0.45, abs(previousTemporalDetail - currentTemporalDetail));
             temporalDetailWeight = max(temporalDetailWeight, 1.0 - smoothstep(0.02, 0.12, max(previousTemporalDetail, currentTemporalDetail)));
+            float reservoirConfidenceWeight = lerp(0.45, 1.0, currentReservoirConfidence);
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
-            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight * temporalDetailWeight;
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight * temporalDetailWeight * reservoirConfidenceWeight;
 
             historyColor = clampedHistory;
             historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
@@ -432,6 +434,10 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     else if (renderDebugMode >= 9.5 && renderDebugMode < 10.5)
     {
         finalColor = currentStepRatio.xxx;
+    }
+    else if (renderDebugMode >= 11.5 && renderDebugMode < 12.5)
+    {
+        finalColor = float3(currentReservoirConfidence, currentTemporalDetail, combinedHistoryWeight);
     }
     ResolveOut output;
     output.finalColor = float4(finalColor, 1.0);

@@ -185,6 +185,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + riskColor * riskMask * (0.36 + risk * 0.95)
         + riskColor * fractureMask * (0.18 + risk * 0.58);
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 

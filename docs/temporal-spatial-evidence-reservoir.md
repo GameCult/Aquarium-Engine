@@ -137,7 +137,8 @@ Not built yet:
 - camera/disocclusion/material validation for fractal/SDF reservoirs;
 - spatial neighbor reuse across screen tiles and cube-sphere neighbor domains;
 - GRIS-style domain shift mappings for nested `.aquageo` domains;
-- TAA guide-buffer weaving of reservoir confidence, age, and domain validity;
+- expanded TAA guide-buffer storage for previous-frame reservoir confidence,
+  sample age, domain validity, and invalidation reason;
 - SSD/RAM residency queues driven by reservoir contribution estimates.
 
 ## Implementation Roadmap
@@ -156,7 +157,9 @@ Not built yet:
    invalidation reason.
 7. Weave reservoir confidence and temporal detail into TAA guide buffers so the
    history filter can distinguish stable reused evidence from fresh stochastic
-   noise.
+   noise. The first pass uses current scene-control.w for reservoir confidence
+   and keeps history-control.w as age; full previous-frame reservoir validity
+   still needs an expanded guide layout.
 8. Add Mimir-facing candidate adapters only after the fractal path proves the
    contract: modality features are candidates, not a second reservoir system.
 9. Port the pure core to HLSL and add CPU/GPU parity fixtures.

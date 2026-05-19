@@ -152,6 +152,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + stripeColor * isStripe * (0.92 + sdfObject.state.y * 0.16)
         + gateColor * isGate * (0.42 + sdfObject.state.y * 0.12);
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 

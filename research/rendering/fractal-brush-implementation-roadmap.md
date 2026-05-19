@@ -344,7 +344,9 @@ Tasks:
 - [ ] Add spatial reuse validation across screen tiles and cube-sphere neighbor
   domains.
 - [ ] Feed reservoir confidence, selected target, candidate count, sample age,
-  and invalidation reason into TAA guide/history buffers.
+  and invalidation reason into TAA guide/history buffers. Current
+  scene-control.w now carries current reservoir confidence into resolve; full
+  previous-frame reservoir guide storage remains open.
 - [ ] Add confidence decay and stale uncertainty growth.
 - [ ] Add fake contribution probe.
 - [ ] Add convergence telemetry.
@@ -364,7 +366,8 @@ Tests:
 - fixed camera path converges within tolerance;
 - [x] temporal reuse rejects mismatched domain ancestry;
 - [x] spatial reuse rejects invalid local-frame shifts;
-- TAA history confidence drops when reservoir validity changes;
+- [x] TAA history confidence is modulated by current reservoir confidence;
+- TAA history confidence drops when previous-frame reservoir validity changes;
 - update cost respects budget.
 
 Exit gate:

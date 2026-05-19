@@ -22,6 +22,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.roughness = 0.28;
     surface.emission = primitiveEmissionRadiance(sdfFieldId(sdfIndex)) + surface.baseColor * 0.06;
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 

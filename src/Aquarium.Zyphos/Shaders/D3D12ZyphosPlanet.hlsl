@@ -281,6 +281,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.roughness = lerp(0.34, 0.84, land);
     surface.emission = 0.0;
     surface.temporalDetail = saturate(authoredMaterial * 3.0);
+    surface.reservoirConfidence = saturate(0.42 + authoredMaterial * 2.2 + leafCluster * 0.25 + pebbleCluster * 0.20);
     return surface;
 }
 

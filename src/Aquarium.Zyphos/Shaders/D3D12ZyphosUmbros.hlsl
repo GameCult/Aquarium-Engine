@@ -85,6 +85,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
     surface.roughness = 0.92;
     surface.emission = 0.0;
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 

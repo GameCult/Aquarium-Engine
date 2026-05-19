@@ -364,6 +364,7 @@ SdfSurface sdfSurface(float3 p, int sdfIndex)
         + gold * seamMask * 0.090
         + emberColor * emberMask * (3.2 + heartbeat * 1.1 + domain.pressure * 0.8);
     surface.temporalDetail = 0.0;
+    surface.reservoirConfidence = 1.0;
     return surface;
 }
 
