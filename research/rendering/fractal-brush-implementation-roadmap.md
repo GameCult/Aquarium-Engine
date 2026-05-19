@@ -221,6 +221,8 @@ Tasks:
 - [x] Add debug dump for authored tree and flattened packets.
 - [x] Preserve multiple `.aquageo` tile roots in the ownership tree instead of
   collapsing every claim under the final tile.
+- [x] Add compact `flame` grammar primitive for deterministic curled recursive
+  brush emission.
 
 Tests:
 
@@ -280,6 +282,8 @@ Tasks:
 - [x] Add hysteresis fade weights.
 - [x] Add budget clamp.
 - [x] Add debug channels: score, depth, fade, estimated cost.
+- [x] Add explicit resource budget plan for CPU update count, GPU estimated
+  packet cost, RAM residency, and SSD request pressure.
 
 Tests:
 
@@ -338,6 +342,7 @@ Tasks:
 - [x] Add child request queue.
 - [ ] Add score/cost eviction policy.
 - [x] Add parent-summary fallback path.
+- [x] Clamp simulated RAM residency and SSD requests through the resource plan.
 - [x] Add debug channels: residency, requests, evictions.
 
 Tests:
@@ -363,9 +368,12 @@ Tasks:
 
 - [x] Add Zyphos cube-sphere domain root.
 - [x] Add first tile grammar: ridges, craters, and material bands.
+- [x] Add first flame-style microdetail grammar line inside the Zyphos leaf
+  domain.
 - [x] Lower selected cut to shaped 2D height/material brush packets.
 - [x] Feed planet shader from tile-local cube-face domains for post-hit
   material/detail evaluation.
+- [x] Route Zyphos render-plan construction through the resource budget planner.
 - [ ] Feed traced planet geometry from selected-cut/resident tile packets.
 - [ ] Add face/tile/LOD/cache debug modes.
 - [ ] Remove or quarantine old spherical noise path as baseline fixture.

@@ -35,6 +35,30 @@ public sealed class FractalResidencyPlannerTests
         Assert.Empty(store.Requests);
     }
 
+    [Fact]
+    public void ResidencyPlannerRespectsRamAndSsdBudgets()
+    {
+        var residentA = new AquariumFractalKey("node/resident-a");
+        var residentB = new AquariumFractalKey("node/resident-b");
+        var missingA = new AquariumFractalKey("node/missing-a");
+        var missingB = new AquariumFractalKey("node/missing-b");
+        var store = new TestPayloadStore([residentA, residentB]);
+        var cuts = new[]
+        {
+            new AquariumSelectedCut(residentA, Score: 4.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: true),
+            new AquariumSelectedCut(residentB, Score: 3.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: true),
+            new AquariumSelectedCut(missingA, Score: 2.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: true),
+            new AquariumSelectedCut(missingB, Score: 1.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: true),
+        };
+
+        var plan = FractalResidencyPlanner.Plan(cuts, store, maxRequests: 1, maxResidentNodes: 1);
+
+        Assert.Equal([residentA], plan.ResidentNodes);
+        Assert.Equal([residentB, missingA, missingB], plan.SummaryFallbackNodes);
+        Assert.Equal([missingA], plan.RequestedNodes);
+        Assert.Equal([missingA], store.Requests);
+    }
+
     private sealed class TestPayloadStore(IEnumerable<AquariumFractalKey>? resident = null) : IFractalPayloadStore
     {
         private readonly HashSet<string> residentKeys = resident?.Select(key => key.Value).ToHashSet(StringComparer.Ordinal) ?? [];

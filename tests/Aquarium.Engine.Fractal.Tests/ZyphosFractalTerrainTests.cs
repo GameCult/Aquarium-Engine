@@ -24,13 +24,14 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains(tree.Domains, domain => domain.Kind == AquariumFractalDomainKind.CubeSphereTile && domain.ParentKey.Value == "umbros/pebble-field");
         Assert.Equal(new AquariumFractalKey("umbros/pebble-field"), tree.Domain.ParentKey);
         Assert.Equal(7, tree.Nodes.Count);
-        Assert.Equal(58, tree.Claims.Count);
+        Assert.Equal(61, tree.Claims.Count);
         Assert.Equal(tree.Claims.Count, brushes.Length);
         Assert.Contains(tree.Claims, claim => claim.Tags == "crater");
         Assert.Contains(tree.Claims, claim => claim.Tags == "ridge");
         Assert.Contains(tree.Claims, claim => claim.Tags == "shard");
         Assert.Contains(tree.Claims, claim => claim.Tags == "crown");
         Assert.Contains(tree.Claims, claim => claim.Tags == "leaf");
+        Assert.Contains(tree.Claims, claim => claim.Tags == "flame-leaf");
         Assert.Contains(tree.Claims, claim => claim.Tags == "pebble");
         Assert.Contains(brushes, brush => brush.EnvelopeFalloff > 0.0f && brush.RadiusY > 0.0f);
     }

@@ -64,6 +64,25 @@ public sealed class FractalDslCompilerTests
     }
 
     [Fact]
+    public void DslFlameEmitsCompactCurlingRecursiveClaims()
+    {
+        const string source = """
+            tile PositiveZ 0 0 0 zyphos/terrain
+            flame ember 3 2 1 -2 6 2 0.45 0.72 3.1 5.0 0.8 0.05 23 flame
+            """;
+
+        var first = FractalDslCompiler.Compile(source);
+        var second = FractalDslCompiler.Compile(source);
+
+        Assert.Equal(7, first.Claims.Count);
+        Assert.Equal(first.Claims, second.Claims);
+        Assert.All(first.Claims, claim => Assert.Equal("flame", claim.Tags));
+        Assert.True(first.Claims[1].Radii.X < first.Claims[0].Radii.X);
+        Assert.NotEqual(first.Claims[1].Center, first.Claims[2].Center);
+        Assert.NotEqual(first.Claims[0].RotationRadians, first.Claims[1].RotationRadians);
+    }
+
+    [Fact]
     public void DslPreservesMultipleTileRoots()
     {
         const string source = """

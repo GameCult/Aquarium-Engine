@@ -14,10 +14,23 @@ public static class ZyphosFractalTerrain
     private static readonly Lazy<string> PatchSource = new(() => File.ReadAllText(PatchPath));
     private static readonly Lazy<FractalOwnershipTree> Tree = new(() => FractalDslCompiler.Compile(PatchSource.Value));
     private static readonly Lazy<AquariumFractalSummary[]> Summaries = new(() => FractalSummaryBuilder.Build(Tree.Value));
+    private static readonly Lazy<AquariumContributionState[]> ContributionStates = new(() => Summaries.Value.Select(summary => new AquariumContributionState(
+        summary.NodeKey,
+        MeanContribution: 0.0f,
+        Variance: MathF.Max(summary.MaxHeightError, 0.001f),
+        Confidence: 0.0f,
+        SampleCount: 0,
+        LastSampledFrame: 0,
+        Resident: true)).ToArray());
     private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 64.0f));
     private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, SelectedCut.Value));
     private static readonly object PlanCacheLock = new();
     private static readonly Dictionary<int, ZyphosFractalRenderPlan> PlanCache = [];
+    private static readonly FractalResourceBudget DefaultBudget = new(
+        MaxCpuUpdates: 2,
+        MaxGpuEstimatedCost: 64.0f,
+        MaxResidentPayloads: 64,
+        MaxSsdRequests: 2);
 
     public static string PatchPath => Path.Combine(AppContext.BaseDirectory, PatchRelativePath);
 
@@ -44,13 +57,22 @@ public static class ZyphosFractalTerrain
         }
 
         var bucketPixelsPerWorld = bucket / 16.0f;
-        var selectedCut = FractalSelectedCutBuilder.Build(Summaries.Value, _ => bucketPixelsPerWorld, maxEstimatedCost: 64.0f);
+        var resourcePlan = FractalResourceBudgetPlanner.Plan(
+            Summaries.Value,
+            ContributionStates.Value,
+            _ => bucketPixelsPerWorld,
+            state => ScoreForState(state, bucketPixelsPerWorld),
+            DefaultBudget,
+            new FractalXorShiftRandom((uint)bucket ^ 0x9E3779B9u),
+            ResidentFractalPayloadStore.Instance,
+            frameIndex: (uint)bucket);
+        var selectedCut = resourcePlan.SelectedCut;
         var brushes = FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut);
         var plan = new ZyphosFractalRenderPlan(
             brushes,
             selectedCut,
             bucketPixelsPerWorld,
-            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {bucketPixelsPerWorld:0.00} px-wu");
+            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {resourcePlan.UpdateNodes.Length}/{DefaultBudget.MaxCpuUpdates} cpu updates / {resourcePlan.GpuEstimatedCost:0.0}/{DefaultBudget.MaxGpuEstimatedCost:0.0} gpu cost / {resourcePlan.Residency.ResidentNodes.Count}/{DefaultBudget.MaxResidentPayloads} resident / {resourcePlan.Residency.RequestedNodes.Count}/{DefaultBudget.MaxSsdRequests} ssd requests / {bucketPixelsPerWorld:0.00} px-wu");
 
         lock (PlanCacheLock)
         {
@@ -62,6 +84,33 @@ public static class ZyphosFractalTerrain
 
     public static string Summary =>
         $"{Path.GetFileName(PatchPath)} / {OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} tile nodes / {SelectedCut.Value.Length} cuts / {HeightBrushes.Length} shaped brushes";
+
+    private static float ScoreForState(AquariumContributionState state, float pixelsPerWorld)
+    {
+        foreach (var summary in Summaries.Value)
+        {
+            if (summary.NodeKey == state.NodeKey)
+            {
+                return FractalProjectedErrorScorer.Score(summary, pixelsPerWorld);
+            }
+        }
+
+        return 0.0f;
+    }
+
+    private sealed class ResidentFractalPayloadStore : IFractalPayloadStore
+    {
+        public static ResidentFractalPayloadStore Instance { get; } = new();
+
+        public bool IsResident(AquariumFractalKey nodeKey)
+        {
+            return true;
+        }
+
+        public void Request(AquariumFractalKey nodeKey)
+        {
+        }
+    }
 }
 
 public readonly record struct ZyphosFractalRenderPlan(

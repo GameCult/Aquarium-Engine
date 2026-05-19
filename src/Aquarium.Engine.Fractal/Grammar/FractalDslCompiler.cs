@@ -67,6 +67,15 @@ public static class FractalDslCompiler
                     AddIfsClaims(tokens, ifsDomain.Key, currentNode!.Key, lineIndex, claims);
                     currentNode.ClaimCount += claims.Count - beforeIfs;
                     break;
+                case "flame":
+                    EnsureDomain(domain, lineIndex);
+                    EnsureNode(currentNode, lineIndex);
+                    EnsureTokenCount(tokens, 15, lineIndex);
+                    var flameDomain = domain!.Value;
+                    var beforeFlame = claims.Count;
+                    AddFlameClaims(tokens, flameDomain.Key, currentNode!.Key, lineIndex, claims);
+                    currentNode.ClaimCount += claims.Count - beforeFlame;
+                    break;
                 default:
                     throw new FormatException($"Unknown fractal DSL command `{tokens[0]}` at line {lineIndex + 1}.");
             }
@@ -144,6 +153,30 @@ public static class FractalDslCompiler
         EmitIfsLevel(domainKey, nodeKey, name, center, radii, levels, branches, childScale, spread, rotationStep, falloff, shapePower, amplitude, seed, tags, claims);
     }
 
+    private static void AddFlameClaims(string[] tokens, AquariumFractalKey domainKey, AquariumFractalKey nodeKey, int lineIndex, List<AquariumBrushClaim> claims)
+    {
+        var name = tokens[1];
+        var levels = ParsePositiveInt(tokens[2], lineIndex);
+        var branches = ParsePositiveInt(tokens[3], lineIndex);
+        var center = new Vector2(ParseFloat(tokens[4], lineIndex), ParseFloat(tokens[5], lineIndex));
+        var radii = new Vector2(ParsePositiveFloat(tokens[6], lineIndex), ParsePositiveFloat(tokens[7], lineIndex));
+        var childScale = ParsePositiveFloat(tokens[8], lineIndex);
+        var curl = ParseFloat(tokens[9], lineIndex);
+        var spread = ParsePositiveFloat(tokens[10], lineIndex);
+        var falloff = ParsePositiveFloat(tokens[11], lineIndex);
+        var shapePower = ParsePositiveFloat(tokens[12], lineIndex);
+        var amplitude = ParseFloat(tokens[13], lineIndex);
+        var seed = ParseInt(tokens[14], lineIndex);
+        var tags = tokens.Length >= 16 ? tokens[15] : name;
+
+        if (childScale >= 1.0f)
+        {
+            throw new FormatException($"Flame child scale must be below 1 at line {lineIndex + 1}.");
+        }
+
+        EmitFlameLevel(domainKey, nodeKey, name, center, radii, 0.0f, levels, branches, childScale, curl, spread, falloff, shapePower, amplitude, seed, tags, claims);
+    }
+
     private static void EmitIfsLevel(
         AquariumFractalKey domainKey,
         AquariumFractalKey nodeKey,
@@ -190,6 +223,62 @@ public static class FractalDslCompiler
                 shapePower,
                 amplitude * childScale,
                 seed + 31 + branch,
+                tags,
+            claims);
+        }
+    }
+
+    private static void EmitFlameLevel(
+        AquariumFractalKey domainKey,
+        AquariumFractalKey nodeKey,
+        string name,
+        Vector2 center,
+        Vector2 radii,
+        float spiralAngle,
+        int levelsRemaining,
+        int branches,
+        float childScale,
+        float curl,
+        float spread,
+        float falloff,
+        float shapePower,
+        float amplitude,
+        int seed,
+        string tags,
+        List<AquariumBrushClaim> claims)
+    {
+        var level = claims.Count;
+        var rotation = spiralAngle + curl * level;
+        claims.Add(HeightClaim(domainKey, nodeKey, $"{name}/{level}", claims.Count, center, radii, rotation, falloff, shapePower, amplitude, seed + level, tags));
+
+        if (levelsRemaining <= 1)
+        {
+            return;
+        }
+
+        var nextRadii = radii * childScale;
+        var branchStep = MathF.Tau / branches;
+        for (var branch = 0; branch < branches; branch++)
+        {
+            var turn = spiralAngle + curl + (branchStep * branch) + HashAngle(seed, level, branch) * 0.5f;
+            var reach = spread * MathF.Max(nextRadii.X, nextRadii.Y) * (1.0f + branch * 0.17f);
+            var offset = new Vector2(MathF.Cos(turn), MathF.Sin(turn)) * reach;
+            EmitFlameLevel(
+                domainKey,
+                nodeKey,
+                name,
+                center + offset,
+                nextRadii,
+                turn,
+                levelsRemaining - 1,
+                branches,
+                childScale,
+                curl,
+                spread,
+                falloff,
+                shapePower,
+                amplitude * MathF.Sqrt(childScale),
+                seed + 97 + (branch * 17),
                 tags,
                 claims);
         }
