@@ -501,8 +501,10 @@ confidence decay, stale uncertainty growth, and convergence telemetry.
 Current state: `FractalOccupancyGraph` now owns per-node contribution state,
 last visible frame, last observed score, and update probability. The
 contribution cache routes through this graph, and unobserved nodes decay
-confidence while stale uncertainty grows. Convergence telemetry and richer
-resource-tier residency fields remain open.
+confidence while stale uncertainty grows. Residency planning now keeps resident
+payloads by score-per-cost and emits eviction decisions for low-value expensive
+payloads. Convergence telemetry and richer resource-tier residency fields remain
+open.
 
 ### Phase E: 2D SDF Tile Backend
 

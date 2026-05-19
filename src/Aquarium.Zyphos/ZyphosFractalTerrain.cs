@@ -135,6 +135,7 @@ public static class ZyphosFractalTerrain
             $"  gpuEstimatedCost: {plan.ResourcePlan.GpuEstimatedCost:0.000}/{budget.MaxGpuEstimatedCost:0.000}",
             $"  ramResident: {plan.ResourcePlan.Residency.ResidentNodes.Count}/{budget.MaxResidentPayloads}",
             $"  ssdRequests: {plan.ResourcePlan.Residency.RequestedNodes.Count}/{budget.MaxSsdRequests}",
+            $"  evictions: {plan.ResourcePlan.Residency.EvictedNodes.Count}",
             $"  structuralProbe: {(plan.StructuralProbeReservoir.HasSample ? plan.StructuralProbeReservoir.NodeKey.Value : "none")}",
             $"  structuralProbeWeight: {plan.StructuralProbeReservoir.WeightSum:0.000} candidates={plan.StructuralProbeReservoir.CandidateCount} contributionWeight={plan.StructuralProbeReservoir.ContributionWeight:0.000}",
             $"  surfacePages: {plan.SurfacePages.Length} {SurfacePageDimension}x{SurfacePageDimension}",

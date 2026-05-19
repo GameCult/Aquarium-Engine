@@ -1,3 +1,4 @@
+using System.Numerics;
 using Aquarium.Engine.Fractal;
 using Aquarium.Engine.Fractal.Lod;
 
@@ -57,6 +58,42 @@ public sealed class FractalResidencyPlannerTests
         Assert.Equal([residentB, missingA, missingB], plan.SummaryFallbackNodes);
         Assert.Equal([missingA], plan.RequestedNodes);
         Assert.Equal([missingA], store.Requests);
+    }
+
+    [Fact]
+    public void ResidencyPlannerEvictsLowScoreHighCostPayloadsFirst()
+    {
+        var expensive = new AquariumFractalKey("node/expensive");
+        var cheap = new AquariumFractalKey("node/cheap");
+        var store = new TestPayloadStore([expensive, cheap]);
+        var cuts = new[]
+        {
+            new AquariumSelectedCut(expensive, Score: 5.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: false),
+            new AquariumSelectedCut(cheap, Score: 4.0f, Fade: 1.0f, UsesSummary: true, RequestedChildren: false),
+        };
+        var summaries = new[]
+        {
+            Summary(expensive, estimatedCost: 100.0f),
+            Summary(cheap, estimatedCost: 1.0f),
+        };
+
+        var plan = FractalResidencyPlanner.Plan(cuts, summaries, store, maxRequests: 0, maxResidentNodes: 1);
+
+        Assert.Equal([cheap], plan.ResidentNodes);
+        Assert.Equal([expensive], plan.SummaryFallbackNodes);
+        Assert.Equal([expensive], plan.EvictedNodes);
+        Assert.Empty(plan.RequestedNodes);
+    }
+
+    private static AquariumFractalSummary Summary(AquariumFractalKey key, float estimatedCost)
+    {
+        return new AquariumFractalSummary(
+            key,
+            Vector4.Zero,
+            MaxHeightError: 1.0f,
+            MaxMaterialDelta: 0.0f,
+            estimatedCost,
+            DescendantCount: 0);
     }
 
     private sealed class TestPayloadStore(IEnumerable<AquariumFractalKey>? resident = null) : IFractalPayloadStore

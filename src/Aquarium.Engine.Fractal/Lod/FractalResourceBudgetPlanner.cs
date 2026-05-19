@@ -24,7 +24,7 @@ public static class FractalResourceBudgetPlanner
 
         var selectedCut = FractalSelectedCutBuilder.Build(summaries, projectedPixelsPerWorldUnit, budget.MaxGpuEstimatedCost);
         var updateNodes = FractalStochasticUpdateScheduler.SelectUpdates(states, currentScore, budget.MaxCpuUpdates, random, frameIndex);
-        var residency = FractalResidencyPlanner.Plan(selectedCut, payloadStore, budget.MaxSsdRequests, budget.MaxResidentPayloads);
+        var residency = FractalResidencyPlanner.Plan(selectedCut, summaries, payloadStore, budget.MaxSsdRequests, budget.MaxResidentPayloads);
 
         return new FractalResourcePlan(
             selectedCut,

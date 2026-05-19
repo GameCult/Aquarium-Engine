@@ -406,7 +406,7 @@ Tasks:
   page metadata.
 - [x] Add fake payload store with resident/missing states.
 - [x] Add child request queue.
-- [ ] Add score/cost eviction policy.
+- [x] Add score/cost eviction policy.
 - [x] Add parent-summary fallback path.
 - [x] Clamp simulated RAM residency and SSD requests through the resource plan.
 - [x] Add debug channels: residency, requests, evictions.
@@ -415,7 +415,7 @@ Tests:
 
 - [x] missing child renders parent summary;
 - [x] high-score missing child enqueues request;
-- low-score high-cost payload evicts first;
+- [x] low-score high-cost payload evicts first;
 - [x] frame path never blocks on fake store.
 
 Exit gate:

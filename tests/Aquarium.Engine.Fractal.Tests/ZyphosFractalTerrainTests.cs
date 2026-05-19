@@ -81,6 +81,7 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("gpuEstimatedCost:", dump, StringComparison.Ordinal);
         Assert.Contains("ramResident:", dump, StringComparison.Ordinal);
         Assert.Contains("ssdRequests:", dump, StringComparison.Ordinal);
+        Assert.Contains("evictions:", dump, StringComparison.Ordinal);
         Assert.Contains("structuralProbe:", dump, StringComparison.Ordinal);
         Assert.Contains("structuralProbeWeight:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePages:", dump, StringComparison.Ordinal);
