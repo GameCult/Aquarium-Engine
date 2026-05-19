@@ -49,6 +49,7 @@ struct SceneOut
     float4 colorTravel : SV_Target0;
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
+    float4 reservoirGuide : SV_Target3;
     float depth : SV_Depth;
 };
 
@@ -379,6 +380,7 @@ SceneOut D3D12ScenePS(VertexOut input)
     output.colorTravel = float4(result.color, min(result.travel, farDistance + 1.0));
     output.metadata = float4(result.fieldId, result.normal);
     output.control = float4(result.coverage, result.stepCount / 72.0, 0.0, 0.0);
+    output.reservoirGuide = float4(1.0, 0.0, 1.0, 0.0);
     output.depth = saturate(result.travel / max(farDistance, 0.001));
     return output;
 }

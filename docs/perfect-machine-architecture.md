@@ -463,6 +463,20 @@ Add a dedicated reservoir guide history target rather than packing previous
 reservoir validity into existing control channels. Preserve current-control.w
 as the current confidence lane.
 
+Guide schema:
+
+```text
+x: reservoir confidence
+y: reservoir sample age
+z: domain validity
+w: invalidation code
+```
+
+Current state: SDF and temporal Gaussian passes write a scene reservoir guide
+MRT. Resolve reads current and previous guide textures, folds confidence and
+domain validity into history validation, and writes a ping-ponged history
+reservoir guide target. `history-control.w` remains pixel history age.
+
 ### Phase C: Fractal Probe Pipeline
 
 Turn IFS node probes into typed reservoir candidates with renderer-facing camera

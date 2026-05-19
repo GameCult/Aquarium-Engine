@@ -74,6 +74,7 @@ struct SceneOut
     float4 colorTravel : SV_Target0;
     float4 metadata : SV_Target1;
     float4 control : SV_Target2;
+    float4 reservoirGuide : SV_Target3;
     float depth : SV_Depth;
 };
 

@@ -345,8 +345,9 @@ Tasks:
   domains.
 - [ ] Feed reservoir confidence, selected target, candidate count, sample age,
   and invalidation reason into TAA guide/history buffers. Current
-  scene-control.w now carries current reservoir confidence into resolve; full
-  previous-frame reservoir guide storage remains open.
+  reservoir confidence, sample age, domain validity, and invalidation code now
+  have explicit scene/history reservoir guide targets; selected target and
+  candidate count still need producer-side packing once GPU reservoirs exist.
 - [ ] Add confidence decay and stale uncertainty growth.
 - [ ] Add fake contribution probe.
 - [ ] Add convergence telemetry.
@@ -367,7 +368,7 @@ Tests:
 - [x] temporal reuse rejects mismatched domain ancestry;
 - [x] spatial reuse rejects invalid local-frame shifts;
 - [x] TAA history confidence is modulated by current reservoir confidence;
-- TAA history confidence drops when previous-frame reservoir validity changes;
+- [x] TAA history confidence drops when previous-frame reservoir/domain validity changes;
 - update cost respects budget.
 
 Exit gate:

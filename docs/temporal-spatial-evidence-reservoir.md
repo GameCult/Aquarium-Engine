@@ -141,6 +141,25 @@ Not built yet:
   sample age, domain validity, and invalidation reason;
 - SSD/RAM residency queues driven by reservoir contribution estimates.
 
+## TAA Guide Layout
+
+Reservoir/TAA guide data has a dedicated current scene target and ping-ponged
+history target. It is deliberately separate from `history-control.w`, which
+continues to own pixel history age.
+
+```text
+x: reservoir confidence
+y: reservoir sample age
+z: domain validity
+w: invalidation code
+```
+
+The first live producers are SDF surfaces and temporal Gaussian splats. Resolve
+reads the current and previous guide textures, folds confidence and domain
+validity into history validation, then writes the next history guide. Future
+ReSTIR/GRIS passes should extend the producer side of this schema rather than
+packing more reservoir folklore into scene-control channels.
+
 ## Implementation Roadmap
 
 1. Keep the CPU reservoir core pure and exhaustive under unit tests.

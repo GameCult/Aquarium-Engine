@@ -34,6 +34,8 @@ Texture2D<float4> historyControlTexture : register(t8);
 Texture2D<float4> bloomTexture0 : register(t9);
 Texture2D<float4> bloomTexture1 : register(t10);
 Texture2D<float4> bloomTexture2 : register(t11);
+Texture2D<float4> currentReservoirGuideTexture : register(t26);
+Texture2D<float4> historyReservoirGuideTexture : register(t27);
 SamplerState sourceSampler : register(s0);
 
 struct SdfObject
@@ -57,6 +59,7 @@ struct ResolveOut
     float4 historyColor : SV_Target1;
     float4 historyMetadata : SV_Target2;
     float4 historyControl : SV_Target3;
+    float4 historyReservoirGuide : SV_Target4;
 };
 
 static const float FIELD_ID_HEIGHT_FIELD = 4.0;
@@ -187,6 +190,16 @@ float4 loadHistoryMetadata(float2 uv)
 float4 loadHistoryControl(float2 uv)
 {
     return historyControlTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadCurrentReservoirGuide(float2 uv)
+{
+    return currentReservoirGuideTexture.Load(int3(pixelFromUv(uv), 0));
+}
+
+float4 loadHistoryReservoirGuide(float2 uv)
+{
+    return historyReservoirGuideTexture.Load(int3(pixelFromUv(uv), 0));
 }
 
 void currentNeighborhood(float2 uv, out float3 neighborhoodMin, out float3 neighborhoodMax)
@@ -325,15 +338,20 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     float3 currentColor = current.rgb;
     float4 currentMetadata = loadCurrentMetadata(input.uv);
     float4 currentControl = loadCurrentControl(input.uv);
+    float4 currentReservoirGuide = loadCurrentReservoirGuide(input.uv);
     float currentFieldId = currentMetadata.x;
     float3 currentNormal = currentMetadata.yzw;
     float currentCoverage = saturate(currentControl.x);
     float currentStepRatio = saturate(currentControl.y);
     float currentTemporalDetail = saturate(currentControl.z);
-    float currentReservoirConfidence = currentControl.w > 0.0 ? saturate(currentControl.w) : 1.0;
+    float currentReservoirConfidence = currentReservoirGuide.x > 0.0 ? saturate(currentReservoirGuide.x) : (currentControl.w > 0.0 ? saturate(currentControl.w) : 1.0);
+    float currentReservoirSampleAge = max(currentReservoirGuide.y, 0.0);
+    float currentReservoirDomainValidity = currentReservoirGuide.z > 0.0 ? saturate(currentReservoirGuide.z) : 1.0;
 
     float historyWeight = 0.0;
     float historyAge = 0.0;
+    float reservoirSampleAge = currentReservoirSampleAge;
+    float reservoirInvalidationCode = 0.0;
     float3 historyColor = currentColor;
     if (frameIndex > 0.5 && currentTravel <= farDistance && currentFieldId > 0.5)
     {
@@ -346,6 +364,7 @@ ResolveOut D3D12ResolvePS(VertexOut input)
         {
             float4 previousMetadata = loadHistoryMetadata(previousUv);
             float4 previousControl = loadHistoryControl(previousUv);
+            float4 previousReservoirGuide = loadHistoryReservoirGuide(previousUv);
             float4 previous = historyTexture.SampleLevel(sourceSampler, previousUv, 0.0);
             float previousFieldId = previousMetadata.x;
             float previousTravel = previous.a;
@@ -353,6 +372,9 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float previousCoverage = saturate(previousControl.x);
             float previousTemporalDetail = saturate(previousControl.z);
             float previousHistoryAge = max(previousControl.w, 0.0);
+            float previousReservoirConfidence = previousReservoirGuide.x > 0.0 ? saturate(previousReservoirGuide.x) : 1.0;
+            float previousReservoirSampleAge = max(previousReservoirGuide.y, 0.0);
+            float previousReservoirDomainValidity = previousReservoirGuide.z > 0.0 ? saturate(previousReservoirGuide.z) : 1.0;
             float expectedPreviousTravel = distance(previousCameraPosition, previousWorldPosition);
             float travelDelta = abs(previousTravel - expectedPreviousTravel);
             float travelTolerance = max(0.045, expectedPreviousTravel * 0.018);
@@ -378,13 +400,16 @@ ResolveOut D3D12ResolvePS(VertexOut input)
             float coverageContinuityWeight = 1.0 - smoothstep(0.10, 0.50, abs(previousCoverage - currentCoverage));
             float temporalDetailWeight = 1.0 - smoothstep(0.08, 0.45, abs(previousTemporalDetail - currentTemporalDetail));
             temporalDetailWeight = max(temporalDetailWeight, 1.0 - smoothstep(0.02, 0.12, max(previousTemporalDetail, currentTemporalDetail)));
-            float reservoirConfidenceWeight = lerp(0.45, 1.0, currentReservoirConfidence);
+            float reservoirConfidenceWeight = lerp(0.45, 1.0, min(currentReservoirConfidence, previousReservoirConfidence));
+            float reservoirDomainWeight = currentReservoirDomainValidity * previousReservoirDomainValidity;
             float historyConfidence = smoothstep(0.0, 6.0, previousHistoryAge);
-            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight * temporalDetailWeight * reservoirConfidenceWeight;
+            float validationWeight = travelWeight * colorWeight * fieldWeight * normalWeight * coverageWeight * coverageContinuityWeight * temporalDetailWeight * reservoirConfidenceWeight * reservoirDomainWeight;
 
             historyColor = clampedHistory;
             historyWeight = 0.82 * lerp(0.35, 1.0, historyConfidence) * validationWeight;
             historyAge = validationWeight > 0.01 ? min(previousHistoryAge + 1.0, MAX_HISTORY_AGE) : 0.0;
+            reservoirSampleAge = validationWeight > 0.01 ? min(max(currentReservoirSampleAge, previousReservoirSampleAge + 1.0), MAX_HISTORY_AGE) : currentReservoirSampleAge;
+            reservoirInvalidationCode = validationWeight > 0.01 ? 0.0 : 1.0;
         }
     }
 
@@ -444,5 +469,6 @@ ResolveOut D3D12ResolvePS(VertexOut input)
     output.historyColor = float4(resolved, currentTravel);
     output.historyMetadata = currentMetadata;
     output.historyControl = float4(currentControl.xyz, combinedHistoryAge);
+    output.historyReservoirGuide = float4(currentReservoirConfidence, reservoirSampleAge, currentReservoirDomainValidity, reservoirInvalidationCode);
     return output;
 }
