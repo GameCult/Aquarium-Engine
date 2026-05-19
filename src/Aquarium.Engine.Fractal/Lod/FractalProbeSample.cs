@@ -30,12 +30,26 @@ public enum FractalProbeReuseRejection
     DifferentLineage,
     ExcessiveLocalShift,
     InvalidBounds,
+    ExcessiveCameraMotion,
+    Disoccluded,
+    MaterialMismatch,
+    NotVisible,
 }
 
 public readonly record struct FractalProbeReuseResult(
     bool CanReuse,
     FractalProbeReuseRejection Rejection,
     float LocalShift);
+
+public readonly record struct FractalProbeTemporalValidation(
+    float CameraMotionPixels,
+    float MaxCameraMotionPixels,
+    float DisocclusionConfidence,
+    float MinDisocclusionConfidence,
+    float MaterialDelta,
+    float MaxMaterialDelta,
+    float VisibilityConfidence,
+    float MinVisibilityConfidence);
 
 public static class FractalProbeReuseValidator
 {
@@ -74,6 +88,42 @@ public static class FractalProbeReuseValidator
         }
 
         return new FractalProbeReuseResult(true, FractalProbeReuseRejection.None, localShift);
+    }
+
+    public static FractalProbeReuseResult ValidateTemporal(
+        FractalProbeSample source,
+        FractalProbeSample target,
+        FractalDomainGraph domains,
+        float maxLocalShift,
+        FractalProbeTemporalValidation temporal)
+    {
+        var spatial = Validate(source, target, domains, maxLocalShift);
+        if (!spatial.CanReuse)
+        {
+            return spatial;
+        }
+
+        if (!float.IsFinite(temporal.CameraMotionPixels) || temporal.CameraMotionPixels > MathF.Max(temporal.MaxCameraMotionPixels, 0.0f))
+        {
+            return spatial with { CanReuse = false, Rejection = FractalProbeReuseRejection.ExcessiveCameraMotion };
+        }
+
+        if (!float.IsFinite(temporal.DisocclusionConfidence) || temporal.DisocclusionConfidence < Math.Clamp(temporal.MinDisocclusionConfidence, 0.0f, 1.0f))
+        {
+            return spatial with { CanReuse = false, Rejection = FractalProbeReuseRejection.Disoccluded };
+        }
+
+        if (!float.IsFinite(temporal.MaterialDelta) || temporal.MaterialDelta > MathF.Max(temporal.MaxMaterialDelta, 0.0f))
+        {
+            return spatial with { CanReuse = false, Rejection = FractalProbeReuseRejection.MaterialMismatch };
+        }
+
+        if (!float.IsFinite(temporal.VisibilityConfidence) || temporal.VisibilityConfidence < Math.Clamp(temporal.MinVisibilityConfidence, 0.0f, 1.0f))
+        {
+            return spatial with { CanReuse = false, Rejection = FractalProbeReuseRejection.NotVisible };
+        }
+
+        return spatial;
     }
 
     private static bool ShareLineage(AquariumFractalKey sourceDomain, AquariumFractalKey targetDomain, FractalDomainGraph domains)

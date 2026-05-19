@@ -489,6 +489,9 @@ payload handle. Renderer-facing temporal validation remains open.
 `FractalStructuralProbeReservoir` builds a selected-cut reservoir from an
 ownership tree, summaries, and projected pixels per world unit; Zyphos now
 exposes that reservoir in its fractal render plan/debug dump.
+`FractalProbeReuseValidator.ValidateTemporal` now names the renderer-facing
+rejection reasons for camera motion, disocclusion, material mismatch, and
+visibility before those checks are lowered to GPU reuse passes.
 
 ### Phase D: Occupancy Graph
 

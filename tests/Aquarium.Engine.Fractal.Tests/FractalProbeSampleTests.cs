@@ -60,6 +60,62 @@ public sealed class FractalProbeSampleTests
         Assert.Equal(FractalProbeReuseRejection.ExcessiveLocalShift, result.Rejection);
     }
 
+    [Fact]
+    public void TemporalReuseValidatorRejectsExcessiveCameraMotion()
+    {
+        var result = FractalProbeReuseValidator.ValidateTemporal(
+            Probe("zyphos/surface", Vector3.Zero),
+            Probe("zyphos/surface", Vector3.Zero),
+            DomainGraph(),
+            maxLocalShift: 1.0f,
+            ValidTemporal() with { CameraMotionPixels = 12.0f, MaxCameraMotionPixels = 4.0f });
+
+        Assert.False(result.CanReuse);
+        Assert.Equal(FractalProbeReuseRejection.ExcessiveCameraMotion, result.Rejection);
+    }
+
+    [Fact]
+    public void TemporalReuseValidatorRejectsDisocclusion()
+    {
+        var result = FractalProbeReuseValidator.ValidateTemporal(
+            Probe("zyphos/surface", Vector3.Zero),
+            Probe("zyphos/surface", Vector3.Zero),
+            DomainGraph(),
+            maxLocalShift: 1.0f,
+            ValidTemporal() with { DisocclusionConfidence = 0.2f, MinDisocclusionConfidence = 0.7f });
+
+        Assert.False(result.CanReuse);
+        Assert.Equal(FractalProbeReuseRejection.Disoccluded, result.Rejection);
+    }
+
+    [Fact]
+    public void TemporalReuseValidatorRejectsMaterialMismatch()
+    {
+        var result = FractalProbeReuseValidator.ValidateTemporal(
+            Probe("zyphos/surface", Vector3.Zero),
+            Probe("zyphos/surface", Vector3.Zero),
+            DomainGraph(),
+            maxLocalShift: 1.0f,
+            ValidTemporal() with { MaterialDelta = 0.6f, MaxMaterialDelta = 0.25f });
+
+        Assert.False(result.CanReuse);
+        Assert.Equal(FractalProbeReuseRejection.MaterialMismatch, result.Rejection);
+    }
+
+    [Fact]
+    public void TemporalReuseValidatorAllowsValidRendererInputs()
+    {
+        var result = FractalProbeReuseValidator.ValidateTemporal(
+            Probe("zyphos/surface", Vector3.Zero),
+            Probe("zyphos/surface/forest", new Vector3(0.1f, 0.0f, 0.0f)),
+            DomainGraph(),
+            maxLocalShift: 1.0f,
+            ValidTemporal());
+
+        Assert.True(result.CanReuse);
+        Assert.Equal(FractalProbeReuseRejection.None, result.Rejection);
+    }
+
     private static FractalProbeSample Probe(
         string domainKey,
         Vector3 localCenter,
@@ -87,6 +143,19 @@ public sealed class FractalProbeSampleTests
             Domain("umbros", AquariumFractalDomainKind.Planetary, "solar"),
             Domain("umbros/surface", AquariumFractalDomainKind.Surface2D, "umbros"),
         ]);
+    }
+
+    private static FractalProbeTemporalValidation ValidTemporal()
+    {
+        return new FractalProbeTemporalValidation(
+            CameraMotionPixels: 1.0f,
+            MaxCameraMotionPixels: 4.0f,
+            DisocclusionConfidence: 0.95f,
+            MinDisocclusionConfidence: 0.7f,
+            MaterialDelta: 0.05f,
+            MaxMaterialDelta: 0.25f,
+            VisibilityConfidence: 0.9f,
+            MinVisibilityConfidence: 0.5f);
     }
 
     private static AquariumFractalDomain Domain(string key, AquariumFractalDomainKind kind, string? parent)

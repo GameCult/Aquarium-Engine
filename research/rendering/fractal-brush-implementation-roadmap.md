@@ -347,6 +347,9 @@ Tasks:
   error, bounds, and disocclusion/material compatibility. Domain ancestry and
   local-shift checks exist; camera/disocclusion/material validation still need
   renderer inputs.
+- [x] Add CPU temporal reuse validation contract with camera motion,
+  disocclusion, material mismatch, visibility, domain ancestry, local-frame
+  error, and bound rejection reasons.
 - [ ] Add spatial reuse validation across screen tiles and cube-sphere neighbor
   domains.
 - [ ] Feed reservoir confidence, selected target, candidate count, sample age,
@@ -373,6 +376,8 @@ Tests:
 - fixed camera path converges within tolerance;
 - [x] temporal reuse rejects mismatched domain ancestry;
 - [x] spatial reuse rejects invalid local-frame shifts;
+- [x] temporal reuse rejects camera motion, disocclusion, material mismatch,
+  and low visibility;
 - [x] TAA history confidence is modulated by current reservoir confidence;
 - [x] TAA history confidence drops when previous-frame reservoir/domain validity changes;
 - update cost respects budget.
