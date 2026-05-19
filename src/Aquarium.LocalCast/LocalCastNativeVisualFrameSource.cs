@@ -118,6 +118,16 @@ public sealed class LocalCastNativeVisualFrameSource : ILocalCastVisualFrameSour
 
     public LocalCastNativeVisualFrameSource(
         ILocalCastNativeRuntime runtime,
+        string description = "native LocalcastRuntime")
+        : this(
+            runtime,
+            new LocalCastNativeRenderDescriptorDecoder(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer).TryDecode,
+            description)
+    {
+    }
+
+    public LocalCastNativeVisualFrameSource(
+        ILocalCastNativeRuntime runtime,
         LocalCastNativeRenderPayloadDecoder decodeRenderPayload,
         string description = "native LocalcastRuntime")
     {

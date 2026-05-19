@@ -247,6 +247,67 @@ public sealed class LocalCastNativeVisualFrameSourceTests
         Assert.False(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer(in shortStride, default, out _));
     }
 
+    [Fact]
+    public void DefaultNativeSourceConstructorUsesDescriptorAndPointDecoders()
+    {
+        var nativePoint = new LocalCastNativeRenderPoint
+        {
+            StableKeyHash = 0xCAFE,
+            SourceTimestampNs = 1_900,
+            X = 0.1f,
+            Y = 0.2f,
+            Z = 1.2f,
+            RadiusMeters = 0.03f,
+            Red = 0.7f,
+            Green = 0.6f,
+            Blue = 0.5f,
+            Alpha = 0.9f,
+            Confidence = 0.8f,
+        };
+        var pointSize = Marshal.SizeOf<LocalCastNativeRenderPoint>();
+        var pointPointer = Marshal.AllocHGlobal(pointSize);
+        var descriptorPointer = Marshal.AllocHGlobal(Marshal.SizeOf<LocalCastNativeRenderPacketDescriptor>());
+        try
+        {
+            Marshal.StructureToPtr(nativePoint, pointPointer, false);
+            Marshal.StructureToPtr(
+                new LocalCastNativeRenderPacketDescriptor
+                {
+                    PointBufferHandle = (ulong)pointPointer,
+                    PointCount = 1,
+                    PointStrideBytes = (uint)pointSize,
+                    TargetWidth = 1920,
+                    TargetHeight = 1080,
+                    SourceTimeMinNs = 1_000,
+                    SourceTimeMaxNs = 1_900,
+                    PresentTimeNs = 2_000,
+                    AudioAlignmentTimeNs = 1_950,
+                },
+                descriptorPointer,
+                false);
+            var sample = new LocalCastNativeSampleHandle
+            {
+                SensorIdHash = 11,
+                TimestampNs = 1_900,
+                ArrivalNs = 1_910,
+                Sequence = 21,
+                PayloadHandle = (ulong)descriptorPointer,
+                Flags = LocalCastNativeSampleFlags.None,
+            };
+            var source = new LocalCastNativeVisualFrameSource(new FakeNativeRuntime(sample, renderPacketCount: 1));
+
+            Assert.True(source.TryReadLatest(out var frame));
+            Assert.Equal(21, frame.FrameId);
+            Assert.Equal(1920, frame.TargetWidth);
+            Assert.Equal("native:000000000000cafe", frame.Points[0].StableKey);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(pointPointer);
+            Marshal.FreeHGlobal(descriptorPointer);
+        }
+    }
+
     private static LocalCastVisualFrame FrameFromPayload(ulong payloadHandle, ulong timestampNs)
     {
         return new LocalCastVisualFrame
