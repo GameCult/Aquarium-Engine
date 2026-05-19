@@ -518,8 +518,10 @@ turns a selected IFS cut into stable page metadata, and the Zyphos render plan
 now exposes height, 2D signed-distance, material, and confidence pages beside
 its structural probe reservoir. `FractalSurfacePageResidencyPlanner` adds a
 mockable page-store boundary with byte-budgeted resident, missing, requested,
-and evicted page decisions. The real page store, atlas, and D3D12 lowering
-remain open.
+and evicted page decisions. `FractalSurfacePageRasterizer` now lowers resident
+pages to CPU height, 2D signed-distance support, material, and confidence
+sample payloads using the same shaped brush envelope math as the live brush
+compiler. The real page store, atlas, and D3D12 lowering remain open.
 
 ### Phase F: 3D SDF Splat Backend
 

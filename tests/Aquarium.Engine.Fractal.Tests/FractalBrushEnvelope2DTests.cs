@@ -25,6 +25,16 @@ public sealed class FractalBrushEnvelope2DTests
     }
 
     [Fact]
+    public void SignedSupportDistanceIsNegativeInsideAndPositiveOutside()
+    {
+        var envelope = new FractalBrushEnvelope2D(Vector2.Zero, 2.0, 1.0, 0.0, falloff: 4.0);
+
+        Assert.True(envelope.SignedSupportDistanceEstimate(Vector2.Zero) < 0.0);
+        Assert.Equal(0.0, envelope.SignedSupportDistanceEstimate(new Vector2(2.0f, 0.0f)), 12);
+        Assert.True(envelope.SignedSupportDistanceEstimate(new Vector2(3.0f, 0.0f)) > 0.0);
+    }
+
+    [Fact]
     public void RoundEnvelopeIsRotationInvariant()
     {
         var unrotated = new FractalBrushEnvelope2D(Vector2.Zero, 3.0, 3.0, 0.0, falloff: 2.5);

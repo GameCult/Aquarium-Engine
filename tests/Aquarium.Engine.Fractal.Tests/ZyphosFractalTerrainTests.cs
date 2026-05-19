@@ -53,7 +53,7 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("gpu cost", near.Summary, StringComparison.Ordinal);
         Assert.Contains("resident", near.Summary, StringComparison.Ordinal);
         Assert.Contains("probe candidates", near.Summary, StringComparison.Ordinal);
-        Assert.Contains("surface pages", near.Summary, StringComparison.Ordinal);
+        Assert.Contains("surface payloads", near.Summary, StringComparison.Ordinal);
         Assert.True(near.StructuralProbeReservoir.HasSample);
         Assert.True(near.StructuralProbeReservoir.CandidateCount > 0);
         Assert.True(near.StructuralProbeReservoir.WeightSum > 0.0f);
@@ -62,6 +62,8 @@ public sealed class ZyphosFractalTerrainTests
         Assert.True(near.SurfacePageResidency.ResidentPages.Count <= near.SurfacePages.Length);
         Assert.True(near.SurfacePageResidency.ResidentBytes <= 2L * 1024L * 1024L);
         Assert.True(near.SurfacePageResidency.RequestedPages.Count <= 8);
+        Assert.Equal(near.SurfacePageResidency.ResidentPages.Count, near.SurfacePagePayloads.Length);
+        Assert.All(near.SurfacePagePayloads, payload => Assert.Equal(payload.Page.Width * payload.Page.Height, payload.Samples.Length));
         Assert.All(near.SurfacePages, page =>
         {
             Assert.Equal(128, page.Width);
@@ -89,6 +91,7 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("structuralProbeWeight:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePages:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageResident:", dump, StringComparison.Ordinal);
+        Assert.Contains("surfacePagePayloads:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageRequests:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageEvictions:", dump, StringComparison.Ordinal);
         Assert.Contains("selected:", dump, StringComparison.Ordinal);

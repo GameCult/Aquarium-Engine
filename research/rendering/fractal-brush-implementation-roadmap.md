@@ -406,6 +406,8 @@ Tasks:
   page metadata.
 - [x] Add mockable surface page store boundary with resident/request/evict
   decisions under a byte budget.
+- [x] Add CPU surface page rasterizer for resident height, 2D signed-distance,
+  material, and confidence pages.
 - [x] Add fake payload store with resident/missing states.
 - [x] Add child request queue.
 - [x] Add score/cost eviction policy.

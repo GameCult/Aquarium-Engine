@@ -22,6 +22,7 @@ public static class ZyphosFractalTerrain
     private static readonly FractalContributionCache ContributionCache = new();
     private static readonly object PlanCacheLock = new();
     private static readonly Dictionary<string, AquariumHeightFieldBrush[]> BrushCache = [];
+    private static readonly Dictionary<string, FractalSurfacePagePayload> SurfacePagePayloadCache = [];
     private static readonly FractalResourceBudget DefaultBudget = new(
         MaxCpuUpdates: 2,
         MaxGpuEstimatedCost: 64.0f,
@@ -76,6 +77,7 @@ public static class ZyphosFractalTerrain
             ResidentSurfacePageStore.Instance,
             MaxResidentSurfacePageBytes,
             MaxSurfacePageRequests);
+        var surfacePagePayloads = BuildSurfacePagePayloads(surfacePageResidency.ResidentPages);
         var cutKey = CutCacheKey(selectedCut);
         AquariumHeightFieldBrush[] brushes;
         lock (PlanCacheLock)
@@ -94,8 +96,9 @@ public static class ZyphosFractalTerrain
             structuralProbeReservoir,
             surfacePages,
             surfacePageResidency,
+            surfacePagePayloads,
             bucketPixelsPerWorld,
-            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {resourcePlan.UpdateNodes.Length}/{DefaultBudget.MaxCpuUpdates} cpu updates / {resourcePlan.GpuEstimatedCost:0.0}/{DefaultBudget.MaxGpuEstimatedCost:0.0} gpu cost / {resourcePlan.Residency.ResidentNodes.Count}/{DefaultBudget.MaxResidentPayloads} resident / {resourcePlan.Residency.RequestedNodes.Count}/{DefaultBudget.MaxSsdRequests} ssd requests / {(structuralProbeReservoir.HasSample ? structuralProbeReservoir.CandidateCount : 0)} probe candidates / {surfacePageResidency.ResidentPages.Count}/{surfacePages.Length} surface pages / {bucketPixelsPerWorld:0.00} px-wu");
+            $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {resourcePlan.UpdateNodes.Length}/{DefaultBudget.MaxCpuUpdates} cpu updates / {resourcePlan.GpuEstimatedCost:0.0}/{DefaultBudget.MaxGpuEstimatedCost:0.0} gpu cost / {resourcePlan.Residency.ResidentNodes.Count}/{DefaultBudget.MaxResidentPayloads} resident / {resourcePlan.Residency.RequestedNodes.Count}/{DefaultBudget.MaxSsdRequests} ssd requests / {(structuralProbeReservoir.HasSample ? structuralProbeReservoir.CandidateCount : 0)} probe candidates / {surfacePagePayloads.Length}/{surfacePages.Length} surface payloads / {bucketPixelsPerWorld:0.00} px-wu");
     }
 
     private static AquariumFractalSurfacePage[] PlanSurfacePages(IReadOnlyList<AquariumSelectedCut> selectedCut)
@@ -109,6 +112,27 @@ public static class ZyphosFractalTerrain
                 SurfacePageDimension,
                 SurfacePageDimension))
             .ToArray();
+    }
+
+    private static FractalSurfacePagePayload[] BuildSurfacePagePayloads(IReadOnlyList<AquariumFractalSurfacePage> residentPages)
+    {
+        var payloads = new FractalSurfacePagePayload[residentPages.Count];
+        lock (PlanCacheLock)
+        {
+            for (var index = 0; index < residentPages.Count; index++)
+            {
+                var page = residentPages[index];
+                if (!SurfacePagePayloadCache.TryGetValue(page.Key.Value, out var payload))
+                {
+                    payload = FractalSurfacePageRasterizer.Rasterize(Tree.Value, page);
+                    SurfacePagePayloadCache[page.Key.Value] = payload;
+                }
+
+                payloads[index] = payload;
+            }
+        }
+
+        return payloads;
     }
 
     private static string CutCacheKey(IReadOnlyList<AquariumSelectedCut> selectedCut)
@@ -148,6 +172,7 @@ public static class ZyphosFractalTerrain
             $"  structuralProbeWeight: {plan.StructuralProbeReservoir.WeightSum:0.000} candidates={plan.StructuralProbeReservoir.CandidateCount} contributionWeight={plan.StructuralProbeReservoir.ContributionWeight:0.000}",
             $"  surfacePages: {plan.SurfacePages.Length} {SurfacePageDimension}x{SurfacePageDimension}",
             $"  surfacePageResident: {plan.SurfacePageResidency.ResidentPages.Count}/{plan.SurfacePages.Length} bytes={plan.SurfacePageResidency.ResidentBytes}/{MaxResidentSurfacePageBytes}",
+            $"  surfacePagePayloads: {plan.SurfacePagePayloads.Length}",
             $"  surfacePageRequests: {plan.SurfacePageResidency.RequestedPages.Count}/{MaxSurfacePageRequests}",
             $"  surfacePageEvictions: {plan.SurfacePageResidency.EvictedPages.Count}",
             "selected:",
@@ -210,5 +235,6 @@ public readonly record struct ZyphosFractalRenderPlan(
     FractalProbeReservoirSnapshot StructuralProbeReservoir,
     AquariumFractalSurfacePage[] SurfacePages,
     FractalSurfacePageResidencyPlan SurfacePageResidency,
+    FractalSurfacePagePayload[] SurfacePagePayloads,
     float PixelsPerWorld,
     string Summary);

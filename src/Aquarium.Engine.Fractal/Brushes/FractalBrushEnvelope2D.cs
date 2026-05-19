@@ -80,6 +80,12 @@ public readonly record struct FractalBrushEnvelope2D
         return NormalizedRadiusSquared(point) <= 1.0;
     }
 
+    public double SignedSupportDistanceEstimate(Vector2 point)
+    {
+        var normalizedRadius = Math.Sqrt(NormalizedRadiusSquared(point));
+        return (normalizedRadius - 1.0) * Math.Min(RadiusX, RadiusY);
+    }
+
     public FractalBrushEnvelopeBounds2D AxisAlignedBounds()
     {
         var cos = Math.Cos(RotationRadians);
