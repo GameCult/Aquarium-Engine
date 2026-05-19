@@ -333,6 +333,8 @@ Tasks:
 - [x] Add exploration budget.
 - [x] Add live contribution cache that observes only scheduled nodes each frame
   and feeds the next resource plan.
+- [x] Promote contribution state into `FractalOccupancyGraph` with visibility,
+  update probability, confidence decay, and stale uncertainty growth.
 - [x] Convert contribution-cache refresh into a candidate generator that submits
   weighted candidates to the resampled-importance core.
 - [x] Add fractal SDF probe candidate records: domain key, local frame, bound,
@@ -348,7 +350,7 @@ Tasks:
   reservoir confidence, sample age, domain validity, and invalidation code now
   have explicit scene/history reservoir guide targets; selected target and
   candidate count still need producer-side packing once GPU reservoirs exist.
-- [ ] Add confidence decay and stale uncertainty growth.
+- [x] Add confidence decay and stale uncertainty growth.
 - [ ] Add fake contribution probe.
 - [ ] Add convergence telemetry.
 - [ ] Add debug channels: uncertainty, sample age, update probability,

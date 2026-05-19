@@ -487,6 +487,12 @@ motion, disocclusion, material, and visibility validation.
 Promote contribution state into the heuristic occupancy graph and add
 confidence decay, stale uncertainty growth, and convergence telemetry.
 
+Current state: `FractalOccupancyGraph` now owns per-node contribution state,
+last visible frame, last observed score, and update probability. The
+contribution cache routes through this graph, and unobserved nodes decay
+confidence while stale uncertainty grows. Convergence telemetry and richer
+resource-tier residency fields remain open.
+
 ### Phase E: 2D SDF Tile Backend
 
 Build cached 2D SDF/height/material pages for cube-sphere and torus domains.

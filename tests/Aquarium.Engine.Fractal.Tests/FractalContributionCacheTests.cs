@@ -48,6 +48,9 @@ public sealed class FractalContributionCacheTests
         Assert.Equal(2, state.SampleCount);
         Assert.True(state.Confidence > 0.1f);
         Assert.True(state.Resident);
+        Assert.True(cache.TryGetOccupancy(summary.NodeKey, out var occupancy));
+        Assert.Equal(summary.NodeKey, occupancy.Contribution.NodeKey);
+        Assert.True(occupancy.UpdateProbability > 0.0);
     }
 
     [Fact]

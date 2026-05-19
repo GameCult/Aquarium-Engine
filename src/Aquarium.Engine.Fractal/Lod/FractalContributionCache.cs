@@ -5,7 +5,7 @@ namespace Aquarium.Engine.Fractal.Lod;
 
 public sealed class FractalContributionCache
 {
-    private readonly FractalContributionTable table = new();
+    private readonly FractalOccupancyGraph occupancy = new();
     private uint frameIndex;
 
     public FractalContributionReservoirSnapshot LastFrameReservoir { get; private set; }
@@ -28,8 +28,11 @@ public sealed class FractalContributionCache
         for (var index = 0; index < summaries.Count; index++)
         {
             var summary = summaries[index];
-            states[index] = table.GetOrCreate(summary.NodeKey);
-            scores[summary.NodeKey.Value] = FractalProjectedErrorScorer.Score(summary, projectedPixelsPerWorldUnit(summary));
+            states[index] = occupancy.GetOrCreate(summary.NodeKey).Contribution;
+            var score = FractalProjectedErrorScorer.Score(summary, projectedPixelsPerWorldUnit(summary));
+            scores[summary.NodeKey.Value] = score;
+            var updateProbability = FractalStochasticUpdateScheduler.UpdateProbability(states[index], score, frameIndex);
+            occupancy.MarkVisible(summary.NodeKey, score, frameIndex, updateProbability);
         }
 
         var plan = FractalResourceBudgetPlanner.Plan(
@@ -51,7 +54,7 @@ public sealed class FractalContributionCache
                 continue;
             }
 
-            var state = table.GetOrCreate(nodeKey);
+            var state = occupancy.GetOrCreate(nodeKey).Contribution;
             var updateProbability = FractalStochasticUpdateScheduler.UpdateProbability(state, observedScore, frameIndex);
             var isResident = resident.Contains(nodeKey.Value);
             var candidate = FractalContributionCandidateGenerator.Build(
@@ -61,16 +64,29 @@ public sealed class FractalContributionCache
                 frameIndex,
                 isResident);
             reservoir.Add(candidate, random.NextDouble());
-            table.Store(FractalContributionEstimator.Observe(state, observedScore, frameIndex, isResident));
+            occupancy.Observe(nodeKey, observedScore, frameIndex, isResident);
         }
 
+        occupancy.DecayUnobserved(frameIndex);
         LastFrameReservoir = FractalContributionCandidateGenerator.Snapshot(reservoir);
         return plan;
     }
 
     public bool TryGet(AquariumFractalKey nodeKey, out AquariumContributionState state)
     {
-        return table.TryGet(nodeKey, out state);
+        if (occupancy.TryGet(nodeKey, out var node))
+        {
+            state = node.Contribution;
+            return true;
+        }
+
+        state = default;
+        return false;
+    }
+
+    public bool TryGetOccupancy(AquariumFractalKey nodeKey, out FractalOccupancyNodeState state)
+    {
+        return occupancy.TryGet(nodeKey, out state);
     }
 
 }
