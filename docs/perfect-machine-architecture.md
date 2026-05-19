@@ -511,8 +511,11 @@ Use parent summaries while child pages stream.
 
 Current state: `AquariumFractalSurfacePageKey` and
 `AquariumFractalSurfacePage` define renderer-agnostic page metadata for height,
-2D signed-distance, material, and confidence pages. The page store and D3D12
-lowering remain open.
+2D signed-distance, material, and confidence pages. `FractalSurfacePagePlanner`
+turns a selected IFS cut into stable page metadata, and the Zyphos render plan
+now exposes height, 2D signed-distance, material, and confidence pages beside
+its structural probe reservoir. The page store, eviction policy, atlas, and
+D3D12 lowering remain open.
 
 ### Phase F: 3D SDF Splat Backend
 

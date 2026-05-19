@@ -53,9 +53,18 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("gpu cost", near.Summary, StringComparison.Ordinal);
         Assert.Contains("resident", near.Summary, StringComparison.Ordinal);
         Assert.Contains("probe candidates", near.Summary, StringComparison.Ordinal);
+        Assert.Contains("surface pages", near.Summary, StringComparison.Ordinal);
         Assert.True(near.StructuralProbeReservoir.HasSample);
         Assert.True(near.StructuralProbeReservoir.CandidateCount > 0);
         Assert.True(near.StructuralProbeReservoir.WeightSum > 0.0f);
+        Assert.Equal(near.SelectedCuts.Length * 4, near.SurfacePages.Length);
+        Assert.Contains(near.SurfacePages, page => page.Key.Kind == AquariumFractalSurfacePageKind.SignedDistance2D);
+        Assert.All(near.SurfacePages, page =>
+        {
+            Assert.Equal(128, page.Width);
+            Assert.Equal(128, page.Height);
+            Assert.Contains(near.SelectedCuts, cut => cut.NodeKey == page.Key.NodeKey);
+        });
         Assert.Empty(near.ResourcePlan.Residency.RequestedNodes);
         Assert.True(MathF.Abs(near.HeightBrushes[0].Amplitude) * MathF.Max(near.HeightBrushes[0].Radius, near.HeightBrushes[0].RadiusY) >=
             MathF.Abs(near.HeightBrushes[^1].Amplitude) * MathF.Max(near.HeightBrushes[^1].Radius, near.HeightBrushes[^1].RadiusY));
@@ -74,6 +83,7 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("ssdRequests:", dump, StringComparison.Ordinal);
         Assert.Contains("structuralProbe:", dump, StringComparison.Ordinal);
         Assert.Contains("structuralProbeWeight:", dump, StringComparison.Ordinal);
+        Assert.Contains("surfacePages:", dump, StringComparison.Ordinal);
         Assert.Contains("selected:", dump, StringComparison.Ordinal);
     }
 }

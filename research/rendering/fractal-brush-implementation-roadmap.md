@@ -402,6 +402,8 @@ Tasks:
 
 - [x] Add renderer-agnostic surface page key/metadata contracts for height,
   2D signed-distance, material, and confidence pages.
+- [x] Add CPU surface page planner that lowers selected IFS cuts into stable
+  page metadata.
 - [x] Add fake payload store with resident/missing states.
 - [x] Add child request queue.
 - [ ] Add score/cost eviction policy.
