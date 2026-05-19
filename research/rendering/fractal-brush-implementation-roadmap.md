@@ -310,6 +310,8 @@ Tasks:
 - [x] Add estimator state: mean, variance/uncertainty, confidence, sample count, sample age.
 - [x] Add stochastic scheduler with deterministic random source.
 - [x] Add exploration budget.
+- [x] Add live contribution cache that observes only scheduled nodes each frame
+  and feeds the next resource plan.
 - [ ] Add confidence decay and stale uncertainty growth.
 - [ ] Add fake contribution probe.
 - [ ] Add convergence telemetry.
@@ -374,6 +376,8 @@ Tasks:
 - [x] Feed planet shader from tile-local cube-face domains for post-hit
   material/detail evaluation.
 - [x] Route Zyphos render-plan construction through the resource budget planner.
+- [x] Update Zyphos contribution cache every render-plan request while reusing
+  compiled brush packets for equivalent selected cuts.
 - [ ] Feed traced planet geometry from selected-cut/resident tile packets.
 - [ ] Add face/tile/LOD/cache debug modes.
 - [ ] Remove or quarantine old spherical noise path as baseline fixture.

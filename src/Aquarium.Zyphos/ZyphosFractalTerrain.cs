@@ -14,18 +14,11 @@ public static class ZyphosFractalTerrain
     private static readonly Lazy<string> PatchSource = new(() => File.ReadAllText(PatchPath));
     private static readonly Lazy<FractalOwnershipTree> Tree = new(() => FractalDslCompiler.Compile(PatchSource.Value));
     private static readonly Lazy<AquariumFractalSummary[]> Summaries = new(() => FractalSummaryBuilder.Build(Tree.Value));
-    private static readonly Lazy<AquariumContributionState[]> ContributionStates = new(() => Summaries.Value.Select(summary => new AquariumContributionState(
-        summary.NodeKey,
-        MeanContribution: 0.0f,
-        Variance: MathF.Max(summary.MaxHeightError, 0.001f),
-        Confidence: 0.0f,
-        SampleCount: 0,
-        LastSampledFrame: 0,
-        Resident: true)).ToArray());
     private static readonly Lazy<AquariumSelectedCut[]> SelectedCut = new(() => FractalSelectedCutBuilder.Build(Summaries.Value, _ => 8.0f, maxEstimatedCost: 64.0f));
     private static readonly Lazy<AquariumHeightFieldBrush[]> Brushes = new(() => FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, SelectedCut.Value));
+    private static readonly FractalContributionCache ContributionCache = new();
     private static readonly object PlanCacheLock = new();
-    private static readonly Dictionary<int, ZyphosFractalRenderPlan> PlanCache = [];
+    private static readonly Dictionary<string, AquariumHeightFieldBrush[]> BrushCache = [];
     private static readonly FractalResourceBudget DefaultBudget = new(
         MaxCpuUpdates: 2,
         MaxGpuEstimatedCost: 64.0f,
@@ -48,39 +41,41 @@ public static class ZyphosFractalTerrain
     {
         var pixelsPerWorld = Math.Clamp(72.0f / MathF.Max(shot.EffectiveDistance, 0.001f), 0.25f, 48.0f);
         var bucket = (int)Math.Clamp(MathF.Round(pixelsPerWorld * 16.0f), 4.0f, 768.0f);
+        var bucketPixelsPerWorld = bucket / 16.0f;
+        FractalResourcePlan resourcePlan;
         lock (PlanCacheLock)
         {
-            if (PlanCache.TryGetValue(bucket, out var cached))
+            resourcePlan = ContributionCache.PlanFrame(
+                Summaries.Value,
+                _ => bucketPixelsPerWorld,
+                DefaultBudget,
+                new FractalXorShiftRandom((uint)bucket ^ 0x9E3779B9u),
+                ResidentFractalPayloadStore.Instance);
+        }
+
+        var selectedCut = resourcePlan.SelectedCut;
+        var cutKey = CutCacheKey(selectedCut);
+        AquariumHeightFieldBrush[] brushes;
+        lock (PlanCacheLock)
+        {
+            if (!BrushCache.TryGetValue(cutKey, out brushes!))
             {
-                return cached;
+                brushes = FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut);
+                BrushCache[cutKey] = brushes;
             }
         }
 
-        var bucketPixelsPerWorld = bucket / 16.0f;
-        var resourcePlan = FractalResourceBudgetPlanner.Plan(
-            Summaries.Value,
-            ContributionStates.Value,
-            _ => bucketPixelsPerWorld,
-            state => ScoreForState(state, bucketPixelsPerWorld),
-            DefaultBudget,
-            new FractalXorShiftRandom((uint)bucket ^ 0x9E3779B9u),
-            ResidentFractalPayloadStore.Instance,
-            frameIndex: (uint)bucket);
-        var selectedCut = resourcePlan.SelectedCut;
-        var brushes = FractalHeightBrushCompiler.CompileSelectedTree(Tree.Value, selectedCut);
-        var plan = new ZyphosFractalRenderPlan(
+        return new ZyphosFractalRenderPlan(
             brushes,
             selectedCut,
             resourcePlan,
             bucketPixelsPerWorld,
             $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {resourcePlan.UpdateNodes.Length}/{DefaultBudget.MaxCpuUpdates} cpu updates / {resourcePlan.GpuEstimatedCost:0.0}/{DefaultBudget.MaxGpuEstimatedCost:0.0} gpu cost / {resourcePlan.Residency.ResidentNodes.Count}/{DefaultBudget.MaxResidentPayloads} resident / {resourcePlan.Residency.RequestedNodes.Count}/{DefaultBudget.MaxSsdRequests} ssd requests / {bucketPixelsPerWorld:0.00} px-wu");
+    }
 
-        lock (PlanCacheLock)
-        {
-            PlanCache[bucket] = plan;
-        }
-
-        return plan;
+    private static string CutCacheKey(IReadOnlyList<AquariumSelectedCut> selectedCut)
+    {
+        return string.Join("|", selectedCut.Select(cut => cut.NodeKey.Value));
     }
 
     public static string Summary =>
@@ -117,19 +112,6 @@ public static class ZyphosFractalTerrain
         }
 
         return string.Join(Environment.NewLine, lines);
-    }
-
-    private static float ScoreForState(AquariumContributionState state, float pixelsPerWorld)
-    {
-        foreach (var summary in Summaries.Value)
-        {
-            if (summary.NodeKey == state.NodeKey)
-            {
-                return FractalProjectedErrorScorer.Score(summary, pixelsPerWorld);
-            }
-        }
-
-        return 0.0f;
     }
 
     private sealed class ResidentFractalPayloadStore : IFractalPayloadStore

@@ -1,0 +1,71 @@
+using System.Numerics;
+using Aquarium.Engine.Fractal;
+using Aquarium.Engine.Fractal.Lod;
+
+namespace Aquarium.Engine.Fractal.Tests;
+
+public sealed class FractalContributionCacheTests
+{
+    [Fact]
+    public void CacheUpdatesOnlyBudgetedNodesEachFrame()
+    {
+        var cache = new FractalContributionCache();
+        var summaries = new[]
+        {
+            Summary("node/a", maxHeightError: 2.0f),
+            Summary("node/b", maxHeightError: 1.0f),
+            Summary("node/c", maxHeightError: 0.5f),
+        };
+
+        var plan = cache.PlanFrame(
+            summaries,
+            _ => 4.0f,
+            new FractalResourceBudget(MaxCpuUpdates: 1, MaxGpuEstimatedCost: 8.0f, MaxResidentPayloads: 8, MaxSsdRequests: 0),
+            new TestFractalRandom(0.01, 0.01, 0.01),
+            new ResidentStore());
+
+        Assert.Single(plan.UpdateNodes);
+        Assert.True(cache.TryGet(plan.UpdateNodes[0], out var updated));
+        Assert.Equal(1, updated.SampleCount);
+        Assert.True(updated.Confidence > 0.0f);
+    }
+
+    [Fact]
+    public void CacheConfidenceConvergesAcrossRepeatedFrames()
+    {
+        var cache = new FractalContributionCache();
+        var summary = Summary("node/a", maxHeightError: 2.0f);
+        var budget = new FractalResourceBudget(MaxCpuUpdates: 1, MaxGpuEstimatedCost: 4.0f, MaxResidentPayloads: 4, MaxSsdRequests: 0);
+
+        cache.PlanFrame([summary], _ => 4.0f, budget, new TestFractalRandom(0.01), new ResidentStore());
+        cache.PlanFrame([summary], _ => 4.0f, budget, new TestFractalRandom(0.01), new ResidentStore());
+
+        Assert.True(cache.TryGet(summary.NodeKey, out var state));
+        Assert.Equal(2, state.SampleCount);
+        Assert.True(state.Confidence > 0.1f);
+        Assert.True(state.Resident);
+    }
+
+    private static AquariumFractalSummary Summary(string key, float maxHeightError)
+    {
+        return new AquariumFractalSummary(
+            new AquariumFractalKey(key),
+            Vector4.Zero,
+            maxHeightError,
+            MaxMaterialDelta: 0.0f,
+            EstimatedCost: 1.0f,
+            DescendantCount: 1);
+    }
+
+    private sealed class ResidentStore : IFractalPayloadStore
+    {
+        public bool IsResident(AquariumFractalKey nodeKey)
+        {
+            return true;
+        }
+
+        public void Request(AquariumFractalKey nodeKey)
+        {
+        }
+    }
+}
