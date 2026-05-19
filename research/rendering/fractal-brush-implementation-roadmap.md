@@ -380,7 +380,9 @@ Tasks:
   compiled brush packets for equivalent selected cuts.
 - [x] Feed traced planet geometry from a hard-budgeted top-influence subset of
   selected tile packets.
-- [ ] Add face/tile/LOD/cache debug modes.
+- [x] Add first face/tile/material influence debug view through render debug
+  mode 11.
+- [ ] Add LOD/cache debug overlays.
 - [ ] Remove or quarantine old spherical noise path as baseline fixture.
 
 Tests:

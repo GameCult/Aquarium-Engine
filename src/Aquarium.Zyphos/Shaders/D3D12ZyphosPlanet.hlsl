@@ -151,6 +151,30 @@ float zyAuthoredBrushTerrain(float3 dir, out float materialMask)
     return zyAuthoredBrushTerrainLimited(dir, 64, materialMask);
 }
 
+float3 zyFaceDebugColor(float face)
+{
+    if (face < 0.5) return float3(0.95, 0.18, 0.14);
+    if (face < 1.5) return float3(0.12, 0.56, 1.00);
+    if (face < 2.5) return float3(0.20, 0.88, 0.34);
+    if (face < 3.5) return float3(1.00, 0.78, 0.18);
+    if (face < 4.5) return float3(0.78, 0.36, 1.00);
+    return float3(0.10, 0.90, 0.86);
+}
+
+float3 zyFractalDomainDebug(float3 dir)
+{
+    float face;
+    float2 faceUv = zyCubeFaceUv(dir, face);
+    float materialMask;
+    float authoredHeight = zyAuthoredBrushTerrain(dir, materialMask);
+    float2 grid = abs(frac((faceUv * 0.5 + 0.5) * 8.0) - 0.5);
+    float line = 1.0 - smoothstep(0.015, 0.055, min(grid.x, grid.y));
+    float3 faceColor = zyFaceDebugColor(face);
+    float signedHeight = authoredHeight >= 0.0 ? 1.0 : 0.0;
+    float3 brushColor = lerp(float3(0.12, 0.28, 1.0), float3(1.0, 0.42, 0.12), signedHeight) * saturate(materialMask * 5.0);
+    return saturate(faceColor * 0.28 + line.xxx * 0.34 + brushColor);
+}
+
 float zyTileRelief(float2 uv, float level, float amplitude, float ridgeBias)
 {
     float scale = exp2(level);
@@ -264,6 +288,11 @@ float3 shadeSdf(float2 uv, float travel, float3 p, float3 normal, int sdfIndex, 
 {
     SdfObject sdfObject = sdfObjects[sdfIndex];
     float3 dir = zyPlanetDir(p - sdfObject.centerRadius.xyz, sdfObject);
+    if (renderDebugMode >= 10.5 && renderDebugMode < 11.5)
+    {
+        return zyFractalDomainDebug(dir);
+    }
+
     float3 viewDirection = normalize(cameraPosition - p);
     float3 starDirectionLocal = zyPrimaryStarDirectionLocal(sdfObject);
     float eclipse = zyUmbrosEclipse(starDirectionLocal);
