@@ -110,6 +110,7 @@ public sealed class ZyphosRuntime : IAquariumRuntime
             })
             .Command("zyphos", _ => $"Zyphos: {ZyphosFractalTerrain.Summary}", "Report Zyphos demo status.")
             .Command("zyphos-fractal", _ => ZyphosFractalTerrain.DebugDump, "Dump the compiled Zyphos fractal terrain grammar.")
+            .Command("zyphos-fractal-plan", _ => ZyphosFractalTerrain.BuildPlanDebugDump(ZyphosFractalTerrain.BuildRenderPlan(CurrentShot())), "Dump the current Zyphos fractal selected cut and resource budget.")
             .Command("zyphos-system", _ => $"Zyphos-Umbros: separation {ZyphosUmbrosSystem.SeparationInZyphosRadii:0.0} Zyphos radii, Umbros radius {ZyphosUmbrosSystem.UmbrosRadiusRatio:0.00} Zyphos, apparent diameter {ZyphosUmbrosSystem.UmbrosAngularDiameterDegrees:0.0} degrees.", "Report the modeled Zyphos/Umbros/star baseline.");
     }
 

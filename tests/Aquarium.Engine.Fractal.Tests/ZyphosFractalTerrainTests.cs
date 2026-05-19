@@ -49,5 +49,23 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Equal(ZyphosFractalTerrain.SelectedCuts.Length, near.SelectedCuts.Length);
         Assert.Equal(ZyphosFractalTerrain.HeightBrushes.Length, near.HeightBrushes.Length);
         Assert.Contains("px-wu", near.Summary, StringComparison.Ordinal);
+        Assert.Contains("cpu updates", near.Summary, StringComparison.Ordinal);
+        Assert.Contains("gpu cost", near.Summary, StringComparison.Ordinal);
+        Assert.Contains("resident", near.Summary, StringComparison.Ordinal);
+        Assert.Empty(near.ResourcePlan.Residency.RequestedNodes);
+    }
+
+    [Fact]
+    public void ZyphosFractalPlanDebugDumpReportsResourceBudgets()
+    {
+        var shot = ZyphosCameraComposer.Compose(ZyphosSpatialDomainCatalog.CanopyLeaf, 0.1f, 0.4f, 0.1f, 0.0f);
+        var dump = ZyphosFractalTerrain.BuildPlanDebugDump(ZyphosFractalTerrain.BuildRenderPlan(shot));
+
+        Assert.Contains("Zyphos fractal resource plan", dump, StringComparison.Ordinal);
+        Assert.Contains("cpuUpdates:", dump, StringComparison.Ordinal);
+        Assert.Contains("gpuEstimatedCost:", dump, StringComparison.Ordinal);
+        Assert.Contains("ramResident:", dump, StringComparison.Ordinal);
+        Assert.Contains("ssdRequests:", dump, StringComparison.Ordinal);
+        Assert.Contains("selected:", dump, StringComparison.Ordinal);
     }
 }

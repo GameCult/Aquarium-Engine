@@ -71,6 +71,7 @@ public static class ZyphosFractalTerrain
         var plan = new ZyphosFractalRenderPlan(
             brushes,
             selectedCut,
+            resourcePlan,
             bucketPixelsPerWorld,
             $"{selectedCut.Length}/{Summaries.Value.Length} cuts / {brushes.Length}/{OwnershipTree.Claims.Count} brushes / {resourcePlan.UpdateNodes.Length}/{DefaultBudget.MaxCpuUpdates} cpu updates / {resourcePlan.GpuEstimatedCost:0.0}/{DefaultBudget.MaxGpuEstimatedCost:0.0} gpu cost / {resourcePlan.Residency.ResidentNodes.Count}/{DefaultBudget.MaxResidentPayloads} resident / {resourcePlan.Residency.RequestedNodes.Count}/{DefaultBudget.MaxSsdRequests} ssd requests / {bucketPixelsPerWorld:0.00} px-wu");
 
@@ -84,6 +85,39 @@ public static class ZyphosFractalTerrain
 
     public static string Summary =>
         $"{Path.GetFileName(PatchPath)} / {OwnershipTree.Claims.Count} DSL claims / {OwnershipTree.Nodes.Count} tile nodes / {SelectedCut.Value.Length} cuts / {HeightBrushes.Length} shaped brushes";
+
+    public static string BuildPlanDebugDump(ZyphosFractalRenderPlan plan)
+    {
+        var budget = plan.ResourcePlan.Budget;
+        var lines = new List<string>
+        {
+            "Zyphos fractal resource plan",
+            $"  pixelsPerWorld: {plan.PixelsPerWorld:0.000}",
+            $"  selectedCut: {plan.SelectedCuts.Length}/{Summaries.Value.Length}",
+            $"  brushes: {plan.HeightBrushes.Length}/{OwnershipTree.Claims.Count}",
+            $"  cpuUpdates: {plan.ResourcePlan.UpdateNodes.Length}/{budget.MaxCpuUpdates}",
+            $"  gpuEstimatedCost: {plan.ResourcePlan.GpuEstimatedCost:0.000}/{budget.MaxGpuEstimatedCost:0.000}",
+            $"  ramResident: {plan.ResourcePlan.Residency.ResidentNodes.Count}/{budget.MaxResidentPayloads}",
+            $"  ssdRequests: {plan.ResourcePlan.Residency.RequestedNodes.Count}/{budget.MaxSsdRequests}",
+            "selected:",
+        };
+
+        foreach (var cut in plan.SelectedCuts)
+        {
+            lines.Add($"  {cut.NodeKey.Value} score={cut.Score:0.000} fade={cut.Fade:0.000} requestChildren={cut.RequestedChildren}");
+        }
+
+        if (plan.ResourcePlan.UpdateNodes.Length > 0)
+        {
+            lines.Add("updates:");
+            foreach (var key in plan.ResourcePlan.UpdateNodes)
+            {
+                lines.Add($"  {key.Value}");
+            }
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
 
     private static float ScoreForState(AquariumContributionState state, float pixelsPerWorld)
     {
@@ -116,5 +150,6 @@ public static class ZyphosFractalTerrain
 public readonly record struct ZyphosFractalRenderPlan(
     AquariumHeightFieldBrush[] HeightBrushes,
     AquariumSelectedCut[] SelectedCuts,
+    FractalResourcePlan ResourcePlan,
     float PixelsPerWorld,
     string Summary);
