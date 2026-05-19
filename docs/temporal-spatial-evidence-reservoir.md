@@ -2,40 +2,83 @@
 
 ## Objective
 
-Aquarium owns resolved temporal spatial evidence. Producers may capture raw
-camera frames, audio blocks, point claims, SDF probes, or calibration events, but
-the shared stable-key history, delayed presentation, smoothing, confidence
-weighting, expiry, and backend lowering belong to the Aquarium reservoir stack.
+Aquarium owns the shared temporal evidence machine for two customers:
 
-This serves both current customers:
+- fractal rendering, where SDF/detail/path candidates need bounded reuse across
+  pixels, frames, and nested domains;
+- Mimir/LocalCast sensor fusion, where camera and microphone features need a
+  delayed coherence window before the resolved field is rendered.
 
-- fractal rendering: SDF probes and selected-cut packets need bounded,
-  confidence-weighted detail that converges while the camera moves;
-- Mimir/LocalCast sensor fusion: cameras and microphones need a delayed
-  coherence window before the resolved field is rendered.
+The old stable-key accumulator was useful, but it was not ReSTIR. The live
+architecture now splits the problem into a small resampled-importance core, a
+spatial evidence track layer, typed lowerings, renderer passes, and TAA history.
 
-## Pipeline
+## Research Spine
+
+- NVIDIA ReSTIR DI repeatedly resamples candidate light samples, then applies
+  spatial and temporal resampling to share useful samples across nearby pixels
+  and frames. The paper reports equal-error speedups of 6-60x, with biased
+  variants reaching 35-65x in its tested direct-lighting workloads.
+  Source: https://research.nvidia.com/labs/rtr/publication/bitterli2020spatiotemporal/
+- ReSTIR GI applies the same screen-space spatiotemporal reuse idea to
+  multi-bounce indirect paths and reports 9.3x-166x MSE improvement at one
+  sample per pixel in tested scenes.
+  Source: https://research.nvidia.com/publication/2021-06_restir-gi-path-resampling-real-time-path-tracing
+- GRIS generalizes RIS/ReSTIR to correlated samples, unknown PDFs, varied
+  domains, and shift mappings. That is the important part for Aquarium:
+  fractal domains and sensor-fusion samples are not all light samples.
+  Source: https://research.nvidia.com/labs/rtr/publication/lin2022generalized/
+- RTXDI's integration docs make the pass boundary concrete: acquire initial
+  samples, store reservoir data, validate temporal reuse through reprojection,
+  validate spatial reuse against nearby surfaces, shift candidate paths between
+  domains, then shade/denoise from the final reservoir.
+  Sources:
+  https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirGI.md
+  https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirPT.md
+
+## Pipeline Map
 
 ```text
-raw producer samples
--> typed producer adapter
--> TemporalSpatialEvidenceObservation
--> TemporalSpatialEvidenceReservoir
--> TemporalSpatialEvidenceSample snapshot
+producer observations
+-> candidate generator
+-> target evaluator
+-> ResampledImportanceReservoir<TSample>
+-> temporal reuse pass
+-> spatial/domain reuse pass
+-> validation + shift mapping
+-> TemporalSpatialEvidenceReservoir track layer when stable fields are needed
 -> TemporalSpatialEvidenceLowering
 -> backend packet stream
--> D3D12 render/fusion/TAA
+-> renderer/fusion passes
+-> TAA guide/history buffers
 ```
 
 ## Ownership
 
-Raw sample reservoirs own capture-time retention only. LocalCastBridge's native
-rolling reservoir is allowed to keep time-ordered camera/audio/sample handles,
-typed views, latest-for-sensor lookup, and provenance filtering. It must not own
-resolved spatial confidence, smoothed motion, render packet lowering, or TAA
-history.
+`ResampledImportanceReservoir<TSample>` owns RIS/ReSTIR-style candidate math:
 
-`TemporalSpatialEvidenceReservoir` owns stable spatial tracks:
+- one selected representative sample;
+- summed importance weight of accepted candidates;
+- number of source candidates represented by the reservoir;
+- selected sample target value;
+- final contribution weight `weightSum / (candidateCount * selectedTarget)`.
+
+Candidate generators own proposal distributions. A fractal renderer may propose
+SDF probe candidates from projected error, node bounds, blue-noise screen tiles,
+or resident children. Mimir may propose visual/audio feature candidates from
+sensor confidence and calibration state. The reservoir does not know these
+domains; it only receives target and source-PDF values.
+
+Reuse passes own validity and shift mapping. A sample may be reused only when
+the target domain can explain it. For pixels this means depth/normal/material
+compatibility, motion vectors, conservative visibility, and disocclusion tests.
+For fractal domains it means matching domain ancestry, bounded local-frame
+error, resident payload compatibility, and conservative SDF bounds. For sensor
+fusion it means time delay, calibration confidence, modality agreement, and
+feature reprojection error.
+
+`TemporalSpatialEvidenceReservoir` owns stable resolved spatial tracks after
+candidate selection when the output is a field with persistent identity:
 
 - stable key identity;
 - accumulation window and presentation delay;
@@ -45,52 +88,77 @@ history.
 - expiry;
 - max-track eviction by confidence and age.
 
-`TemporalSpatialEvidenceLowering` owns packet conversions. Current lowerings:
+`TemporalSpatialEvidenceLowering` owns packet conversion. Consumers do not pack
+payload vectors by private convention when a lowering helper exists.
 
-- `TemporalGaussianObservation` -> evidence observation;
-- evidence sample -> `AquariumTemporalSdfGaussian`;
-- `AquariumGpuFusionSeed` -> evidence observation;
-- evidence sample -> `AquariumGpuFusionSeed`.
-
-Adapters own domain-specific interpretation before the reservoir. For example,
-LocalCast may decide how a visual point maps to radii, color, falloff, and
-shape power, but it then hands the result to the shared lowering path.
-
-Renderer passes own backend packet layout and GPU execution. TAA owns pixel
-history validation, not producer identity or stable-key accumulation.
+TAA owns pixel history validation and temporal guide buffers. It may consume
+reservoir confidence, sample age, domain id, motion, and temporal-detail lanes,
+but it does not own producer identity or stable spatial evidence.
 
 ## Invariants
 
-- Stable-key spatial history has one owner: `TemporalSpatialEvidenceReservoir`.
-- Consumers do not privately implement track dictionaries, smoothing, expiry, or
-  max-count eviction for resolved spatial evidence.
-- Payload vectors are not ad hoc folklore. If a backend needs packed payload
-  fields, add or use a named lowering helper.
-- Raw retention and resolved evidence are separate layers. Do not collapse
-  LocalCastBridge's raw rolling reservoir into Aquarium's resolved evidence
-  reservoir.
-- Conservative bounds remain safety authority. Learned scoring or stochastic
-  sampling may prioritize work, but it must not replace bounds used for render
-  correctness.
+- Reservoir math is a pure, testable core before it becomes HLSL.
+- A reservoir is not a dictionary of tracks. A track layer may use reservoirs,
+  but it does not replace candidate resampling.
+- Reuse is invalid until a pass proves the shift/validation contract for the
+  source and target domains.
+- Conservative bounds remain the safety authority. Learned or stochastic
+  priority may decide what to refresh first; it must not replace SDF bounds,
+  visibility bounds, or calibration bounds.
+- CPU, GPU, RAM, and SSD budgets are inputs to candidate generation and
+  residency. They are not hidden side effects of renderer convenience code.
+- Consumer repos do not grow parallel stable-key temporal caches.
 
-## Current Consumers
+## Current State
 
-`TemporalGaussianAccumulator` is a compatibility facade. It maps Gaussian
-observations through `TemporalSpatialEvidenceLowering`, stores them in the
-shared reservoir, and lowers snapshots back to `AquariumTemporalSdfGaussian`.
+Built:
 
-`LocalCastGpuFusionAccumulator` is also a facade. It maps LocalCast fallback
-GPU fusion seeds into shared evidence observations and lowers snapshots back to
-`AquariumGpuFusionSeed`.
+- `ResampledImportanceCandidate<TSample>` stores a sample, target value, source
+  PDF, and represented candidate count.
+- `ResampledImportanceReservoir<TSample>` accepts candidates by weight
+  proportional to `target / sourcePdf`, merges reservoirs, preserves represented
+  candidate count, and exposes the RIS contribution weight.
+- `TemporalSpatialEvidenceReservoir` remains the stable track layer used by
+  temporal Gaussian fields and LocalCast fallback GPU fusion.
+- `FractalContributionCache` remains the node-summary LOD estimator. It should
+  become a candidate generator feeding the resampling core rather than a
+  separate claim to temporal-reservoir theory.
 
-`FractalContributionCache` is adjacent, not yet unified: it owns selected-cut
-contribution estimates for authored fractal nodes. Future SDF probe evidence
-should enter the shared reservoir when probe results become spatial samples;
-node-summary scoring remains a separate LOD planning authority.
+Not built yet:
+
+- GPU reservoir buffers;
+- temporal reprojection validation for fractal/SDF reservoirs;
+- spatial neighbor reuse for fractal/SDF reservoirs;
+- GRIS-style domain shift mappings for nested `.aquageo` domains;
+- TAA guide-buffer weaving of reservoir confidence, age, and domain validity;
+- SSD/RAM residency queues driven by reservoir contribution estimates.
+
+## Implementation Roadmap
+
+1. Keep the CPU reservoir core pure and exhaustive under unit tests.
+2. Add typed reservoir samples for fractal SDF probes: domain key, local frame,
+   bound radius, target contribution, source PDF, payload handle, and material
+   delta.
+3. Turn `FractalContributionCache` into a candidate generator that refreshes
+   nodes under CPU budget and submits candidates to the reservoir core.
+4. Add temporal reuse for fractal probes using camera motion, domain ancestry,
+   local-frame error, and conservative bounds.
+5. Add spatial reuse across screen tiles and quadtree neighbors.
+6. Lower selected reservoirs into GPU brush/SDF packets and expose debug views
+   for weight sum, selected target, candidate count, confidence, age, and
+   invalidation reason.
+7. Weave reservoir confidence and temporal detail into TAA guide buffers so the
+   history filter can distinguish stable reused evidence from fresh stochastic
+   noise.
+8. Add Mimir-facing candidate adapters only after the fractal path proves the
+   contract: modality features are candidates, not a second reservoir system.
+9. Port the pure core to HLSL and add CPU/GPU parity fixtures.
+10. Add residency scheduling: hot selected reservoirs keep GPU packets resident,
+    warm reservoirs keep RAM payloads, cold reservoirs fall to SSD handles.
 
 ## Cut Line
 
-Do not build a second temporal spatial evidence cache in a client repo. If a
-consumer needs different sample semantics, add a producer adapter and a named
-lowering helper. If it needs different retention semantics, extend the shared
-reservoir only after stating the invariant the new behavior protects.
+If a new subsystem stores temporal candidates, it must state whether it owns raw
+producer retention, resampled candidate selection, stable resolved tracks,
+packet lowering, or TAA history. If it cannot name that authority, it is not an
+architecture. It is a decorative leak.

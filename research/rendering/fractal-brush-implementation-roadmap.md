@@ -303,36 +303,78 @@ Cut line:
 
 ## Phase 6: Probabilistic Online Updates
 
-Goal: refresh contribution estimates under budget and converge.
+Goal: refresh contribution estimates under budget and converge without
+pretending an online smoother is ReSTIR.
+
+Research authority:
+
+- ReSTIR DI: candidate generation plus temporal and spatial reservoir reuse for
+  real-time direct lighting.
+  https://research.nvidia.com/labs/rtr/publication/bitterli2020spatiotemporal/
+- ReSTIR GI: path reservoirs for indirect lighting, with final shading fed by a
+  selected reservoir sample.
+  https://research.nvidia.com/publication/2021-06_restir-gi-path-resampling-real-time-path-tracing
+- GRIS: the generalized theory for correlated samples, unknown PDFs, varied
+  domains, and shift mappings. This is the fractal/SDF/sensor-fusion door.
+  https://research.nvidia.com/labs/rtr/publication/lin2022generalized/
+- RTXDI integration docs: initial sampling, temporal reprojection, spatial
+  reuse, validation, shift mapping, reservoir buffers, and denoiser guide
+  buffers.
+  https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirGI.md
+  https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirPT.md
 
 Tasks:
 
+- [x] Add pure `ResampledImportanceReservoir<TSample>` core with selected
+  sample, target, weight sum, represented candidate count, merge, and
+  contribution weight.
 - [x] Add estimator state: mean, variance/uncertainty, confidence, sample count, sample age.
 - [x] Add stochastic scheduler with deterministic random source.
 - [x] Add exploration budget.
 - [x] Add live contribution cache that observes only scheduled nodes each frame
   and feeds the next resource plan.
+- [ ] Convert contribution-cache refresh into a candidate generator that submits
+  weighted candidates to the resampled-importance core.
+- [ ] Add fractal SDF probe candidate records: domain key, local frame, bound,
+  projected contribution target, source PDF, payload handle, and material delta.
+- [ ] Add temporal reuse validation: camera motion, domain ancestry, local-frame
+  error, bounds, and disocclusion/material compatibility.
+- [ ] Add spatial reuse validation across screen tiles and cube-sphere neighbor
+  domains.
+- [ ] Feed reservoir confidence, selected target, candidate count, sample age,
+  and invalidation reason into TAA guide/history buffers.
 - [ ] Add confidence decay and stale uncertainty growth.
 - [ ] Add fake contribution probe.
 - [ ] Add convergence telemetry.
-- [ ] Add debug channels: uncertainty, sample age, update probability.
+- [ ] Add debug channels: uncertainty, sample age, update probability,
+  reservoir weight sum, selected target, candidate count, reuse validity.
 
 Tests:
 
+- [x] reservoir accepts candidates proportional to target/source PDF;
+- [x] reservoir merge preserves represented candidate count and weight sum;
+- [x] invalid zero-weight candidates do not corrupt reservoir state;
 - deterministic RNG fixture repeats schedule;
 - visible nodes keep nonzero update probability;
 - near-threshold nodes keep nonzero update probability;
 - stale wrong score recovers after observations;
 - fixed camera path converges within tolerance;
+- temporal reuse rejects mismatched domain ancestry;
+- spatial reuse rejects invalid local-frame shifts;
+- TAA history confidence drops when reservoir validity changes;
 - update cost respects budget.
 
 Exit gate:
 
-- cache updates only a bounded subset per frame while selected cuts converge.
+- cache updates only a bounded subset per frame while selected cuts converge,
+  and the selected detail path is driven by tested reservoir math rather than a
+  frozen score table.
 
 Cut line:
 
-- No neural predictor until this estimator fails with captured telemetry.
+- No neural predictor until the ReSTIR/GRIS-shaped reservoir pipeline fails
+  with captured telemetry. No consumer-owned temporal cache unless it clearly
+  owns raw capture retention rather than resolved evidence.
 
 ## Phase 7: Residency Simulation
 
