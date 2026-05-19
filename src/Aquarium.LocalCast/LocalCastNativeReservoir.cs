@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Aquarium.LocalCast;
 
@@ -110,6 +111,20 @@ public interface ILocalCastNativeRuntime : IDisposable
     bool TryReadViewSample(LocalCastNativeSampleKind kind, nuint index, out LocalCastNativeSampleHandle sample);
 
     bool TryReadLatestForSensor(LocalCastNativeSampleKind kind, ulong sensorIdHash, out LocalCastNativeSampleHandle sample);
+}
+
+public static class LocalCastNativeSourceId
+{
+    public static ulong HashUtf8(string sourceId)
+    {
+        if (string.IsNullOrEmpty(sourceId))
+        {
+            return 0;
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(sourceId);
+        return LocalCastNativeMethods.HashSourceId(bytes, (UIntPtr)bytes.Length);
+    }
 }
 
 public interface ILocalCastNativeProducer : IDisposable
@@ -265,6 +280,9 @@ public sealed class LocalCastNativeProducer : ILocalCastNativeProducer
 internal static class LocalCastNativeMethods
 {
     private const string LibraryName = "localcast_reservoir";
+
+    [DllImport(LibraryName, EntryPoint = "localcast_hash_source_id")]
+    internal static extern ulong HashSourceId(byte[] bytes, UIntPtr byteLen);
 
     [DllImport(LibraryName, EntryPoint = "localcast_runtime_create")]
     internal static extern IntPtr RuntimeCreate(ulong durationNs);
