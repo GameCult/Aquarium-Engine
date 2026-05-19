@@ -38,20 +38,7 @@ public sealed class TemporalGaussianAccumulator
 
     public void Observe(IEnumerable<TemporalGaussianObservation> observations)
     {
-        reservoir.Observe(observations.Select(observation => new TemporalSpatialEvidenceObservation(
-            observation.StableKey,
-            observation.Center,
-            observation.Radii,
-            observation.Orientation,
-            observation.ColorOpacity,
-            new Vector4(
-                MathF.Max(0.0001f, observation.Falloff),
-                MathF.Max(0.0001f, observation.ShapePower),
-                0.0f,
-                0.0f),
-            observation.Confidence,
-            observation.ObservedTimeSeconds,
-            observation.FieldId)));
+        reservoir.Observe(observations.Select(TemporalSpatialEvidenceLowering.FromGaussianObservation));
     }
 
     public AquariumTemporalGaussianField BuildField(float renderTimeSeconds)
@@ -61,21 +48,7 @@ public sealed class TemporalGaussianAccumulator
 
         for (var index = 0; index < snapshot.Samples.Count; index++)
         {
-            var sample = snapshot.Samples[index];
-            gaussians[index] = new AquariumTemporalSdfGaussian(
-                sample.StableKey,
-                sample.Center,
-                sample.PreviousCenter,
-                sample.Velocity,
-                sample.Radii,
-                sample.Orientation,
-                sample.Payload0,
-                sample.Confidence,
-                sample.HistoryWeight,
-                sample.LastObservedTimeSeconds,
-                sample.Payload1.X,
-                sample.Payload1.Y,
-                sample.FieldId);
+            gaussians[index] = TemporalSpatialEvidenceLowering.ToTemporalGaussian(snapshot.Samples[index]);
         }
 
         return new AquariumTemporalGaussianField

@@ -31,6 +31,10 @@ The Gaussian field is one backend for this reservoir, not the reservoir's
 identity. Fractal SDF probes, visual point-cloud features, and future acoustic
 constraints can all enter as stable keyed spatial evidence as long as each
 producer declares confidence, time, bounds, and payload lowering rules.
+`TemporalSpatialEvidenceLowering` owns the current packet conversions for
+`TemporalGaussianObservation`, `AquariumTemporalSdfGaussian`, and
+`AquariumGpuFusionSeed`; consumers should use those helpers instead of packing
+payload vectors privately.
 
 The D3D12 renderer lowers the field into `D3D12TemporalGaussianPacket`, uploads
 the active packet span into a 1,048,576-entry structured buffer, and renders an
