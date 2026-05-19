@@ -108,6 +108,58 @@ public readonly record struct AquariumFractalSurfacePage(
     int PayloadHandle,
     float MaxError);
 
+public readonly record struct AquariumFractalSdfSplat3DKey
+{
+    public AquariumFractalSdfSplat3DKey(
+        AquariumFractalKey domainKey,
+        AquariumFractalKey nodeKey,
+        int payloadHandle)
+    {
+        if (domainKey.Value is null)
+        {
+            throw new ArgumentException("3D SDF splat domain key must not be empty.", nameof(domainKey));
+        }
+
+        if (nodeKey.Value is null)
+        {
+            throw new ArgumentException("3D SDF splat node key must not be empty.", nameof(nodeKey));
+        }
+
+        if (payloadHandle < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(payloadHandle), payloadHandle, "3D SDF splat payload handle must not be negative.");
+        }
+
+        DomainKey = domainKey;
+        NodeKey = nodeKey;
+        PayloadHandle = payloadHandle;
+    }
+
+    public AquariumFractalKey DomainKey { get; }
+
+    public AquariumFractalKey NodeKey { get; }
+
+    public int PayloadHandle { get; }
+
+    public string Value => $"{DomainKey.Value}:{NodeKey.Value}:sdf3d:{PayloadHandle:D6}";
+
+    public override string ToString()
+    {
+        return Value;
+    }
+}
+
+public readonly record struct AquariumFractalSdfSplat3D(
+    AquariumFractalSdfSplat3DKey Key,
+    Vector3 Center,
+    Quaternion Orientation,
+    Vector3 Radii,
+    float Falloff,
+    float ShapePower,
+    float DistanceOffset,
+    float MaterialValue,
+    float Confidence);
+
 public readonly record struct AquariumBrushClaim(
     AquariumFractalKey Key,
     AquariumFractalKey DomainKey,

@@ -528,6 +528,14 @@ compiler. The real page store, atlas, and D3D12 lowering remain open.
 Build compact-support 3D SDF splat packets for object/volume domains. Keep
 distance safety conservative and LOD gated.
 
+Current state: `AquariumFractalSdfSplat3DKey` and
+`AquariumFractalSdfSplat3D` define stable compact-support 3D SDF splat packets.
+`FractalSdfSplat3DCompiler` lowers structural probe samples into splats, and
+`FractalSdfSplat3DKernel` provides CPU compact-weight and signed-distance
+parity math. Zyphos now exposes a first structural SDF splat from its probe
+reservoir. D3D12 lowering and object/body recursive form integration remain
+open.
+
 ### Phase G: 2D-Projected-To-3D Backend
 
 Project 2D SDF tile pages onto 3D domains: cube-sphere planets, torus stations,

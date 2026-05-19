@@ -1,3 +1,4 @@
+using System.Numerics;
 using Aquarium.Engine.Fractal.Grammar;
 using Aquarium.Engine.Fractal.Temporal;
 
@@ -7,11 +8,34 @@ public readonly record struct FractalProbeReservoirSnapshot(
     bool HasSample,
     AquariumFractalKey DomainKey,
     AquariumFractalKey NodeKey,
+    Vector3 LocalCenter,
     float TargetContribution,
     float BoundRadius,
+    float SourcePdf,
+    float MaterialDelta,
     float WeightSum,
     int CandidateCount,
-    float ContributionWeight);
+    float ContributionWeight,
+    int PayloadHandle)
+{
+    public FractalProbeSample ToProbeSample()
+    {
+        if (!HasSample)
+        {
+            throw new InvalidOperationException("Cannot convert an empty structural probe reservoir snapshot to a probe sample.");
+        }
+
+        return new FractalProbeSample(
+            DomainKey,
+            NodeKey,
+            LocalCenter,
+            BoundRadius,
+            TargetContribution,
+            SourcePdf,
+            MaterialDelta,
+            PayloadHandle);
+    }
+}
 
 public static class FractalStructuralProbeReservoir
 {
@@ -69,11 +93,15 @@ public static class FractalStructuralProbeReservoir
             HasSample: true,
             selected.DomainKey,
             selected.NodeKey,
+            selected.LocalCenter,
             selected.TargetContribution,
             selected.BoundRadius,
+            selected.SourcePdf,
+            selected.MaterialDelta,
             reservoir.WeightSum,
             reservoir.CandidateCount,
-            reservoir.ContributionWeight);
+            reservoir.ContributionWeight,
+            selected.PayloadHandle);
     }
 
     private static FractalProbeReservoirSnapshot Empty()
@@ -82,10 +110,14 @@ public static class FractalStructuralProbeReservoir
             HasSample: false,
             DomainKey: default,
             NodeKey: default,
+            LocalCenter: Vector3.Zero,
             TargetContribution: 0.0f,
             BoundRadius: 0.0f,
+            SourcePdf: 0.0f,
+            MaterialDelta: 0.0f,
             WeightSum: 0.0f,
             CandidateCount: 0,
-            ContributionWeight: 0.0f);
+            ContributionWeight: 0.0f,
+            PayloadHandle: 0);
     }
 }

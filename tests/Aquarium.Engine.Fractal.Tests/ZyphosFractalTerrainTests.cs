@@ -57,6 +57,8 @@ public sealed class ZyphosFractalTerrainTests
         Assert.True(near.StructuralProbeReservoir.HasSample);
         Assert.True(near.StructuralProbeReservoir.CandidateCount > 0);
         Assert.True(near.StructuralProbeReservoir.WeightSum > 0.0f);
+        Assert.Single(near.StructuralSdfSplats);
+        Assert.Equal(near.StructuralProbeReservoir.NodeKey, near.StructuralSdfSplats[0].Key.NodeKey);
         Assert.Equal(near.SelectedCuts.Length * 4, near.SurfacePages.Length);
         Assert.Contains(near.SurfacePages, page => page.Key.Kind == AquariumFractalSurfacePageKind.SignedDistance2D);
         Assert.True(near.SurfacePageResidency.ResidentPages.Count <= near.SurfacePages.Length);
@@ -89,6 +91,7 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("evictions:", dump, StringComparison.Ordinal);
         Assert.Contains("structuralProbe:", dump, StringComparison.Ordinal);
         Assert.Contains("structuralProbeWeight:", dump, StringComparison.Ordinal);
+        Assert.Contains("structuralSdfSplats:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePages:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageResident:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePagePayloads:", dump, StringComparison.Ordinal);

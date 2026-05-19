@@ -24,8 +24,11 @@ public sealed class FractalStructuralProbeReservoirTests
         Assert.True(snapshot.HasSample);
         Assert.Equal(domainKey, snapshot.DomainKey);
         Assert.Equal(rootKey, snapshot.NodeKey);
+        Assert.Equal(Vector3.Zero, snapshot.LocalCenter);
         Assert.Equal(1, snapshot.CandidateCount);
+        Assert.Equal(0, snapshot.PayloadHandle);
         Assert.True(snapshot.TargetContribution > 0.0f);
+        Assert.True(snapshot.SourcePdf > 0.0f);
         Assert.True(snapshot.WeightSum > 0.0f);
     }
 

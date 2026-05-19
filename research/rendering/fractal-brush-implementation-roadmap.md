@@ -448,6 +448,8 @@ Tasks:
   compiled brush packets for equivalent selected cuts.
 - [x] Feed traced planet geometry from a hard-budgeted top-influence subset of
   selected tile packets.
+- [x] Lower the structural probe reservoir into a first compact 3D SDF splat
+  packet for inspection.
 - [x] Add first face/tile/material influence debug view through render debug
   mode 11.
 - [ ] Add LOD/cache debug overlays.
