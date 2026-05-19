@@ -15,6 +15,11 @@ public enum LocalCastNativeSampleKind : uint
     RenderPacket = 8,
 }
 
+public enum LocalCastNativeAudioSampleFormat : uint
+{
+    Float32Interleaved = 1,
+}
+
 [Flags]
 public enum LocalCastNativeSampleFlags : uint
 {
@@ -34,6 +39,18 @@ public struct LocalCastNativeSampleHandle
     public uint Reserved;
 
     public readonly bool IsLive => Flags == LocalCastNativeSampleFlags.None;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct LocalCastNativeAudioBlockDescriptor
+{
+    public ulong DataHandle;
+    public uint FrameCount;
+    public uint ChannelCount;
+    public uint SampleRateHz;
+    public LocalCastNativeAudioSampleFormat SampleFormat;
+    public ulong StartSample;
+    public ulong ChannelLayoutHash;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -69,6 +86,12 @@ public interface ILocalCastNativeProducer : IDisposable
     ulong NextSequence { get; }
 
     bool TryPush(ulong timestampNs, ulong arrivalNs, ulong payloadHandle, out LocalCastNativeSampleHandle sample);
+
+    bool TryPushAudioBlock(
+        ulong timestampNs,
+        ulong arrivalNs,
+        in LocalCastNativeAudioBlockDescriptor descriptor,
+        out LocalCastNativeSampleHandle sample);
 }
 
 public sealed class LocalCastNativeRuntime : ILocalCastNativeRuntime
@@ -165,6 +188,16 @@ public sealed class LocalCastNativeProducer : ILocalCastNativeProducer
         return LocalCastNativeMethods.ProducerPush(handle, runtime.Handle, timestampNs, arrivalNs, payloadHandle, out sample);
     }
 
+    public bool TryPushAudioBlock(
+        ulong timestampNs,
+        ulong arrivalNs,
+        in LocalCastNativeAudioBlockDescriptor descriptor,
+        out LocalCastNativeSampleHandle sample)
+    {
+        EnsureNotDisposed();
+        return LocalCastNativeMethods.ProducerPushAudioBlock(handle, runtime.Handle, timestampNs, arrivalNs, in descriptor, out sample);
+    }
+
     public void Dispose()
     {
         if (handle == IntPtr.Zero)
@@ -237,5 +270,15 @@ internal static class LocalCastNativeMethods
         ulong timestampNs,
         ulong arrivalNs,
         ulong payloadHandle,
+        out LocalCastNativeSampleHandle sample);
+
+    [DllImport(LibraryName, EntryPoint = "localcast_producer_push_audio_block")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool ProducerPushAudioBlock(
+        IntPtr producer,
+        IntPtr runtime,
+        ulong timestampNs,
+        ulong arrivalNs,
+        in LocalCastNativeAudioBlockDescriptor descriptor,
         out LocalCastNativeSampleHandle sample);
 }

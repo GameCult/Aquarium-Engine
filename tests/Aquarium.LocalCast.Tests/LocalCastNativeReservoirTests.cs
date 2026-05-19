@@ -34,6 +34,31 @@ public sealed class LocalCastNativeReservoirTests
     }
 
     [Fact]
+    public void AudioBlockDescriptorLayoutMatchesNativeAbi()
+    {
+        Assert.Equal(40, Marshal.SizeOf<LocalCastNativeAudioBlockDescriptor>());
+        Assert.Equal(1u, (uint)LocalCastNativeAudioSampleFormat.Float32Interleaved);
+
+        var descriptor = new LocalCastNativeAudioBlockDescriptor
+        {
+            DataHandle = 99,
+            FrameCount = 1024,
+            ChannelCount = 6,
+            SampleRateHz = 48_000,
+            SampleFormat = LocalCastNativeAudioSampleFormat.Float32Interleaved,
+            StartSample = 2_048,
+            ChannelLayoutHash = 77,
+        };
+
+        Assert.Equal(99u, descriptor.DataHandle);
+        Assert.Equal(1024u, descriptor.FrameCount);
+        Assert.Equal(6u, descriptor.ChannelCount);
+        Assert.Equal(48_000u, descriptor.SampleRateHz);
+        Assert.Equal(2_048u, descriptor.StartSample);
+        Assert.Equal(77u, descriptor.ChannelLayoutHash);
+    }
+
+    [Fact]
     public void RuntimeStatusLayoutUsesNativeSizeCounts()
     {
         var expected = 16 + (10 * UIntPtr.Size);
