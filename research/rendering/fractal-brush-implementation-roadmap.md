@@ -529,10 +529,10 @@ Cut line:
 
 - If it does not beat the estimator clearly, delete it. No ornamental oracle.
 
-## Phase 11: GPU-Resident Splat Receipt
+## Phase 11: GPU-Resident Splat And Reservoir Receipt
 
-Goal: prove hot fractal splat population belongs on the GPU, not in managed
-object graphs.
+Goal: prove hot fractal splat and reservoir population belongs on the GPU, not
+in managed object graphs.
 
 Tasks:
 
@@ -542,26 +542,35 @@ Tasks:
   that genuinely need C# memory.
 - [x] Add D3D12 compute receipt harness that writes millions of splats directly
   into a GPU-resident UAV.
+- [x] Add distinct GPU reservoir packet contracts for SDF envelopes, PBR
+  material envelopes, and radiosity.
+- [x] Sample those three reservoir types in independent compute passes under a
+  stochastic per-frame update budget.
 - [x] Measure with GPU timestamp queries and read back only a tiny checksum
   sample.
 
 Receipt:
 
-- GTX 1070, `2,000,000` splats, `120` measured frames, `80` bytes/splat.
-- GPU time: `3.362 ms/frame`.
-- Equivalent throughput: `297.5 FPS`, about `594.9M` splats/sec.
-- Command: `.\scripts\fractal-splat-receipt.ps1 -Splats 2000000 -Frames 120`.
+- GTX 1070, `2,000,000` splats, `2,000,000` SDF reservoirs,
+  `2,000,000` PBR reservoirs, and `2,000,000` radiosity reservoirs.
+- Packet sizes: `80` bytes/splat, `64` bytes/reservoir.
+- Budget: `50,000` updates per reservoir pass per frame, `2`
+  candidates/update, full reservoir coverage in `40` frames.
+- GPU time: `4.471 ms/frame`.
+- Equivalent throughput: `223.7 FPS`, about `447.3M` splats/sec.
+- Command: `.\scripts\fractal-splat-receipt.ps1 -Splats 2000000 -Frames 120 -Candidates 2 -ReservoirUpdates 50000`.
 
 Exit gate:
 
-- Receipt must show plural-millions of GPU-resident splats populated at hundreds
-  of FPS equivalent on the target tired GTX 1070.
+- Receipt must show plural-millions of GPU-resident splats and distinct
+  reservoir layers populated or updated at hundreds of FPS equivalent on the
+  target tired GTX 1070.
 
 Cut line:
 
-- This is compute-side population throughput, not final shaded visibility. Do
-  not sell it as renderer completion until the draw/raster/resolve path consumes
-  the same packed buffer.
+- This is compute-side population and cache-update throughput, not final shaded
+  visibility. Do not sell it as renderer completion until the
+  draw/raster/resolve path consumes the same packed buffers.
 
 ## First Work Packet
 

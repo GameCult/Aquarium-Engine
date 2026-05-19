@@ -169,6 +169,27 @@ public readonly record struct AquariumPackedFractalSdfSplat3D(
     Vector4 MaterialConfidence,
     Vector4 Key);
 
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct AquariumPackedSdfEnvelopeReservoir(
+    Vector4 CenterRadius,
+    Vector4 RadiiFalloff,
+    Vector4 WeightTargetCount,
+    Vector4 Validation);
+
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct AquariumPackedPbrMaterialReservoir(
+    Vector4 BaseColorRoughMetal,
+    Vector4 NormalVariance,
+    Vector4 WeightTargetCount,
+    Vector4 Validation);
+
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct AquariumPackedRadiosityReservoir(
+    Vector4 RadianceDistance,
+    Vector4 DirectionOcclusion,
+    Vector4 WeightTargetCount,
+    Vector4 Validation);
+
 public readonly record struct AquariumBrushClaim(
     AquariumFractalKey Key,
     AquariumFractalKey DomainKey,

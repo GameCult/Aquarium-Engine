@@ -51,4 +51,12 @@ public sealed class FractalSdfSplat3DContractTests
     {
         Assert.Equal(80, Marshal.SizeOf<AquariumPackedFractalSdfSplat3D>());
     }
+
+    [Fact]
+    public void PackedReservoirTypesAreDistinctFixedSizeGpuPackets()
+    {
+        Assert.Equal(64, Marshal.SizeOf<AquariumPackedSdfEnvelopeReservoir>());
+        Assert.Equal(64, Marshal.SizeOf<AquariumPackedPbrMaterialReservoir>());
+        Assert.Equal(64, Marshal.SizeOf<AquariumPackedRadiosityReservoir>());
+    }
 }

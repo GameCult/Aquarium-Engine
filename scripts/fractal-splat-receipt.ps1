@@ -3,6 +3,8 @@ param(
     [int]$Warmup = 30,
     [int]$Frames = 120,
     [int]$Depth = 8,
+    [int]$Candidates = 2,
+    [int]$ReservoirUpdates = 50000,
     [int]$ReadbackSplats = 64
 )
 
@@ -13,4 +15,6 @@ dotnet run --project (Join-Path $repoRoot "tools\Aquarium.Fractal.Receipt\Aquari
     --warmup $Warmup `
     --frames $Frames `
     --depth $Depth `
+    --candidates $Candidates `
+    --reservoir-updates $ReservoirUpdates `
     --readback-splats $ReadbackSplats

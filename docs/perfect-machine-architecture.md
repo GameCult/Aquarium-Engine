@@ -559,12 +559,18 @@ Move hot reservoirs to GPU buffers, add spatial reuse across screen tiles and
 domain neighbors, and keep CPU/GPU parity fixtures.
 
 Current state: `tools/Aquarium.Fractal.Receipt` is the first GPU-resident
-receipt harness. It allocates a packed D3D12 `RWStructuredBuffer` of fractal SDF
-splats, populates the whole buffer with a compute shader, measures GPU timestamp
-queries, and reads back only a tiny checksum sample. On the local GTX 1070, the
-receipt ran `2,000,000` splats for `120` measured frames at `3.362 ms/frame`,
-`297.5 FPS` equivalent, and about `594.9M` splats/sec. This proves compute-side
-population throughput, not final shaded visibility.
+receipt harness. It allocates an 80-byte packed SDF splat UAV plus three
+separate 64-byte reservoir UAVs for SDF envelopes, PBR material envelopes, and
+radiosity. The receipt runs independent D3D12 compute passes for splat
+population, SDF reservoir sampling, PBR reservoir sampling, and radiosity
+reservoir sampling; the three reservoir passes share only the stochastic update
+budget vocabulary, not packet anatomy. On the local GTX 1070, the budgeted
+receipt kept `2,000,000` splats and `2,000,000` reservoirs per layer resident,
+updated `50,000` entries per reservoir layer per frame with two candidates per
+update, and measured `4.471 ms/frame`, `223.7 FPS` equivalent over `120`
+frames. This proves compute-side GPU residency and budgeted temporal
+convergence for the layered cache; final shaded visibility still has to consume
+the same packed buffers.
 
 ### Phase J: Learned Priority Gate
 
