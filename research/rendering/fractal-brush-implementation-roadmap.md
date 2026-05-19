@@ -341,6 +341,8 @@ Tasks:
   projected contribution target, source PDF, payload handle, and material delta.
 - [x] Add structural probe generator that lowers IFS node summaries into
   `FractalProbeSample` reservoir candidates.
+- [x] Add selected-cut structural probe reservoir and expose it through Zyphos'
+  fractal render plan/debug dump.
 - [ ] Add temporal reuse validation: camera motion, domain ancestry, local-frame
   error, bounds, and disocclusion/material compatibility. Domain ancestry and
   local-shift checks exist; camera/disocclusion/material validation still need

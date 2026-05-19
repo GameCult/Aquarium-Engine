@@ -486,6 +486,9 @@ Current state: `FractalStructuralProbeGenerator` lowers an
 `AquariumFractalSummary` into `FractalProbeSample` candidates with local center,
 bound radius, projected target contribution, source PDF, material delta, and
 payload handle. Renderer-facing temporal validation remains open.
+`FractalStructuralProbeReservoir` builds a selected-cut reservoir from an
+ownership tree, summaries, and projected pixels per world unit; Zyphos now
+exposes that reservoir in its fractal render plan/debug dump.
 
 ### Phase D: Occupancy Graph
 
