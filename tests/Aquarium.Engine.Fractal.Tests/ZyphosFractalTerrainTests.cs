@@ -66,6 +66,8 @@ public sealed class ZyphosFractalTerrainTests
         Assert.True(near.SurfacePageResidency.RequestedPages.Count <= 8);
         Assert.Equal(near.SurfacePageResidency.ResidentPages.Count, near.SurfacePagePayloads.Length);
         Assert.All(near.SurfacePagePayloads, payload => Assert.Equal(payload.Page.Width * payload.Page.Height, payload.Samples.Length));
+        Assert.True(near.ProjectedSurfaceSdfSplats.Length <= 64);
+        Assert.NotEmpty(near.ProjectedSurfaceSdfSplats);
         Assert.All(near.SurfacePages, page =>
         {
             Assert.Equal(128, page.Width);
@@ -95,6 +97,7 @@ public sealed class ZyphosFractalTerrainTests
         Assert.Contains("surfacePages:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageResident:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePagePayloads:", dump, StringComparison.Ordinal);
+        Assert.Contains("projectedSurfaceSdfSplats:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageRequests:", dump, StringComparison.Ordinal);
         Assert.Contains("surfacePageEvictions:", dump, StringComparison.Ordinal);
         Assert.Contains("selected:", dump, StringComparison.Ordinal);

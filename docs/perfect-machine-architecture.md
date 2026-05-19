@@ -541,6 +541,12 @@ open.
 Project 2D SDF tile pages onto 3D domains: cube-sphere planets, torus stations,
 curved sheets, and object-local surfaces.
 
+Current state: `FractalProjectedSdfSplatCompiler` lowers resident
+`SignedDistance2D` page payloads into compact 3D SDF splats through an explicit
+`Vector2 -> Vector3` mapping and surface normal. Zyphos caches a first bounded
+set of projected surface splats from its resident SDF pages using a flat local
+mapping; real cube-sphere and torus mappings remain open.
+
 ### Phase H: Mimir Adapter
 
 Add sensor candidate adapters after the fractal reservoir path proves the

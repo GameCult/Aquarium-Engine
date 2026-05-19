@@ -450,6 +450,8 @@ Tasks:
   selected tile packets.
 - [x] Lower the structural probe reservoir into a first compact 3D SDF splat
   packet for inspection.
+- [x] Lower resident 2D SDF pages into bounded projected 3D splat packets
+  through an explicit page-to-world mapping boundary.
 - [x] Add first face/tile/material influence debug view through render debug
   mode 11.
 - [ ] Add LOD/cache debug overlays.
