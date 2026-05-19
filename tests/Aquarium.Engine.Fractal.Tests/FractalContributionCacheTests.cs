@@ -28,6 +28,10 @@ public sealed class FractalContributionCacheTests
         Assert.True(cache.TryGet(plan.UpdateNodes[0], out var updated));
         Assert.Equal(1, updated.SampleCount);
         Assert.True(updated.Confidence > 0.0f);
+        Assert.True(cache.LastFrameReservoir.HasSample);
+        Assert.Equal(plan.UpdateNodes[0], cache.LastFrameReservoir.SelectedNodeKey);
+        Assert.Equal(1, cache.LastFrameReservoir.CandidateCount);
+        Assert.True(cache.LastFrameReservoir.WeightSum > 0.0f);
     }
 
     [Fact]
@@ -44,6 +48,27 @@ public sealed class FractalContributionCacheTests
         Assert.Equal(2, state.SampleCount);
         Assert.True(state.Confidence > 0.1f);
         Assert.True(state.Resident);
+    }
+
+    [Fact]
+    public void CacheFramesScheduledContributionAsReservoirCandidate()
+    {
+        var cache = new FractalContributionCache();
+        var summary = Summary("node/bright", maxHeightError: 3.0f);
+
+        cache.PlanFrame(
+            [summary],
+            _ => 4.0f,
+            new FractalResourceBudget(MaxCpuUpdates: 1, MaxGpuEstimatedCost: 4.0f, MaxResidentPayloads: 4, MaxSsdRequests: 0),
+            new TestFractalRandom(0.01, 0.0),
+            new ResidentStore());
+
+        var reservoir = cache.LastFrameReservoir;
+        Assert.True(reservoir.HasSample);
+        Assert.Equal(summary.NodeKey, reservoir.SelectedNodeKey);
+        Assert.True(reservoir.SelectedContribution > 0.0f);
+        Assert.True(reservoir.SelectedTarget > 0.0f);
+        Assert.True(reservoir.ContributionWeight > 0.0f);
     }
 
     private static AquariumFractalSummary Summary(string key, float maxHeightError)

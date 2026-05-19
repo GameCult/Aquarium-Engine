@@ -120,9 +120,10 @@ Built:
   candidate count, and exposes the RIS contribution weight.
 - `TemporalSpatialEvidenceReservoir` remains the stable track layer used by
   temporal Gaussian fields and LocalCast fallback GPU fusion.
-- `FractalContributionCache` remains the node-summary LOD estimator. It should
-  become a candidate generator feeding the resampling core rather than a
-  separate claim to temporal-reservoir theory.
+- `FractalContributionCache` remains the node-summary LOD estimator, and now
+  frames scheduled update nodes as weighted reservoir candidates with a
+  per-frame reservoir snapshot for debug and tests. It is the candidate source,
+  not the full temporal/spatial reuse pass.
 
 Not built yet:
 

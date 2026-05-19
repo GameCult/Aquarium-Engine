@@ -1,4 +1,5 @@
 using Aquarium.Engine.Fractal;
+using Aquarium.Engine.Fractal.Temporal;
 
 namespace Aquarium.Engine.Fractal.Lod;
 
@@ -6,6 +7,8 @@ public sealed class FractalContributionCache
 {
     private readonly FractalContributionTable table = new();
     private uint frameIndex;
+
+    public FractalContributionReservoirSnapshot LastFrameReservoir { get; private set; }
 
     public FractalResourcePlan PlanFrame(
         IReadOnlyList<AquariumFractalSummary> summaries,
@@ -39,6 +42,7 @@ public sealed class FractalContributionCache
             payloadStore,
             frameIndex);
 
+        var reservoir = new ResampledImportanceReservoir<FractalContributionCandidate>();
         var resident = plan.Residency.ResidentNodes.Select(key => key.Value).ToHashSet(StringComparer.Ordinal);
         foreach (var nodeKey in plan.UpdateNodes)
         {
@@ -48,9 +52,19 @@ public sealed class FractalContributionCache
             }
 
             var state = table.GetOrCreate(nodeKey);
-            table.Store(FractalContributionEstimator.Observe(state, observedScore, frameIndex, resident.Contains(nodeKey.Value)));
+            var updateProbability = FractalStochasticUpdateScheduler.UpdateProbability(state, observedScore, frameIndex);
+            var isResident = resident.Contains(nodeKey.Value);
+            var candidate = FractalContributionCandidateGenerator.Build(
+                nodeKey,
+                observedScore,
+                updateProbability,
+                frameIndex,
+                isResident);
+            reservoir.Add(candidate, random.NextDouble());
+            table.Store(FractalContributionEstimator.Observe(state, observedScore, frameIndex, isResident));
         }
 
+        LastFrameReservoir = FractalContributionCandidateGenerator.Snapshot(reservoir);
         return plan;
     }
 

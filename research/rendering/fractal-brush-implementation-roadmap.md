@@ -333,7 +333,7 @@ Tasks:
 - [x] Add exploration budget.
 - [x] Add live contribution cache that observes only scheduled nodes each frame
   and feeds the next resource plan.
-- [ ] Convert contribution-cache refresh into a candidate generator that submits
+- [x] Convert contribution-cache refresh into a candidate generator that submits
   weighted candidates to the resampled-importance core.
 - [ ] Add fractal SDF probe candidate records: domain key, local frame, bound,
   projected contribution target, source PDF, payload handle, and material delta.
@@ -354,6 +354,7 @@ Tests:
 - [x] reservoir accepts candidates proportional to target/source PDF;
 - [x] reservoir merge preserves represented candidate count and weight sum;
 - [x] invalid zero-weight candidates do not corrupt reservoir state;
+- [x] contribution cache exposes scheduled updates as reservoir candidates;
 - deterministic RNG fixture repeats schedule;
 - visible nodes keep nonzero update probability;
 - near-threshold nodes keep nonzero update probability;
