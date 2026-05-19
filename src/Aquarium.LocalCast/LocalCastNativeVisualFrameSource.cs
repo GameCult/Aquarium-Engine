@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Numerics;
+using Aquarium.Engine.Render;
 
 namespace Aquarium.LocalCast;
 
@@ -52,8 +53,18 @@ public sealed class LocalCastNativeRenderDescriptorDecoder
             TargetWidth = checked((int)descriptor.TargetWidth),
             TargetHeight = checked((int)descriptor.TargetHeight),
             Points = points,
+            NativeGpuFusionPointBuffer = CreateDirectPointBuffer(in descriptor),
         };
         return true;
+    }
+
+    public static bool DecodeNoManagedPoints(
+        in LocalCastNativeRenderPacketDescriptor descriptor,
+        LocalCastNativeSampleHandle _,
+        out IReadOnlyList<LocalCastVisualPoint> points)
+    {
+        points = [];
+        return descriptor.PointCount == 0 || CanUploadDirectly(in descriptor);
     }
 
     public static bool DecodeNativePointBuffer(
@@ -92,6 +103,26 @@ public sealed class LocalCastNativeRenderDescriptorDecoder
         return true;
     }
 
+    private static AquariumGpuFusionPointBuffer CreateDirectPointBuffer(in LocalCastNativeRenderPacketDescriptor descriptor)
+    {
+        if (!CanUploadDirectly(in descriptor))
+        {
+            return default;
+        }
+
+        return new AquariumGpuFusionPointBuffer(
+            (IntPtr)descriptor.PointBufferHandle,
+            checked((int)descriptor.PointCount),
+            checked((int)descriptor.PointStrideBytes));
+    }
+
+    private static bool CanUploadDirectly(in LocalCastNativeRenderPacketDescriptor descriptor)
+    {
+        var pointSize = Marshal.SizeOf<LocalCastNativeRenderPoint>();
+        return descriptor.PointCount == 0
+            || (descriptor.PointBufferHandle != 0 && descriptor.PointStrideBytes == pointSize);
+    }
+
     private static LocalCastVisualFrame EmptyFrame()
     {
         return new LocalCastVisualFrame
@@ -121,7 +152,7 @@ public sealed class LocalCastNativeVisualFrameSource : ILocalCastVisualFrameSour
         string description = "native LocalcastRuntime")
         : this(
             runtime,
-            new LocalCastNativeRenderDescriptorDecoder(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer).TryDecode,
+            new LocalCastNativeRenderDescriptorDecoder(LocalCastNativeRenderDescriptorDecoder.DecodeNoManagedPoints).TryDecode,
             description)
     {
     }

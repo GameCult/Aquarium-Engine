@@ -28,6 +28,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
     private int latestClapCount;
     private string latestStatus = "waiting";
     private AquariumCalibrationEventFrame latestCalibrationEvents = AquariumCalibrationEventFrame.Empty;
+    private AquariumGpuFusionField latestDirectGpuFusionField = AquariumGpuFusionField.Empty;
 
     public LocalCastRuntime(AquariumRuntimeOptions options)
         : this(options, new LocalCastVisualStateFileSource(ResolveVisualCachePath()))
@@ -67,12 +68,14 @@ public sealed class LocalCastRuntime : IAquariumRuntime
         get
         {
             var temporalField = accumulator.BuildField(sceneTimelineSeconds);
-            var gpuFusionField = gpuFusionAccumulator.BuildField(sceneTimelineSeconds);
+            var gpuFusionField = latestDirectGpuFusionField.HasInput
+                ? latestDirectGpuFusionField
+                : gpuFusionAccumulator.BuildField(sceneTimelineSeconds);
             var scene = new AquariumSceneState
             {
                 TraceHeightFieldSurface = false,
                 UseStarfieldBackground = false,
-                TemporalGaussianField = gpuFusionField.Seeds.Count == 0
+                TemporalGaussianField = !gpuFusionField.HasInput
                     ? temporalField
                     : AquariumTemporalGaussianField.Empty,
                 CalibrationEventFrame = latestCalibrationEvents,
@@ -112,10 +115,24 @@ public sealed class LocalCastRuntime : IAquariumRuntime
 
         if (frame.FrameId != lastFrameId)
         {
-            accumulator.Observe(mapper.Map(frame));
-            gpuFusionAccumulator.Observe(frame);
+            if (frame.NativeGpuFusionPointBuffer.HasInput)
+            {
+                latestDirectGpuFusionField = new AquariumGpuFusionField
+                {
+                    PointBuffer = frame.NativeGpuFusionPointBuffer,
+                    AccumulationWindowSeconds = ResolveGpuHistorySeconds(),
+                    PresentationDelaySeconds = 0.35f,
+                };
+            }
+            else
+            {
+                accumulator.Observe(mapper.Map(frame));
+                gpuFusionAccumulator.Observe(frame);
+                latestDirectGpuFusionField = AquariumGpuFusionField.Empty;
+            }
+
             lastFrameId = frame.FrameId;
-            latestPointCount = frame.Points.Count;
+            latestPointCount = frame.PointCount;
             latestStatus = "live";
         }
 

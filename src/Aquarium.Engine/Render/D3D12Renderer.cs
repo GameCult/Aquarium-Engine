@@ -62,6 +62,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private const int RootFusionSensorTextures = 3;
     private const int RootFusionAcousticConstraints = 4;
     private const int RootFusionOutput = 5;
+    private const int RootFusionNativePoints = 6;
     private static readonly DebugUi.DebugUiOption[] RenderDebugOptions =
     [
         new(0, "Final"),
@@ -141,6 +142,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12StructuredBuffer gpuSensorCameraBuffer;
     private readonly D3D12StructuredBuffer acousticConstraintBuffer;
     private readonly D3D12StructuredBuffer gpuFusionSeedBuffer;
+    private readonly D3D12StructuredBuffer gpuFusionPointBuffer;
     private readonly D3D12StructuredBuffer temporalGaussianBuffer;
     private readonly Dictionary<string, D3D12ExternalSensorTexture> externalSensorTextures = new(StringComparer.Ordinal);
     private readonly D3D12CubeTexture studioPmremTexture;
@@ -151,11 +153,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
     private readonly D3D12AcousticConstraintPacket[] acousticConstraints = new D3D12AcousticConstraintPacket[MaxAcousticConstraintCount];
     private readonly D3D12GpuFusionSeedPacket[] gpuFusionSeeds = new D3D12GpuFusionSeedPacket[MaxTemporalGaussianCount];
     private readonly D3D12TemporalGaussianPacket[] temporalGaussians = new D3D12TemporalGaussianPacket[MaxTemporalGaussianCount];
+    private AquariumGpuFusionPointBuffer gpuFusionPointSource;
     private int temporalGaussianCount;
     private int gpuSensorCameraCount;
     private int gpuSensorTextureCount;
     private int acousticConstraintCount;
     private int gpuFusionSeedCount;
+    private int gpuFusionPointCount;
     private bool temporalGaussiansGpuGenerated;
     private Viewport viewport;
     private RawRect scissorRect;
@@ -257,12 +261,14 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gpuSensorCameraBuffer = new D3D12StructuredBuffer(device, MaxGpuSensorCameraCount, Marshal.SizeOf<D3D12GpuSensorCameraPacket>(), "Aquarium D3D12 GPU Sensor Camera Buffer");
         acousticConstraintBuffer = new D3D12StructuredBuffer(device, MaxAcousticConstraintCount, Marshal.SizeOf<D3D12AcousticConstraintPacket>(), "Aquarium D3D12 Acoustic Constraint Buffer");
         gpuFusionSeedBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12GpuFusionSeedPacket>(), "Aquarium D3D12 LocalCast GPU Fusion Seed Buffer");
+        gpuFusionPointBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12GpuFusionPointPacket>(), "Aquarium D3D12 LocalCast GPU Fusion Native Point Buffer");
         temporalGaussianBuffer = new D3D12StructuredBuffer(device, MaxTemporalGaussianCount, Marshal.SizeOf<D3D12TemporalGaussianPacket>(), "Aquarium D3D12 Temporal Gaussian Buffer", allowUnorderedAccess: true);
         resourceRegistry.Add("sdf-light-buffer", sdfLightBuffer);
         resourceRegistry.Add("sdf-object-buffer", sdfObjectBuffer);
         resourceRegistry.Add("gpu-sensor-camera-buffer", gpuSensorCameraBuffer);
         resourceRegistry.Add("acoustic-constraint-buffer", acousticConstraintBuffer);
         resourceRegistry.Add("gpu-fusion-seed-buffer", gpuFusionSeedBuffer);
+        resourceRegistry.Add("gpu-fusion-point-buffer", gpuFusionPointBuffer);
         resourceRegistry.Add("temporal-gaussian-buffer", temporalGaussianBuffer);
         commandList = device.CreateCommandList<ID3D12GraphicsCommandList>(0, CommandListType.Direct, frames[frameIndex].CommandAllocator, null);
         commandList.Name = "Aquarium D3D12 Graphics Command List";
@@ -520,11 +526,13 @@ public sealed class D3D12Renderer : IAquariumRenderer
         var activeAccumulationWindow = activeGpuSensorInput
             ? frame.Scene.GpuSensorFrame.AccumulationWindowSeconds
             : frame.Scene.GpuFusionField.Seeds.Count > 0
+                || frame.Scene.GpuFusionField.PointBuffer.HasInput
             ? frame.Scene.GpuFusionField.AccumulationWindowSeconds
             : frame.Scene.TemporalGaussianField.AccumulationWindowSeconds;
         var activePresentationDelay = activeGpuSensorInput
             ? frame.Scene.GpuSensorFrame.PresentationDelaySeconds
             : frame.Scene.GpuFusionField.Seeds.Count > 0
+                || frame.Scene.GpuFusionField.PointBuffer.HasInput
             ? frame.Scene.GpuFusionField.PresentationDelaySeconds
             : frame.Scene.TemporalGaussianField.PresentationDelaySeconds;
         var frameConstants = frameResources.UploadRing.WriteConstant(new FrameConstants(
@@ -557,7 +565,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
                 gpuFusionSeedCount),
             new Vector4(
                 acousticConstraintCount,
-                activeAccumulationWindow,
+                gpuFusionPointCount,
                 activePresentationDelay,
                 frame.Scene.AcousticFieldFrame.HasInput ? 1.0f : 0.0f)));
         frameResources.FrameConstantsDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -582,6 +590,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         acousticConstraintBuffer.CreateShaderResourceView(device, frameResources.AcousticConstraintDescriptor);
         frameResources.GpuFusionSeedDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         gpuFusionSeedBuffer.CreateShaderResourceView(device, frameResources.GpuFusionSeedDescriptor);
+        frameResources.GpuFusionPointDescriptor = frameResources.TransientShaderDescriptors.Allocate();
+        gpuFusionPointBuffer.CreateShaderResourceView(device, frameResources.GpuFusionPointDescriptor);
         frameResources.TemporalGaussianDescriptor = frameResources.TransientShaderDescriptors.Allocate();
         temporalGaussianBuffer.CreateShaderResourceView(device, frameResources.TemporalGaussianDescriptor);
         frameResources.TemporalGaussianUnorderedAccessDescriptor = frameResources.TransientShaderDescriptors.Allocate();
@@ -799,6 +809,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         studioIrradianceTexture.Dispose();
         studioPmremTexture.Dispose();
         temporalGaussianBuffer.Dispose();
+        gpuFusionPointBuffer.Dispose();
         gpuFusionSeedBuffer.Dispose();
         acousticConstraintBuffer.Dispose();
         gpuSensorCameraBuffer.Dispose();
@@ -1464,7 +1475,19 @@ public sealed class D3D12Renderer : IAquariumRenderer
             acousticConstraintBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, acousticConstraints.AsSpan(0, acousticConstraintCount));
             if (temporalGaussiansGpuGenerated)
             {
-                gpuFusionSeedBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, gpuFusionSeeds.AsSpan(0, gpuFusionSeedCount));
+                if (gpuFusionPointCount > 0)
+                {
+                    gpuFusionPointBuffer.UploadPartialBytes(
+                        activeCommandList,
+                        frameResources.UploadRing,
+                        gpuFusionPointSource.Buffer,
+                        gpuFusionPointCount,
+                        gpuFusionPointSource.StrideBytes);
+                }
+                else
+                {
+                    gpuFusionSeedBuffer.UploadPartial(activeCommandList, frameResources.UploadRing, gpuFusionSeeds.AsSpan(0, gpuFusionSeedCount));
+                }
             }
             else
             {
@@ -1488,6 +1511,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
         try
         {
             gpuFusionSeedBuffer.Transition(activeCommandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
+            gpuFusionPointBuffer.Transition(activeCommandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
             temporalGaussianBuffer.Transition(activeCommandList, ResourceStates.UnorderedAccess);
             activeCommandList.SetDescriptorHeaps(frameResources.TransientShaderDescriptors.Heap);
             activeCommandList.SetComputeRootSignature(localCastFusionRootSignature);
@@ -1498,6 +1522,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             activeCommandList.SetComputeRootDescriptorTable(RootFusionSensorTextures, frameResources.GpuSensorTextureDescriptor.Gpu);
             activeCommandList.SetComputeRootDescriptorTable(RootFusionAcousticConstraints, frameResources.AcousticConstraintDescriptor.Gpu);
             activeCommandList.SetComputeRootDescriptorTable(RootFusionOutput, frameResources.TemporalGaussianUnorderedAccessDescriptor.Gpu);
+            activeCommandList.SetComputeRootDescriptorTable(RootFusionNativePoints, frameResources.GpuFusionPointDescriptor.Gpu);
             activeCommandList.Dispatch((uint)((temporalGaussianCount + 127) / 128), 1, 1);
             temporalGaussianBuffer.Transition(activeCommandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
         }
@@ -1604,6 +1629,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         gpuSensorTextureCount = 0;
         acousticConstraintCount = 0;
         gpuFusionSeedCount = 0;
+        gpuFusionPointCount = 0;
+        gpuFusionPointSource = default;
         temporalGaussiansGpuGenerated = false;
         heightFieldBrushConstants = D3D12HeightFieldBrushConstants.FromBrushes(scene.HeightFieldBrushes);
 
@@ -1639,6 +1666,16 @@ public sealed class D3D12Renderer : IAquariumRenderer
         }
 
         acousticConstraintCount += clapCount;
+
+        if (scene.GpuFusionField.PointBuffer.HasInput)
+        {
+            var pointCount = Math.Min(scene.GpuFusionField.PointBuffer.Count, MaxTemporalGaussianCount);
+            temporalGaussianCount = pointCount;
+            gpuFusionPointCount = pointCount;
+            gpuFusionPointSource = scene.GpuFusionField.PointBuffer with { Count = pointCount };
+            temporalGaussiansGpuGenerated = true;
+            return;
+        }
 
         if (scene.GpuFusionField.Seeds.Count > 0)
         {
@@ -2234,6 +2271,12 @@ public sealed class D3D12Renderer : IAquariumRenderer
             0,
             0,
             D3D12.DescriptorRangeOffsetAppend);
+        var nativePointRange = new DescriptorRange(
+            DescriptorRangeType.ShaderResourceView,
+            1,
+            37,
+            0,
+            D3D12.DescriptorRangeOffsetAppend);
         var rootParameters = new[]
         {
             new RootParameter(new RootDescriptorTable([frameRange]), ShaderVisibility.All),
@@ -2242,6 +2285,7 @@ public sealed class D3D12Renderer : IAquariumRenderer
             new RootParameter(new RootDescriptorTable([sensorTextureRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([acousticConstraintRange]), ShaderVisibility.All),
             new RootParameter(new RootDescriptorTable([outputRange]), ShaderVisibility.All),
+            new RootParameter(new RootDescriptorTable([nativePointRange]), ShaderVisibility.All),
         };
         var description = new RootSignatureDescription(
             RootSignatureFlags.None,
@@ -2568,6 +2612,8 @@ public sealed class D3D12Renderer : IAquariumRenderer
         public D3D12DescriptorSlot AcousticConstraintDescriptor { get; set; }
 
         public D3D12DescriptorSlot GpuFusionSeedDescriptor { get; set; }
+
+        public D3D12DescriptorSlot GpuFusionPointDescriptor { get; set; }
 
         public D3D12DescriptorSlot TemporalGaussianDescriptor { get; set; }
 

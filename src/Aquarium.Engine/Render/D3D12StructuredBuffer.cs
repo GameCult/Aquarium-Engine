@@ -78,6 +78,34 @@ internal sealed class D3D12StructuredBuffer : IDisposable
         Transition(commandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
     }
 
+    public void UploadPartialBytes(
+        ID3D12GraphicsCommandList commandList,
+        D3D12UploadRing uploadRing,
+        IntPtr source,
+        int elementLength,
+        int sourceStrideBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(elementLength);
+        if (elementLength > elementCount)
+        {
+            throw new ArgumentException($"Structured buffer holds {elementCount} elements but received {elementLength}.", nameof(elementLength));
+        }
+
+        if (sourceStrideBytes != strideBytes)
+        {
+            throw new ArgumentException($"Structured buffer stride mismatch. Expected {strideBytes} bytes but received {sourceStrideBytes}.", nameof(sourceStrideBytes));
+        }
+
+        var byteCount = checked(elementLength * strideBytes);
+        var upload = uploadRing.WriteBytes(source, byteCount);
+        Transition(commandList, ResourceStates.CopyDest);
+        if (upload.DataBytes > 0)
+        {
+            commandList.CopyBufferRegion(Resource, 0, uploadRing.Resource, (ulong)upload.OffsetBytes, (ulong)upload.DataBytes);
+        }
+        Transition(commandList, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource);
+    }
+
     public void CreateShaderResourceView(ID3D12Device device, D3D12DescriptorSlot descriptor)
     {
         device.CreateShaderResourceView(

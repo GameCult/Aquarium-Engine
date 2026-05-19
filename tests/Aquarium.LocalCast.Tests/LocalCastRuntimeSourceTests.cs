@@ -1,5 +1,6 @@
 using System.Numerics;
 using Aquarium.Engine;
+using Aquarium.Engine.Render;
 using Aquarium.Engine.Input;
 using Aquarium.LocalCast;
 
@@ -20,8 +21,32 @@ public sealed class LocalCastRuntimeSourceTests
         Assert.True(frame.Scene.GpuFusionField.Seeds.Count > 0);
     }
 
+    [Fact]
+    public void RuntimePublishesNativePointBufferWithoutManagedSeedMapping()
+    {
+        var source = new FakeFrameSource(
+            new AquariumGpuFusionPointBuffer((IntPtr)0x1000, 3, 56));
+        var runtime = new LocalCastRuntime(new AquariumRuntimeOptions(true, null), source);
+
+        runtime.Update(0.016f, new InputState());
+        var frame = runtime.Frame;
+
+        Assert.Empty(frame.Scene.GpuFusionField.Seeds);
+        Assert.True(frame.Scene.GpuFusionField.PointBuffer.HasInput);
+        Assert.Equal(3, frame.Scene.GpuFusionField.PointBuffer.Count);
+        Assert.Equal(56, frame.Scene.GpuFusionField.PointBuffer.StrideBytes);
+        Assert.Empty(frame.Scene.TemporalGaussianField.Gaussians);
+    }
+
     private sealed class FakeFrameSource : ILocalCastVisualFrameSource
     {
+        private readonly AquariumGpuFusionPointBuffer pointBuffer;
+
+        public FakeFrameSource(AquariumGpuFusionPointBuffer pointBuffer = default)
+        {
+            this.pointBuffer = pointBuffer;
+        }
+
         public int ReadCount { get; private set; }
 
         public string Description => "fake-native-source";
@@ -51,6 +76,7 @@ public sealed class LocalCastRuntimeSourceTests
                         0.8f,
                         120),
                 ],
+                NativeGpuFusionPointBuffer = pointBuffer,
             };
             return true;
         }

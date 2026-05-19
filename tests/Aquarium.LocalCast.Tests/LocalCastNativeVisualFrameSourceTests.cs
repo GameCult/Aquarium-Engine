@@ -248,7 +248,7 @@ public sealed class LocalCastNativeVisualFrameSourceTests
     }
 
     [Fact]
-    public void DefaultNativeSourceConstructorUsesDescriptorAndPointDecoders()
+    public void DefaultNativeSourceConstructorExposesDirectPointBuffer()
     {
         var nativePoint = new LocalCastNativeRenderPoint
         {
@@ -299,7 +299,12 @@ public sealed class LocalCastNativeVisualFrameSourceTests
             Assert.True(source.TryReadLatest(out var frame));
             Assert.Equal(21, frame.FrameId);
             Assert.Equal(1920, frame.TargetWidth);
-            Assert.Equal("native:000000000000cafe", frame.Points[0].StableKey);
+            Assert.Empty(frame.Points);
+            Assert.True(frame.NativeGpuFusionPointBuffer.HasInput);
+            Assert.Equal(pointPointer, frame.NativeGpuFusionPointBuffer.Buffer);
+            Assert.Equal(1, frame.NativeGpuFusionPointBuffer.Count);
+            Assert.Equal(pointSize, frame.NativeGpuFusionPointBuffer.StrideBytes);
+            Assert.Equal(1, frame.PointCount);
         }
         finally
         {

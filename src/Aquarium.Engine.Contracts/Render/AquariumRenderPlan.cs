@@ -397,9 +397,22 @@ public sealed class AquariumGpuFusionField
 
     public IReadOnlyList<AquariumGpuFusionSeed> Seeds { get; init; } = [];
 
+    public AquariumGpuFusionPointBuffer PointBuffer { get; init; }
+
     public float AccumulationWindowSeconds { get; init; }
 
     public float PresentationDelaySeconds { get; init; }
+
+    public bool HasInput => Seeds.Count > 0 || PointBuffer.HasInput;
+}
+
+public readonly record struct AquariumGpuFusionPointBuffer(
+    IntPtr Buffer,
+    int Count,
+    int StrideBytes)
+{
+    // Caller owns the memory and must keep it stable until the render frame has uploaded it.
+    public bool HasInput => Buffer != IntPtr.Zero && Count > 0 && StrideBytes > 0;
 }
 
 public sealed class AquariumTemporalGaussianField

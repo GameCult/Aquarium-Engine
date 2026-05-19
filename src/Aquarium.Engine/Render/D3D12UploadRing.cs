@@ -74,6 +74,30 @@ internal sealed unsafe class D3D12UploadRing : IDisposable
         return new D3D12UploadAllocation(GpuVirtualAddress + (ulong)offset, (uint)size, offset, byteCount);
     }
 
+    public D3D12UploadAllocation WriteBytes(IntPtr source, int byteCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(byteCount);
+        if (byteCount > 0 && source == IntPtr.Zero)
+        {
+            throw new ArgumentException("Source pointer cannot be zero when byte count is non-zero.", nameof(source));
+        }
+
+        var size = Align256(byteCount);
+        if (cursor + size > CapacityBytes)
+        {
+            throw new InvalidOperationException($"D3D12 upload ring '{Name}' exhausted ({cursor}/{CapacityBytes} bytes used, requested {size} bytes).");
+        }
+
+        var offset = cursor;
+        if (byteCount > 0)
+        {
+            Buffer.MemoryCopy(source.ToPointer(), mapped + offset, byteCount, byteCount);
+        }
+
+        cursor += size;
+        return new D3D12UploadAllocation(GpuVirtualAddress + (ulong)offset, (uint)size, offset, byteCount);
+    }
+
     public string Describe()
     {
         return $"{Name}: {cursor}/{CapacityBytes} bytes";

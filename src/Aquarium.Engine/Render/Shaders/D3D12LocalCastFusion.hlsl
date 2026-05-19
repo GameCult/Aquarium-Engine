@@ -36,6 +36,22 @@ struct GpuFusionSeed
     float4 shapePad;
 };
 
+struct GpuFusionPoint
+{
+    uint2 stableKeyHash;
+    uint2 sourceTimestampNs;
+    float x;
+    float y;
+    float z;
+    float radiusMeters;
+    float red;
+    float green;
+    float blue;
+    float alpha;
+    float confidence;
+    float pad;
+};
+
 struct TemporalGaussian
 {
     float4 centerHistoryWeight;
@@ -73,6 +89,7 @@ StructuredBuffer<GpuFusionSeed> fusionSeeds : register(t26);
 StructuredBuffer<GpuSensorCamera> sensorCameras : register(t27);
 Texture2D<float4> sensorTextures[8] : register(t28);
 StructuredBuffer<AcousticConstraint> acousticConstraints : register(t36);
+StructuredBuffer<GpuFusionPoint> fusionPoints : register(t37);
 RWStructuredBuffer<TemporalGaussian> temporalGaussiansOut : register(u0);
 
 float Hash01(uint value)
@@ -143,6 +160,7 @@ void D3D12LocalCastFusionCS(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint cameraCount = (uint)temporalGaussianInfo.y;
     uint textureCount = (uint)temporalGaussianInfo.z;
     uint seedCount = (uint)temporalGaussianInfo.w;
+    uint pointCount = (uint)gpuFusionInfo.y;
     if (index >= outputCount)
     {
         return;
@@ -163,6 +181,26 @@ void D3D12LocalCastFusionCS(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
+    if (index < seedCount + pointCount)
+    {
+        GpuFusionPoint nativePoint = fusionPoints[index - seedCount];
+        float confidence = saturate(nativePoint.confidence);
+        float radius = clamp(nativePoint.radiusMeters, 0.0015, 0.09);
+        float opacity = saturate(nativePoint.alpha * (0.35 + confidence * 0.65));
+        float fieldId = (float)((nativePoint.stableKeyHash.x ^ nativePoint.stableKeyHash.y) & 0x00ffffffu);
+        float3 center = float3(nativePoint.x, nativePoint.y, nativePoint.z);
+
+        gaussian.centerHistoryWeight = float4(center, confidence);
+        gaussian.previousCenterFieldId = float4(center, fieldId);
+        gaussian.velocityConfidence = float4(0.0, 0.0, 0.0, confidence);
+        gaussian.radiiFalloff = float4(radius * 1.55, radius * 0.52, radius * 1.12, 4.6);
+        gaussian.orientation = float4(0.0, 0.0, 0.0, 1.0);
+        gaussian.colorOpacity = float4(saturate(nativePoint.red), saturate(nativePoint.green), saturate(nativePoint.blue), min(opacity, 0.98));
+        gaussian.shapePad = float4(1.85, 0.0, 0.0, 0.0);
+        temporalGaussiansOut[index] = gaussian;
+        return;
+    }
+
     if (textureCount == 0 || cameraCount == 0)
     {
         gaussian.centerHistoryWeight = float4(0.0, 0.0, 0.0, 0.0);
@@ -176,7 +214,7 @@ void D3D12LocalCastFusionCS(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
-    uint textureSampleIndex = index - seedCount;
+    uint textureSampleIndex = index - seedCount - pointCount;
     uint textureSlot = min(textureCount - 1, textureSampleIndex / max(1u, ((outputCount - seedCount) / textureCount)));
     GpuSensorCamera camera = sensorCameras[min(cameraCount - 1, textureSlot % cameraCount)];
     uint width = max(1u, (uint)camera.extentsKind.x);
