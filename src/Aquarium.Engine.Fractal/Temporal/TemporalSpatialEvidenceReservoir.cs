@@ -46,6 +46,8 @@ public sealed class TemporalSpatialEvidenceReservoir
 
     public int MaxTrackCount { get; }
 
+    public int TrackCount => tracks.Count;
+
     public void Observe(IEnumerable<TemporalSpatialEvidenceObservation> observations)
     {
         foreach (var observation in observations)

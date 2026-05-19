@@ -106,8 +106,10 @@ Ownership:
   already-derived point claims.
 - `LocalCastGpuFusionMapper` converts typed LocalCast point claims into compact
   seeds only for that fallback path.
-- `LocalCastGpuFusionAccumulator` owns the bounded history buffer for fallback
-  stable seeds before GPU lowering.
+- `LocalCastGpuFusionAccumulator` is only the LocalCast adapter around
+  `TemporalSpatialEvidenceReservoir`; it maps fallback stable seeds into shared
+  evidence observations and lowers reservoir samples back to
+  `AquariumGpuFusionSeed`.
 - `D3D12LocalCastFusion.hlsl` owns the first compute lowering pass.
 - `D3D12Renderer` owns GPU sensor camera metadata storage, UAV-capable temporal
   Gaussian storage, dispatch, and the transition back to shader-resource state
