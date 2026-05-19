@@ -339,6 +339,8 @@ Tasks:
   weighted candidates to the resampled-importance core.
 - [x] Add fractal SDF probe candidate records: domain key, local frame, bound,
   projected contribution target, source PDF, payload handle, and material delta.
+- [x] Add structural probe generator that lowers IFS node summaries into
+  `FractalProbeSample` reservoir candidates.
 - [ ] Add temporal reuse validation: camera motion, domain ancestry, local-frame
   error, bounds, and disocclusion/material compatibility. Domain ancestry and
   local-shift checks exist; camera/disocclusion/material validation still need

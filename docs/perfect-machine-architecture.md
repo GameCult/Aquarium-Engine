@@ -482,6 +482,11 @@ reservoir guide target. `history-control.w` remains pixel history age.
 Turn IFS node probes into typed reservoir candidates with renderer-facing camera
 motion, disocclusion, material, and visibility validation.
 
+Current state: `FractalStructuralProbeGenerator` lowers an
+`AquariumFractalSummary` into `FractalProbeSample` candidates with local center,
+bound radius, projected target contribution, source PDF, material delta, and
+payload handle. Renderer-facing temporal validation remains open.
+
 ### Phase D: Occupancy Graph
 
 Promote contribution state into the heuristic occupancy graph and add
