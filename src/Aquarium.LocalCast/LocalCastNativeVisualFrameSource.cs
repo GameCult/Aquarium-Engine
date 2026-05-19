@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Numerics;
 
 namespace Aquarium.LocalCast;
 
@@ -52,6 +53,42 @@ public sealed class LocalCastNativeRenderDescriptorDecoder
             TargetHeight = checked((int)descriptor.TargetHeight),
             Points = points,
         };
+        return true;
+    }
+
+    public static bool DecodeNativePointBuffer(
+        in LocalCastNativeRenderPacketDescriptor descriptor,
+        LocalCastNativeSampleHandle _,
+        out IReadOnlyList<LocalCastVisualPoint> points)
+    {
+        points = [];
+        var pointSize = Marshal.SizeOf<LocalCastNativeRenderPoint>();
+        if (descriptor.PointCount == 0)
+        {
+            return true;
+        }
+
+        if (descriptor.PointBufferHandle == 0 || descriptor.PointStrideBytes < pointSize)
+        {
+            return false;
+        }
+
+        var decoded = new LocalCastVisualPoint[checked((int)descriptor.PointCount)];
+        var cursor = (IntPtr)descriptor.PointBufferHandle;
+        var stride = checked((int)descriptor.PointStrideBytes);
+        for (var index = 0; index < decoded.Length; index++)
+        {
+            var native = Marshal.PtrToStructure<LocalCastNativeRenderPoint>(IntPtr.Add(cursor, index * stride));
+            decoded[index] = new LocalCastVisualPoint(
+                $"native:{native.StableKeyHash:x16}",
+                new Vector3(native.X, native.Y, native.Z),
+                native.RadiusMeters,
+                new Vector4(native.Red, native.Green, native.Blue, native.Alpha),
+                native.Confidence,
+                checked((long)native.SourceTimestampNs));
+        }
+
+        points = decoded;
         return true;
     }
 

@@ -161,6 +161,92 @@ public sealed class LocalCastNativeVisualFrameSourceTests
         }
     }
 
+    [Fact]
+    public void NativePointBufferDecoderReadsStridedPoints()
+    {
+        var points = new[]
+        {
+            new LocalCastNativeRenderPoint
+            {
+                StableKeyHash = 0xCAFE,
+                SourceTimestampNs = 1_900,
+                X = 0.1f,
+                Y = 0.2f,
+                Z = 1.2f,
+                RadiusMeters = 0.03f,
+                Red = 0.7f,
+                Green = 0.6f,
+                Blue = 0.5f,
+                Alpha = 0.9f,
+                Confidence = 0.8f,
+            },
+            new LocalCastNativeRenderPoint
+            {
+                StableKeyHash = 0xBEEF,
+                SourceTimestampNs = 1_950,
+                X = -0.1f,
+                Y = 0.4f,
+                Z = 1.4f,
+                RadiusMeters = 0.04f,
+                Red = 0.2f,
+                Green = 0.3f,
+                Blue = 0.9f,
+                Alpha = 0.6f,
+                Confidence = 0.5f,
+            },
+        };
+        var pointSize = Marshal.SizeOf<LocalCastNativeRenderPoint>();
+        var pointer = Marshal.AllocHGlobal(pointSize * points.Length);
+        try
+        {
+            for (var index = 0; index < points.Length; index++)
+            {
+                Marshal.StructureToPtr(points[index], IntPtr.Add(pointer, index * pointSize), false);
+            }
+
+            var descriptor = new LocalCastNativeRenderPacketDescriptor
+            {
+                PointBufferHandle = (ulong)pointer,
+                PointCount = (uint)points.Length,
+                PointStrideBytes = (uint)pointSize,
+            };
+
+            Assert.True(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer(in descriptor, default, out var decoded));
+            Assert.Equal(2, decoded.Count);
+            Assert.Equal("native:000000000000cafe", decoded[0].StableKey);
+            Assert.Equal(new Vector3(0.1f, 0.2f, 1.2f), decoded[0].Position);
+            Assert.Equal(new Vector4(0.7f, 0.6f, 0.5f, 0.9f), decoded[0].ColorOpacity);
+            Assert.Equal(1_950, decoded[1].SourceTimestampNs);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(pointer);
+        }
+    }
+
+    [Fact]
+    public void NativePointBufferDecoderRejectsMissingBufferAndShortStride()
+    {
+        var missing = new LocalCastNativeRenderPacketDescriptor
+        {
+            PointCount = 1,
+            PointStrideBytes = (uint)Marshal.SizeOf<LocalCastNativeRenderPoint>(),
+        };
+        Assert.False(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer(in missing, default, out _));
+
+        var empty = new LocalCastNativeRenderPacketDescriptor();
+        Assert.True(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer(in empty, default, out var points));
+        Assert.Empty(points);
+
+        var shortStride = new LocalCastNativeRenderPacketDescriptor
+        {
+            PointBufferHandle = 1,
+            PointCount = 1,
+            PointStrideBytes = 8,
+        };
+        Assert.False(LocalCastNativeRenderDescriptorDecoder.DecodeNativePointBuffer(in shortStride, default, out _));
+    }
+
     private static LocalCastVisualFrame FrameFromPayload(ulong payloadHandle, ulong timestampNs)
     {
         return new LocalCastVisualFrame

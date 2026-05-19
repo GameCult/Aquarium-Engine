@@ -90,6 +90,31 @@ public sealed class LocalCastNativeReservoirTests
     }
 
     [Fact]
+    public void RenderPointLayoutMatchesNativeAbi()
+    {
+        Assert.Equal(56, Marshal.SizeOf<LocalCastNativeRenderPoint>());
+
+        var point = new LocalCastNativeRenderPoint
+        {
+            StableKeyHash = 0xCAFE,
+            SourceTimestampNs = 1_900,
+            X = 0.1f,
+            Y = 0.2f,
+            Z = 1.2f,
+            RadiusMeters = 0.03f,
+            Red = 0.7f,
+            Green = 0.6f,
+            Blue = 0.5f,
+            Alpha = 0.9f,
+            Confidence = 0.8f,
+        };
+
+        Assert.Equal(0xCAFEu, point.StableKeyHash);
+        Assert.Equal(1_900u, point.SourceTimestampNs);
+        Assert.Equal(0.03f, point.RadiusMeters);
+    }
+
+    [Fact]
     public void RuntimeStatusLayoutUsesNativeSizeCounts()
     {
         var expected = 16 + (10 * UIntPtr.Size);

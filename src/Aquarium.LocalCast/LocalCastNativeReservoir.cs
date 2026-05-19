@@ -69,6 +69,22 @@ public struct LocalCastNativeRenderPacketDescriptor
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public struct LocalCastNativeRenderPoint
+{
+    public ulong StableKeyHash;
+    public ulong SourceTimestampNs;
+    public float X;
+    public float Y;
+    public float Z;
+    public float RadiusMeters;
+    public float Red;
+    public float Green;
+    public float Blue;
+    public float Alpha;
+    public float Confidence;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public struct LocalCastNativeRuntimeStatus
 {
     public ulong EdgeNs;
