@@ -40,7 +40,7 @@ public sealed class FractalResourceBudgetPlannerTests
             store,
             frameIndex: 10);
 
-        Assert.Equal(1, plan.UpdateNodes.Length);
+        Assert.Single(plan.UpdateNodes);
         Assert.True(plan.GpuEstimatedCost <= budget.MaxGpuEstimatedCost);
         Assert.True(plan.Residency.ResidentNodes.Count <= budget.MaxResidentPayloads);
         Assert.True(plan.Residency.RequestedNodes.Count <= budget.MaxSsdRequests);

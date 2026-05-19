@@ -16,13 +16,21 @@ center, velocity, oriented radii, color/opacity, confidence, history weight,
 compact-kernel controls, and field id.
 
 `Aquarium.Engine.Fractal.Temporal.TemporalGaussianAccumulator` consumes
-`TemporalGaussianObservation` rows and owns the live buffering policy:
+`TemporalGaussianObservation` rows and lowers them through the shared
+`TemporalSpatialEvidenceReservoir`. The reservoir owns the live buffering
+policy:
 
 - stable keys identify tracks across camera/sensor frames
 - presentation delay lets late sensor data converge before rendering
 - accumulation window expires old tracks
+- max-track budgets evict low-confidence stale tracks before renderer lowering
 - smoothed velocity predicts the presented center
 - history weight is confidence scaled by age inside the window
+
+The Gaussian field is one backend for this reservoir, not the reservoir's
+identity. Fractal SDF probes, visual point-cloud features, and future acoustic
+constraints can all enter as stable keyed spatial evidence as long as each
+producer declares confidence, time, bounds, and payload lowering rules.
 
 The D3D12 renderer lowers the field into `D3D12TemporalGaussianPacket`, uploads
 the active packet span into a 1,048,576-entry structured buffer, and renders an
