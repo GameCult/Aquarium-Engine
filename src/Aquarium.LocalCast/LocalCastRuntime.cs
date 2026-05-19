@@ -19,7 +19,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
     private readonly LocalCastGpuFusionAccumulator gpuFusionAccumulator = new(
         ResolveGpuHistorySeconds(),
         smoothing: 0.45f);
-    private readonly LocalCastVisualStateReader reader;
+    private readonly ILocalCastVisualFrameSource frameSource;
     private float timeSeconds;
     private float sceneTimelineSeconds;
     private long lastFrameId = -1;
@@ -30,14 +30,19 @@ public sealed class LocalCastRuntime : IAquariumRuntime
     private AquariumCalibrationEventFrame latestCalibrationEvents = AquariumCalibrationEventFrame.Empty;
 
     public LocalCastRuntime(AquariumRuntimeOptions options)
+        : this(options, new LocalCastVisualStateFileSource(ResolveVisualCachePath()))
+    {
+    }
+
+    public LocalCastRuntime(AquariumRuntimeOptions options, ILocalCastVisualFrameSource frameSource)
     {
         Options = options;
-        reader = new LocalCastVisualStateReader(ResolveVisualCachePath());
+        this.frameSource = frameSource;
         Ui = new AquariumUiDocument()
             .Panel("LocalCast", 18.0f, 82.0f, 372.0f, panel =>
             {
                 panel.Section("Camera Field");
-                panel.Readout("Cache", () => reader.Path);
+                panel.Readout("Source", () => this.frameSource.Description);
                 panel.Readout("Frame", () => lastFrameId >= 0 ? $"{lastFrameId} / {latestPointCount} splats" : latestStatus);
                 panel.Readout("Claps", () => lastClapFrameId >= 0 ? $"{lastClapFrameId} / {latestClapCount} events" : "none");
                 panel.Readout("History", () => $"{gpuFusionAccumulator.TrackCount} tracked seeds");
@@ -91,14 +96,14 @@ public sealed class LocalCastRuntime : IAquariumRuntime
 
     public void Start()
     {
-        Console.WriteLine($"LocalCast Aquarium runtime reading {reader.Path}");
+        Console.WriteLine($"LocalCast Aquarium runtime reading {frameSource.Description}");
     }
 
     public void Update(float deltaSeconds, InputState input)
     {
         timeSeconds += Math.Max(deltaSeconds, 0.0f);
 
-        if (!reader.TryReadLatest(out var frame))
+        if (!frameSource.TryReadLatest(out var frame))
         {
             latestStatus = "waiting for visual-state.msgpack";
             sceneTimelineSeconds = MathF.Max(sceneTimelineSeconds, timeSeconds);
@@ -114,7 +119,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
             latestStatus = "live";
         }
 
-        if (reader.TryReadLatestClapEvents(out var clapFrame) && clapFrame.FrameId != lastClapFrameId)
+        if (frameSource.TryReadLatestClapEvents(out var clapFrame) && clapFrame.FrameId != lastClapFrameId)
         {
             latestCalibrationEvents = MapClapEvents(clapFrame);
             lastClapFrameId = clapFrame.FrameId;
@@ -134,7 +139,7 @@ public sealed class LocalCastRuntime : IAquariumRuntime
     {
     }
 
-    private string ResolveVisualCachePath()
+    private static string ResolveVisualCachePath()
     {
         var environmentPath = Environment.GetEnvironmentVariable("LOCALCAST_VISUAL_CACHE");
         if (!string.IsNullOrWhiteSpace(environmentPath))
