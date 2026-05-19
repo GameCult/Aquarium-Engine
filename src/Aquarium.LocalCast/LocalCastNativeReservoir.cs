@@ -54,6 +54,21 @@ public struct LocalCastNativeAudioBlockDescriptor
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public struct LocalCastNativeRenderPacketDescriptor
+{
+    public ulong PointBufferHandle;
+    public uint PointCount;
+    public uint PointStrideBytes;
+    public uint TargetWidth;
+    public uint TargetHeight;
+    public ulong SourceTimeMinNs;
+    public ulong SourceTimeMaxNs;
+    public ulong PresentTimeNs;
+    public ulong AudioAlignmentTimeNs;
+    public ulong MetadataHandle;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public struct LocalCastNativeRuntimeStatus
 {
     public ulong EdgeNs;
@@ -91,6 +106,12 @@ public interface ILocalCastNativeProducer : IDisposable
         ulong timestampNs,
         ulong arrivalNs,
         in LocalCastNativeAudioBlockDescriptor descriptor,
+        out LocalCastNativeSampleHandle sample);
+
+    bool TryPushRenderPacket(
+        ulong timestampNs,
+        ulong arrivalNs,
+        in LocalCastNativeRenderPacketDescriptor descriptor,
         out LocalCastNativeSampleHandle sample);
 }
 
@@ -198,6 +219,16 @@ public sealed class LocalCastNativeProducer : ILocalCastNativeProducer
         return LocalCastNativeMethods.ProducerPushAudioBlock(handle, runtime.Handle, timestampNs, arrivalNs, in descriptor, out sample);
     }
 
+    public bool TryPushRenderPacket(
+        ulong timestampNs,
+        ulong arrivalNs,
+        in LocalCastNativeRenderPacketDescriptor descriptor,
+        out LocalCastNativeSampleHandle sample)
+    {
+        EnsureNotDisposed();
+        return LocalCastNativeMethods.ProducerPushRenderPacket(handle, runtime.Handle, timestampNs, arrivalNs, in descriptor, out sample);
+    }
+
     public void Dispose()
     {
         if (handle == IntPtr.Zero)
@@ -280,5 +311,15 @@ internal static class LocalCastNativeMethods
         ulong timestampNs,
         ulong arrivalNs,
         in LocalCastNativeAudioBlockDescriptor descriptor,
+        out LocalCastNativeSampleHandle sample);
+
+    [DllImport(LibraryName, EntryPoint = "localcast_producer_push_render_packet")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool ProducerPushRenderPacket(
+        IntPtr producer,
+        IntPtr runtime,
+        ulong timestampNs,
+        ulong arrivalNs,
+        in LocalCastNativeRenderPacketDescriptor descriptor,
         out LocalCastNativeSampleHandle sample);
 }

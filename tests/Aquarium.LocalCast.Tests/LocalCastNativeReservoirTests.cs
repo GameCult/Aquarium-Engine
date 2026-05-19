@@ -59,6 +59,37 @@ public sealed class LocalCastNativeReservoirTests
     }
 
     [Fact]
+    public void RenderPacketDescriptorLayoutMatchesNativeAbi()
+    {
+        Assert.Equal(64, Marshal.SizeOf<LocalCastNativeRenderPacketDescriptor>());
+
+        var descriptor = new LocalCastNativeRenderPacketDescriptor
+        {
+            PointBufferHandle = 99,
+            PointCount = 4096,
+            PointStrideBytes = 64,
+            TargetWidth = 1920,
+            TargetHeight = 1080,
+            SourceTimeMinNs = 1_000,
+            SourceTimeMaxNs = 2_000,
+            PresentTimeNs = 2_350,
+            AudioAlignmentTimeNs = 2_300,
+            MetadataHandle = 77,
+        };
+
+        Assert.Equal(99u, descriptor.PointBufferHandle);
+        Assert.Equal(4096u, descriptor.PointCount);
+        Assert.Equal(64u, descriptor.PointStrideBytes);
+        Assert.Equal(1920u, descriptor.TargetWidth);
+        Assert.Equal(1080u, descriptor.TargetHeight);
+        Assert.Equal(1_000u, descriptor.SourceTimeMinNs);
+        Assert.Equal(2_000u, descriptor.SourceTimeMaxNs);
+        Assert.Equal(2_350u, descriptor.PresentTimeNs);
+        Assert.Equal(2_300u, descriptor.AudioAlignmentTimeNs);
+        Assert.Equal(77u, descriptor.MetadataHandle);
+    }
+
+    [Fact]
     public void RuntimeStatusLayoutUsesNativeSizeCounts()
     {
         var expected = 16 + (10 * UIntPtr.Size);
