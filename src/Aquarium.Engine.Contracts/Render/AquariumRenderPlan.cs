@@ -426,6 +426,28 @@ public sealed class AquariumTemporalGaussianField
     public float PresentationDelaySeconds { get; init; }
 }
 
+public sealed class AquariumFractalReservoirField
+{
+    public static AquariumFractalReservoirField Empty { get; } = new();
+
+    public int SplatCount { get; init; }
+
+    public int Depth { get; init; } = 8;
+
+    public uint Seed { get; init; } = 0xA17EA11u;
+
+    public int CandidatesPerReservoirUpdate { get; init; } = 2;
+
+    public int ReservoirUpdatesPerPass { get; init; }
+
+    public bool HasInput =>
+        SplatCount > 0 &&
+        Depth > 0 &&
+        CandidatesPerReservoirUpdate > 0 &&
+        ReservoirUpdatesPerPass > 0 &&
+        ReservoirUpdatesPerPass <= SplatCount;
+}
+
 public sealed class AquariumSceneState
 {
     public static AquariumSceneState Empty { get; } = new();
@@ -441,6 +463,8 @@ public sealed class AquariumSceneState
     public IReadOnlyList<AquariumSdfLight> SdfLights { get; init; } = [];
 
     public AquariumTemporalGaussianField TemporalGaussianField { get; init; } = AquariumTemporalGaussianField.Empty;
+
+    public AquariumFractalReservoirField FractalReservoirField { get; init; } = AquariumFractalReservoirField.Empty;
 
     public AquariumGpuSensorFrame GpuSensorFrame { get; init; } = AquariumGpuSensorFrame.Empty;
 
