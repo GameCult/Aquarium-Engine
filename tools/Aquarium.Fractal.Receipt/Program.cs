@@ -9,7 +9,8 @@ using Vortice.Direct3D12;
 using Vortice.DXGI;
 
 var options = ReceiptOptions.Parse(args);
-using var runner = new GpuFractalSplatReceiptRunner();
+var shaderSource = File.ReadAllText(options.ShaderPath);
+using var runner = new GpuFractalSplatReceiptRunner(shaderSource);
 var receipt = runner.Run(options);
 
 Directory.CreateDirectory(options.OutputDirectory);
@@ -55,8 +56,9 @@ internal sealed class GpuFractalSplatReceiptRunner : IDisposable
     private readonly string adapterName;
     private ulong fenceValue;
 
-    public GpuFractalSplatReceiptRunner()
+    public GpuFractalSplatReceiptRunner(string shaderSource)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(shaderSource);
         device = D3D12.D3D12CreateDevice<ID3D12Device>(IntPtr.Zero, FeatureLevel.Level_11_0);
         adapterName = ResolveAdapterName();
         queue = device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct));
@@ -65,10 +67,10 @@ internal sealed class GpuFractalSplatReceiptRunner : IDisposable
         commandList.Close();
         fence = device.CreateFence(0);
         rootSignature = CreateRootSignature(device);
-        splatPipelineState = CreatePipelineState(device, rootSignature, "D3D12FractalSplatReceiptCS");
-        sdfPipelineState = CreatePipelineState(device, rootSignature, "D3D12SdfEnvelopeReservoirCS");
-        pbrPipelineState = CreatePipelineState(device, rootSignature, "D3D12PbrMaterialReservoirCS");
-        radiosityPipelineState = CreatePipelineState(device, rootSignature, "D3D12RadiosityReservoirCS");
+        splatPipelineState = CreatePipelineState(device, rootSignature, shaderSource, "D3D12FractalSplatReceiptCS");
+        sdfPipelineState = CreatePipelineState(device, rootSignature, shaderSource, "D3D12SdfEnvelopeReservoirCS");
+        pbrPipelineState = CreatePipelineState(device, rootSignature, shaderSource, "D3D12PbrMaterialReservoirCS");
+        radiosityPipelineState = CreatePipelineState(device, rootSignature, shaderSource, "D3D12RadiosityReservoirCS");
     }
 
     public GpuFractalSplatReceipt Run(ReceiptOptions options)
@@ -267,9 +269,9 @@ internal sealed class GpuFractalSplatReceiptRunner : IDisposable
         return device.CreateRootSignature(0, in description, RootSignatureVersion.Version1);
     }
 
-    private static ID3D12PipelineState CreatePipelineState(ID3D12Device device, ID3D12RootSignature rootSignature, string entry)
+    private static ID3D12PipelineState CreatePipelineState(ID3D12Device device, ID3D12RootSignature rootSignature, string shaderSource, string entry)
     {
-        var shader = Compiler.Compile(ShaderSource, entry, "receipt.hlsl", "cs_5_0", ShaderFlags.OptimizationLevel3, EffectFlags.None);
+        var shader = Compiler.Compile(shaderSource, entry, "D3D12FractalReservoirCompute.hlsl", "cs_5_0", ShaderFlags.OptimizationLevel3, EffectFlags.None);
         return device.CreateComputePipelineState(new ComputePipelineStateDescription { RootSignature = rootSignature, ComputeShader = shader });
     }
 
@@ -287,127 +289,6 @@ internal sealed class GpuFractalSplatReceiptRunner : IDisposable
         return hash;
     }
 
-    private const string ShaderSource = """
-struct PackedSplat { float4 centerRadius; float4 orientation; float4 radiiFalloff; float4 materialConfidence; float4 key; };
-struct SdfReservoir { float4 centerRadius; float4 radiiFalloff; float4 weightTargetCount; float4 validation; };
-struct PbrReservoir { float4 baseColorRoughMetal; float4 normalVariance; float4 weightTargetCount; float4 validation; };
-struct RadiosityReservoir { float4 radianceDistance; float4 directionOcclusion; float4 weightTargetCount; float4 validation; };
-
-cbuffer ReceiptConstants : register(b0) { uint SplatCount; uint FrameIndex; uint Depth; uint Seed; uint CandidatesPerPass; uint ReservoirUpdatesPerPass; };
-RWStructuredBuffer<PackedSplat> Splats : register(u0);
-RWStructuredBuffer<SdfReservoir> SdfReservoirs : register(u1);
-RWStructuredBuffer<PbrReservoir> PbrReservoirs : register(u2);
-RWStructuredBuffer<RadiosityReservoir> RadiosityReservoirs : register(u3);
-
-uint Hash(uint x) { x ^= x >> 16; x *= 747796405u; x ^= x >> 16; x *= 2891336453u; x ^= x >> 16; return x; }
-float Random01(uint value) { return (float)(Hash(value) & 16777215u) / 16777216.0; }
-
-float3 FractalPoint(uint index, out float radius)
-{
-    uint n = index ^ Seed;
-    float3 p = 0.0;
-    float scale = 1.0;
-    [loop] for (uint depth = 0; depth < Depth; depth++)
-    {
-        uint branch = (n >> (depth * 2u)) & 3u;
-        float2 dir = branch == 0u ? float2(1.0, 0.0) : branch == 1u ? float2(-0.42, 0.91) : branch == 2u ? float2(-0.76, -0.65) : float2(0.72, -0.69);
-        scale *= 0.535;
-        p.xy += dir * scale;
-        p.z += ((float)branch - 1.5) * scale * 0.19;
-        n = Hash(n + branch + FrameIndex + depth * 17u);
-    }
-    radius = max(scale * 0.75, 0.0001);
-    return p;
-}
-
-uint ReservoirIndex(uint updateIndex, uint passKind)
-{
-    return Hash(updateIndex * 1664525u + FrameIndex * 1013904223u + passKind * 747796405u + Seed) % SplatCount;
-}
-
-float4 ReservoirStats(uint index, uint passKind, float baseTarget, out uint selectedCandidate)
-{
-    float weightSum = 0.0;
-    float selectedTarget = 0.0;
-    selectedCandidate = 0u;
-    [loop] for (uint candidate = 0u; candidate < CandidatesPerPass; candidate++)
-    {
-        float phase = Random01(index * 1664525u + passKind * 1013904223u + candidate * 747796405u + FrameIndex);
-        float target = max(baseTarget * (0.55 + phase), 0.000001);
-        float weight = target * max((float)CandidatesPerPass, 1.0);
-        float nextWeightSum = weightSum + weight;
-        if (weightSum <= 0.0 || Random01(index + candidate * 13007u + passKind * 7919u) < weight / max(nextWeightSum, 0.000001))
-        {
-            selectedTarget = target;
-            selectedCandidate = candidate;
-        }
-        weightSum = nextWeightSum;
-    }
-    float contribution = weightSum / max((float)CandidatesPerPass * selectedTarget, 0.000001);
-    return float4(weightSum, selectedTarget, (float)CandidatesPerPass, contribution);
-}
-
-[numthreads(256, 1, 1)]
-void D3D12FractalSplatReceiptCS(uint3 id : SV_DispatchThreadID)
-{
-    uint index = id.x; if (index >= SplatCount) return;
-    float radius; float3 p = FractalPoint(index, radius);
-    uint h = Hash(index + FrameIndex * 1664525u + Seed);
-    PackedSplat splat;
-    splat.centerRadius = float4(p, radius);
-    splat.orientation = float4(0.0, 0.0, 0.0, 1.0);
-    splat.radiiFalloff = float4(radius, radius * 0.72, radius * 0.45, 4.0);
-    splat.materialConfidence = float4((float)(h & 1023u) / 1023.0, 1.0, 0.0, 1.0);
-    splat.key = float4((float)index, (float)FrameIndex, (float)Depth, asfloat(h));
-    Splats[index] = splat;
-}
-
-[numthreads(256, 1, 1)]
-void D3D12SdfEnvelopeReservoirCS(uint3 id : SV_DispatchThreadID)
-{
-    uint updateIndex = id.x; if (updateIndex >= ReservoirUpdatesPerPass) return;
-    uint index = ReservoirIndex(updateIndex, 0u);
-    PackedSplat splat = Splats[index];
-    uint selected; float4 stats = ReservoirStats(index, 0u, splat.centerRadius.w, selected);
-    SdfReservoir r;
-    r.centerRadius = splat.centerRadius;
-    r.radiiFalloff = splat.radiiFalloff;
-    r.weightTargetCount = stats;
-    r.validation = float4(saturate(stats.y), (float)FrameIndex, (float)selected, asfloat(Hash(index + selected)));
-    SdfReservoirs[index] = r;
-}
-
-[numthreads(256, 1, 1)]
-void D3D12PbrMaterialReservoirCS(uint3 id : SV_DispatchThreadID)
-{
-    uint updateIndex = id.x; if (updateIndex >= ReservoirUpdatesPerPass) return;
-    uint index = ReservoirIndex(updateIndex, 1u);
-    PackedSplat splat = Splats[index];
-    uint selected; float4 stats = ReservoirStats(index, 1u, splat.materialConfidence.x + 0.1, selected);
-    PbrReservoir r;
-    r.baseColorRoughMetal = float4(splat.materialConfidence.x, 1.0 - splat.materialConfidence.x * 0.4, 0.18 + 0.5 * splat.materialConfidence.x, 0.02);
-    r.normalVariance = float4(normalize(splat.centerRadius.xyz + 0.001), splat.radiiFalloff.x);
-    r.weightTargetCount = stats;
-    r.validation = float4(saturate(stats.y), (float)FrameIndex, (float)selected, asfloat(Hash(index + selected + 17u)));
-    PbrReservoirs[index] = r;
-}
-
-[numthreads(256, 1, 1)]
-void D3D12RadiosityReservoirCS(uint3 id : SV_DispatchThreadID)
-{
-    uint updateIndex = id.x; if (updateIndex >= ReservoirUpdatesPerPass) return;
-    uint index = ReservoirIndex(updateIndex, 2u);
-    PackedSplat splat = Splats[index];
-    uint selected; float energy = abs(cos(length(splat.centerRadius.xyz) * 7.0 + (float)FrameIndex * 0.01));
-    float4 stats = ReservoirStats(index, 2u, energy + 0.05, selected);
-    RadiosityReservoir r;
-    r.radianceDistance = float4(energy, energy * 0.62, energy * 0.31, length(splat.centerRadius.xyz));
-    r.directionOcclusion = float4(normalize(-splat.centerRadius.xyz + 0.01), 1.0 - energy * 0.35);
-    r.weightTargetCount = stats;
-    r.validation = float4(saturate(stats.y), (float)FrameIndex, (float)selected, asfloat(Hash(index + selected + 29u)));
-    RadiosityReservoirs[index] = r;
-}
-""";
 }
 
 internal sealed record ReceiptOptions(
@@ -419,11 +300,22 @@ internal sealed record ReceiptOptions(
     int CandidatesPerPass,
     int ReservoirUpdatesPerPass,
     int ReadbackSplats,
+    string ShaderPath,
     string OutputDirectory)
 {
     public static ReceiptOptions Parse(string[] args)
     {
-        var options = new ReceiptOptions(2_000_000, 30, 120, 8, 0xA17EA11u, 2, 50_000, 64, Path.Combine("artifacts", "fractal-splat-receipts"));
+        var options = new ReceiptOptions(
+            2_000_000,
+            30,
+            120,
+            8,
+            0xA17EA11u,
+            2,
+            50_000,
+            64,
+            Path.Combine("src", "Aquarium.Engine", "Render", "Shaders", "D3D12FractalReservoirCompute.hlsl"),
+            Path.Combine("artifacts", "fractal-splat-receipts"));
         for (var index = 0; index < args.Length; index++)
         {
             var arg = args[index];
@@ -438,10 +330,17 @@ internal sealed record ReceiptOptions(
                 "--candidates" => options with { CandidatesPerPass = int.Parse(Next()) },
                 "--reservoir-updates" => options with { ReservoirUpdatesPerPass = int.Parse(Next()) },
                 "--readback-splats" => options with { ReadbackSplats = int.Parse(Next()) },
+                "--shader" => options with { ShaderPath = Next() },
                 "--out" => options with { OutputDirectory = Next() },
                 _ => throw new ArgumentException($"Unknown receipt option: {arg}"),
             };
         }
+
+        if (!File.Exists(options.ShaderPath))
+        {
+            throw new FileNotFoundException("Receipt shader file was not found.", options.ShaderPath);
+        }
+
         if (options.SplatCount <= 0 || options.WarmupFrames < 0 || options.MeasuredFrames <= 0 || options.Depth <= 0 || options.CandidatesPerPass <= 0 || options.ReservoirUpdatesPerPass <= 0 || options.ReservoirUpdatesPerPass > options.SplatCount || options.ReadbackSplats < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(args), "Splats, frames, depth, candidates, and reservoir updates must be positive; reservoir updates must not exceed splats; warmup/readback must not be negative.");
