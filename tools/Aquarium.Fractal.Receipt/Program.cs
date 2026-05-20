@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aquarium.Engine.Fractal;
+using Aquarium.Engine.Fractal.Lod;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
 using Vortice.Direct3D12;
@@ -74,6 +75,12 @@ internal sealed class GpuFractalSplatReceiptRunner : IDisposable
     {
         var splatStride = Marshal.SizeOf<AquariumPackedFractalSdfSplat3D>();
         var reservoirStride = Marshal.SizeOf<AquariumPackedSdfEnvelopeReservoir>();
+        var framePlan = FractalGpuReservoirBudgetPlanner.Plan(
+            options.SplatCount,
+            options.ReservoirUpdatesPerPass,
+            options.CandidatesPerPass,
+            splatStride,
+            reservoirStride);
         var splatBytes = checked((ulong)splatStride * (ulong)options.SplatCount);
         var reservoirBytes = checked((ulong)reservoirStride * (ulong)options.SplatCount);
         using var splats = CreateUavBuffer(splatBytes, "Aquarium Fractal Receipt GPU Splat Buffer");
@@ -150,7 +157,7 @@ internal sealed class GpuFractalSplatReceiptRunner : IDisposable
             options.SplatCount,
             options.CandidatesPerPass,
             options.ReservoirUpdatesPerPass,
-            options.SplatCount / (double)options.ReservoirUpdatesPerPass,
+            framePlan.Passes[0].ExpectedFullCoverageFrames,
             measuredFrames,
             splatStride,
             reservoirStride,
